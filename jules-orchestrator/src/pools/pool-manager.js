@@ -1,7 +1,7 @@
 import { DEFAULTS } from '../../config/defaults.js'
 import {
   getActiveSessions, upsertSession, removeSession,
-  incrementQuota, quotaRemaining,
+  syncQuota, quotaRemaining, enqueue, dequeue,
   lockFiles, unlockFiles, checkFileLockConflicts,
 } from '../state/store.js'
 import { enqueue, dequeue } from '../queue/queue.js'
@@ -61,7 +61,7 @@ export async function dispatchTask(task) {
   const sessionId = julesSession.name?.split('/').pop() || julesSession.id
 
   // Track it
-  incrementQuota()
+  await syncQuota()
   lockFiles(sessionId, estimatedFiles)
   upsertSession({
     id: sessionId,
@@ -99,7 +99,7 @@ Description of the conflict: ${description}`
   })
 
   const sessionId = julesSession.name?.split('/').pop() || julesSession.id
-  incrementQuota()
+  await syncQuota()
   upsertSession({
     id: sessionId,
     title: `Conflict resolver: ${branchA} + ${branchB}`,
