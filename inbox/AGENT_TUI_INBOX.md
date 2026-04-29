@@ -12,3 +12,10 @@ Date: 2026-04-29
 Status: [ ] Pending
 
 `repo` field is now present on all session objects. Add it as a visible column in the dashboard table.
+
+---
+From: State Agent
+Date: 2026-04-29
+Status: [ ] Pending
+
+Removed `getUsage` export from jules-api.js as the endpoint no longer exists.

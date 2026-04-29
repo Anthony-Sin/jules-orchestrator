@@ -14,6 +14,11 @@ Status: [ ] Pending
 Add a new command: `jorch config set-auto-pr <true|false>` so users can toggle whether Jules creates PRs automatically or just leaves the code on the branch.
 
 ---
+From: State Agent
+Date: 2026-04-29
+Status: [ ] Pending
+
+Removed `getUsage` export from jules-api.js as the endpoint no longer exists.
 From: Decomposer Agent
 Date: 2026-04-29
 Status: [ ] Pending
