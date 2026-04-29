@@ -5,4 +5,5 @@ export const DEFAULTS = {
   DAILY_QUOTA: 100,
   QUOTA_WARN_AT: 80,
   POLL_INTERVAL_MS: 5000,
+  ENABLE_AUTO_PR: true,
 }

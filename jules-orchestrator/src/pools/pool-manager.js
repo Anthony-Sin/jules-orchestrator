@@ -1,7 +1,7 @@
 import { DEFAULTS } from '../../config/defaults.js'
 import {
   getActiveSessions, upsertSession, removeSession,
-  incrementQuota, quotaRemaining, enqueue, dequeue,
+  syncQuota, quotaRemaining, enqueue, dequeue,
   lockFiles, unlockFiles, checkFileLockConflicts,
 } from '../state/store.js'
 import { createSession, getSession, deleteSession } from '../state/jules-api.js'
@@ -21,6 +21,7 @@ export function poolSlotsFree(type) {
 }
 
 export async function dispatchTask(task) {
+  await syncQuota()
   const { type, prompt, title, estimatedFiles, id } = task
   const config = getConfig()
 
@@ -60,7 +61,6 @@ export async function dispatchTask(task) {
   const sessionId = julesSession.name?.split('/').pop() || julesSession.id
 
   // Track it
-  incrementQuota()
   lockFiles(sessionId, estimatedFiles)
   upsertSession({
     id: sessionId,
@@ -71,12 +71,14 @@ export async function dispatchTask(task) {
     state: julesSession.state || 'QUEUED',
     createdAt: Date.now(),
     lastUpdated: Date.now(),
+    repo: config.source,
   })
 
   return { queued: false, sessionId }
 }
 
 export async function dispatchConflictResolver(description, branchA, branchB) {
+  await syncQuota()
   const config = getConfig()
   if (!config.source) throw new Error('No source set.')
 
@@ -98,7 +100,6 @@ Description of the conflict: ${description}`
   })
 
   const sessionId = julesSession.name?.split('/').pop() || julesSession.id
-  incrementQuota()
   upsertSession({
     id: sessionId,
     title: `Conflict resolver: ${branchA} + ${branchB}`,
@@ -107,6 +108,7 @@ Description of the conflict: ${description}`
     state: 'QUEUED',
     createdAt: Date.now(),
     lastUpdated: Date.now(),
+    repo: config.source,
   })
 
   return sessionId
@@ -121,6 +123,7 @@ export async function killSession(sessionId) {
 }
 
 export async function pollAndUpdate() {
+  await syncQuota()
   const active = getActiveSessions()
   const updated = []
 
