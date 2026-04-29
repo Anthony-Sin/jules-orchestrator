@@ -50,15 +50,13 @@ function estimateFiles(text) {
     return ['DOMAIN:DATABASE']
   }
 
-  // 3. Fallback to generic domain locks based on type
-  const type = detectType(text)
-  if (type === 'frontend') {
-    return ['DOMAIN:FRONTEND']
-  } else if (type === 'backend') {
-    return ['DOMAIN:BACKEND']
-  }
-
-  return ['unknown']
+  // 3. Fallback to broad globs
+  const files = []
+  if (lower.includes('route') || lower.includes('api')) files.push('src/app/api/**')
+  if (lower.includes('component') || lower.includes('ui')) files.push('src/components/**')
+  if (lower.includes('page')) files.push('src/app/**')
+  if (lower.includes('style') || lower.includes('css')) files.push('src/styles/**')
+  return files.length > 0 ? files : ['unknown']
 }
 
 export function splitPrompt(rawPrompt) {

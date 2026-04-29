@@ -5,7 +5,7 @@ import inquirer from 'inquirer'
 import { splitPrompt, groupByType } from '../src/decomposer/decomposer.js'
 import { dispatchTask, dispatchConflictResolver, killSession, pollAndUpdate, poolSlotsFree } from '../src/pools/pool-manager.js'
 import { renderDashboard } from '../src/tui/renderer.js'
-import { getSessions, getQueue, getConfig, setConfig, quotaRemaining, getActiveSessions } from '../src/state/store.js'
+import { getSessions, getQueue, getConfig, setConfig, quotaRemaining, getActiveSessions, syncQuota } from '../src/state/store.js'
 
 const program = new Command()
 
@@ -31,6 +31,7 @@ program
     }
     console.log()
 
+    await syncQuota()
     if (quotaRemaining() <= 5) {
       console.log(chalk.yellow(`  Warning: only ${quotaRemaining()} sessions remaining today.\n`))
     }
@@ -79,6 +80,7 @@ program
 
     process.on('SIGINT', () => { clearInterval(interval); process.exit(0) })
 
+    await syncQuota()
     while (isRunning) {
       renderDashboard(searchTerm)
 
