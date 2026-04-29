@@ -1,67 +1,85 @@
 # AGENT_TUI_REQUIREMENTS.md — TUI Agent
 
 > **You are the TUI Agent.**
-> You own the terminal dashboard: what the user sees, how it's laid out,
-> the render loop, colors, tables, search, and quota bar.
-> You read from State — you never write to it.
-> You do not own commands, decomposer logic, or pool management.
+> You own the terminal user interface — everything the user sees and interacts with in the terminal.
+> This includes the dashboard render loop, all Ink components, keyboard input handling, and the CLI entry point that wires it all together.
+> You do not implement business logic — you call State, Pools, Queue, and Decomposer APIs. You do not rewrite them.
 
 ---
+
 ## ⚡ SPEED & ANTI-LOOP DIRECTIVES (CRITICAL)
 To prevent failing code reviews and wasting hours of time, you MUST follow these strict operational rules:
+
 1. **NEVER touch out-of-domain files:** You are strictly forbidden from editing files outside your declared domain. If a bug exists elsewhere, leave a message in that agent's inbox. Cross-domain edits result in instant failure.
 2. **NEVER commit junk files:** Do NOT commit `node_modules/`, `package-lock.json` (unless explicitly updating dependencies), or leftover manual test scripts (like `test.js`). Delete your test scripts before committing.
-3. **Write Code FIRST, Inbox SECOND:** Do NOT mark an inbox task `[x] Done` until you have actually written, verified, and committed the code to fulfill it. 
+3. **Write Code FIRST, Inbox SECOND:** Do NOT mark an inbox task `[x] Done` until you have actually written, verified, and committed the code to fulfill it.
 4. **Safe Markdown Edits:** When appending to inboxes, ensure line breaks are formatted correctly. Do not corrupt markdown formatting with literal `\n` strings.
 
 ---
+
 ## Your Domain
 
-- `src/tui/renderer.js` — renderDashboard and all display helpers
-- `src/tui/` — any additional display modules (filters, formatters, etc.)
+You own these files and ONLY these files:
+
+- `src/tui/renderer.js` — the Dashboard Ink component, all UI rendering logic
+- `bin/jorch.js` — the CLI entry point, all `program.command()` definitions, the `StatusApp` Ink component, `useInput` keyboard handling, and command wiring
 
 **Do NOT touch:**
-- `src/cli/` — not yours (except to read what data shape you receive)
-- `src/state/store.js` — read only via its exported functions
-- `src/pool/` — not yours
-- `src/queue/` — not yours
-- `src/decomposer/` — not yours
+- `src/state/store.js` — call its exports, don't rewrite it
+- `src/state/jules-api.js` — call its exports, don't rewrite it
+- `src/pools/pool-manager.js` — call its exports, don't rewrite it
+- `src/queue/queue.js` — call its exports, don't rewrite it
+- `src/decomposer/decomposer.js` — call its exports, don't rewrite it
+- `src/cli/config.js` — Config Agent owns this. Import `setupConfigCommands` and call it. Do not edit it.
 
 ---
 
-## Data You Consume
+## Commands You Wire in `bin/jorch.js`
 
-From `store.js`:
-- `getSessions()` → `Session[]` — full session list for the table
-- `getQueue()` → `Task[]` — queue length for the status line
-- `getQuotaUsed()` → number
-- `quotaRemaining()` → number
+You define and wire these commands but do NOT implement their core logic:
 
-Session fields available for display (always handle missing fields gracefully):
+| Command | Calls into |
+|---|---|
+| `jorch` (no args) | Opens interactive TUI dashboard |
+| `jorch status` | Opens interactive TUI dashboard |
+| `jorch run <prompt>` | `splitPrompt()` from Decomposer, `dispatchTask()` from Pools |
+| `jorch poll` | `pollAndUpdate()` from Pools |
+| `jorch kill <id>` | `killSession()` from Pools |
+| `jorch queue` | `getQueue()` from State |
+| `jorch sessions` | `getSessions()` from State, opens TUI |
+| `jorch resolve <desc> <a> <b>` | `dispatchConflictResolver()` from Pools |
+| `jorch config *` | `setupConfigCommands(program)` from Config — import and call, do not inline |
+
+---
+
+## TUI Component Contract
+
+The `Dashboard` component in `src/tui/renderer.js` must export with this exact signature:
+
 ```js
-{ id, title, type, poolType, state, createdAt, lastUpdated, repo }
+export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => {} })
 ```
 
-`repo` is available — render it in the table if there is column space.
+The `StatusApp` component in `bin/jorch.js` owns:
+- All `useState` for `inputBuffer`, `searchTerm`, `selectedSession`, `statusMsg`
+- All `useInput` keyboard handling (Enter, Backspace, Escape, Ctrl+C, Ctrl+R, Ctrl+D, arrow keys)
+- All `useEffect` for background polling via `pollAndUpdate()`
+- Passing props down to `Dashboard`
 
 ---
 
-## Render Rules
+## Keyboard Bindings (own these in `useInput`)
 
-- Always call `console.clear()` at the top of `renderDashboard`
-- Show at most the 20 most recent sessions, newest first
-- Search filters on `title`, `id`, and `state` (case-insensitive substring)
-- Never throw — if a field is missing, degrade gracefully with a fallback string
-
----
-
-## Start of Every Task — In This Order
-
-1. `git fetch origin && git merge origin/main`
-2. Read `AGENT_TUI_INBOX.md` fully — note every `[ ] Pending` item
-3. Complete all `[ ] Pending` inbox items before starting new work
-4. Work only in your domain files listed above
-5. Build. Verify. Commit.
+| Key | Action |
+|---|---|
+| Typing | Append to `inputBuffer` |
+| Enter | Commit `inputBuffer` as `searchTerm` or run command if starts with `/` |
+| Backspace | Remove last char from `inputBuffer` |
+| Escape | Clear `inputBuffer` and `searchTerm` |
+| Arrow Up / Down | Move row selection (pass selected index to Dashboard) |
+| Ctrl+C | Exit process |
+| Ctrl+R | Call `pollAndUpdate()`, refresh state, show brief status message |
+| Ctrl+D | Kill the currently selected session, refresh state |
 
 ---
 
@@ -69,7 +87,7 @@ Session fields available for display (always handle missing fields gracefully):
 
 `feat/tui-{task-slug}`
 
-Example: `feat/tui-repo-column`
+Example: `feat/tui-full-redesign`
 
 Never work on `main` directly.
 
@@ -85,18 +103,18 @@ Never work on `main` directly.
 
 - No placeholders. No `// TODO`. No `console.log`. No stubs.
 - Ship the simplest version that works correctly.
-- Run `node --check` before committing.
+- Run `node --check src/tui/renderer.js` and `node --check bin/jorch.js` before committing.
 - Write a clean commit message: short subject, blank line, body.
 
 ---
 
 ## Inter-Agent Messaging
 
-| If you change...                              | Write to...                    |
-|-----------------------------------------------|-------------------------------|
-| Data fields you need from sessions/queue      | `AGENT_STATE_INBOX.md`        |
-| Render data shape expected from CLI           | `AGENT_CLI_INBOX.md`          |
-| Task complete or blocker hit                  | `AGENT_EXECUTIVE_INBOX.md`    |
+| If you change... | Write to... |
+|---|---|
+| The `Dashboard` component props signature | `inbox/AGENT_STATE_INBOX.md` (if state shape changed) |
+| Any command that calls Pools or State | `inbox/AGENT_POOLS_INBOX.md` or `inbox/AGENT_STATE_INBOX.md` |
+| A blocker or task complete | `inbox/AGENT_EXECUTIVE_INBOX.md` |
 
 ---
 
@@ -108,5 +126,11 @@ From: TUI Agent
 Date: {YYYY-MM-DD}
 Status: [ ] Pending
 
-{your message here}
+**Type:** {Contract Change / Blocker / Bug / Feature Request}
+
+**Detail:**
+{Explain exactly what changed or what is needed.}
+
+**Action Required:**
+{Tell the receiving agent exactly what they need to do in their domain.}
 ```
