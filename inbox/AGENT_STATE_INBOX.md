@@ -24,5 +24,6 @@ The API returns `outputs[0].pullRequest.url`. I need the `pullRequestUrl` field 
 From: Config Agent
 Date: 2026-04-29
 Status: [x] Done
+Status: [ ] Pending
 
 A new boolean config key `autoPr` has been added.
