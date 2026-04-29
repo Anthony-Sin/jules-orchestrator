@@ -20,6 +20,7 @@ export async function createSession({ prompt, source, startingBranch = 'main', r
       prompt,
       sourceContext: { source, githubRepoContext: { startingBranch } },
       requirePlanApproval,
+      automationMode: "AUTO_CREATE_PR",
     }),
   })
   if (!res.ok) throw new Error(`Jules API error ${res.status}: ${await res.text()}`)

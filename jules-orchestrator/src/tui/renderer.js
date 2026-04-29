@@ -2,7 +2,7 @@ import chalk from 'chalk'
 import Table from 'cli-table3'
 import { getSessions } from '../state/store.js'
 
-export function renderDashboard() {
+export function renderDashboard(searchTerm = '') {
   console.clear()
 
   // ASCII art header closely matching the provided image
@@ -40,18 +40,26 @@ export function renderDashboard() {
     },
   })
 
-  function ago(ms) {
-    if (!ms) return ''
-    const diff = Date.now() - ms
-    const s = Math.floor(diff / 1000)
-    const m = Math.floor(s / 60)
-    const h = Math.floor(m / 60)
+  let filteredSessions = sessions
 
-    const hours = h > 0 ? `${h}h` : ''
-    const minutes = (m % 60) > 0 ? `${m % 60}m` : ''
-    const seconds = `${s % 60}s`
+  if (searchTerm && !searchTerm.startsWith('/')) {
+    const term = searchTerm.toLowerCase()
+    filteredSessions = sessions.filter(s =>
+      (s.title && s.title.toLowerCase().includes(term)) ||
+      (s.id && s.id.toLowerCase().includes(term)) ||
+      (s.state && s.state.toLowerCase().includes(term))
+    )
+  }
 
-    return `${hours}${minutes}${seconds} ago`
+  const displayed = filteredSessions.slice(-20).reverse()
+  for (const s of displayed) {
+    table.push([
+      typeLabel(s.type || s.poolType),
+      truncate(s.title, 34),
+      colorState(s.state || 'UNKNOWN'),
+      chalk.dim(ago(s.lastUpdated || s.createdAt)),
+      chalk.dim(truncate(s.id, 16)),
+    ])
   }
 
   function truncate(str, n) {
