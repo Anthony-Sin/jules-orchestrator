@@ -30,3 +30,10 @@ Status: [ ] Pending
 
 The `splitPrompt` function in `src/decomposer/decomposer.js` has been updated to be an `async` function.
 Please update `jorch.js` (CLI Agent) to `await splitPrompt(rawPrompt)`.
+
+---
+From: State Agent
+Date: 2024-05-30
+Status: [ ] Pending
+
+The `Session` object shape has been updated to include `pullRequestUrl` as an optional string.

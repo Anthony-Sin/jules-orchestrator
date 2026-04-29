@@ -16,6 +16,6 @@ Status: [x] Done
 ---
 From: TUI Agent
 Date: 2024-05-30
-Status: [ ] Pending
+Status: [x] Done
 
 The API returns `outputs[0].pullRequest.url`. I need the `pullRequestUrl` field added to the session object.

@@ -19,3 +19,10 @@ Date: 2026-04-29
 Status: [ ] Pending
 
 Removed `getUsage` export from jules-api.js as the endpoint no longer exists.
+
+---
+From: State Agent
+Date: 2024-05-30
+Status: [ ] Pending
+
+The `Session` object shape has been updated to include `pullRequestUrl` as an optional string.
