@@ -1,5 +1,6 @@
+import React from 'react'
+import { render, Box, Text } from 'ink'
 import chalk from 'chalk'
-import Table from 'cli-table3'
 import { getSessions, getQueue, getQuotaUsed, quotaRemaining } from '../state/store.js'
 import { DEFAULTS } from '../../config/defaults.js'
 
@@ -28,7 +29,8 @@ function typeLabel(type) {
 }
 
 function ago(ms) {
-  const s = Math.floor((Date.now() - ms) / 1000)
+  if (!ms) return ''
+  const s = Math.floor((Date.now() - new Date(ms).getTime()) / 1000)
   if (s < 60) return `${s}s ago`
   if (s < 3600) return `${Math.floor(s / 60)}m ago`
   return `${Math.floor(s / 3600)}h ago`
@@ -39,56 +41,21 @@ function truncate(str, n) {
   return str.length > n ? str.slice(0, n - 1) + '…' : str
 }
 
-export function renderDashboard(searchTerm = '') {
-  console.clear()
-
-  // Header
-  console.log(chalk.bold.white('\n  JULES ORCHESTRATOR'))
-  console.log(chalk.dim('  ─────────────────────────────────────────────\n'))
-
-  // Quota bar
+export function Dashboard({ searchTerm = '' }) {
   const used = getQuotaUsed()
   const remaining = quotaRemaining()
   const pct = Math.floor((used / DEFAULTS.DAILY_QUOTA) * 20)
-  const bar = chalk.green('█'.repeat(pct)) + chalk.gray('░'.repeat(20 - pct))
+  const bar = chalk.green('█'.repeat(pct)) + chalk.gray('░'.repeat(Math.max(0, 20 - pct)))
   const quotaColor = remaining <= 10 ? chalk.red : remaining <= 20 ? chalk.yellow : chalk.white
-  console.log(`  Quota  [${bar}]  ${quotaColor(`${used}/${DEFAULTS.DAILY_QUOTA}`)} used  ${chalk.dim(`(${remaining} remaining)`)}`)
 
-  // Pool summary
   const sessions = getSessions()
   const active = sessions.filter(s => !['COMPLETED', 'FAILED', 'KILLED'].includes(s.state))
   const fe = active.filter(s => s.poolType === 'frontend').length
   const be = active.filter(s => s.poolType === 'backend').length
-  console.log(`  Pools  ${chalk.greenBright(`FE ${fe}/${DEFAULTS.POOL_SIZE_FRONTEND}`)}  ${chalk.blueBright(`BE ${be}/${DEFAULTS.POOL_SIZE_BACKEND}`)}`)
 
   const queue = getQueue()
-  if (queue.length > 0) {
-    console.log(`  Queue  ${chalk.yellow(`${queue.length} task${queue.length > 1 ? 's' : ''} waiting`)}`)
-  }
-
-  console.log()
-
-  // Session table
-  const table = new Table({
-    head: [
-      chalk.dim('type'),
-      chalk.dim('title'),
-      chalk.dim('state'),
-      chalk.dim('last active'),
-      chalk.dim('id'),
-    ],
-    colWidths: [6, 36, 28, 14, 18],
-    style: { border: ['dim'], head: [] },
-    chars: {
-      top: '─', 'top-mid': '┬', 'top-left': '┌', 'top-right': '┐',
-      bottom: '─', 'bottom-mid': '┴', 'bottom-left': '└', 'bottom-right': '┘',
-      left: '│', 'left-mid': '├', mid: '─', 'mid-mid': '┼',
-      right: '│', 'right-mid': '┤', middle: '│',
-    },
-  })
 
   let filteredSessions = sessions
-
   if (searchTerm && !searchTerm.startsWith('/')) {
     const term = searchTerm.toLowerCase()
     filteredSessions = sessions.filter(s =>
@@ -99,19 +66,57 @@ export function renderDashboard(searchTerm = '') {
   }
 
   const displayed = filteredSessions.slice(-20).reverse()
-  for (const s of displayed) {
-    table.push([
-      typeLabel(s.type || s.poolType),
-      truncate(s.title, 34),
-      colorState(s.state || 'UNKNOWN'),
-      chalk.dim(ago(s.lastUpdated || s.createdAt)),
-      chalk.dim(truncate(s.id, 16)),
-    ])
-  }
 
-  if (sessions.length === 0) {
-    console.log(chalk.dim('  No sessions yet. Use: jorch run "your task here"\n'))
+  return React.createElement(Box, { flexDirection: 'column' },
+    React.createElement(Box, { flexDirection: 'column', marginBottom: 1 },
+      React.createElement(Text, { bold: true, color: 'white' }, '\n  JULES ORCHESTRATOR'),
+      React.createElement(Text, { dimColor: true }, '  ─────────────────────────────────────────────\n')
+    ),
+    React.createElement(Box, { marginBottom: 1, flexDirection: 'column' },
+      React.createElement(Text, {}, `  Quota  [${bar}]  ${quotaColor(`${used}/${DEFAULTS.DAILY_QUOTA}`)} used  ${chalk.dim(`(${remaining} remaining)`)}`),
+      React.createElement(Text, {}, `  Pools  ${chalk.greenBright(`FE ${fe}/${DEFAULTS.POOL_SIZE_FRONTEND}`)}  ${chalk.blueBright(`BE ${be}/${DEFAULTS.POOL_SIZE_BACKEND}`)}`),
+      queue.length > 0 && React.createElement(Text, {}, `  Queue  ${chalk.yellow(`${queue.length} task${queue.length > 1 ? 's' : ''} waiting`)}`)
+    ),
+    sessions.length === 0 ? (
+      React.createElement(Box, { marginLeft: 2 },
+        React.createElement(Text, { dimColor: true }, 'No sessions yet. Use: jorch run "your task here"\n')
+      )
+    ) : (
+      React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Box, { borderStyle: 'single', borderColor: 'gray', flexDirection: 'column', paddingX: 1 },
+          React.createElement(Box, {},
+            React.createElement(Box, { width: 8 }, React.createElement(Text, { dimColor: true }, 'type')),
+            React.createElement(Box, { width: 38 }, React.createElement(Text, { dimColor: true }, 'title')),
+            React.createElement(Box, { width: 26 }, React.createElement(Text, { dimColor: true }, 'state')),
+            React.createElement(Box, { width: 14 }, React.createElement(Text, { dimColor: true }, 'last active')),
+            React.createElement(Box, { width: 25 }, React.createElement(Text, { dimColor: true }, 'repo')),
+            React.createElement(Box, { width: 20 }, React.createElement(Text, { dimColor: true }, 'id')),
+            React.createElement(Box, { width: 35 }, React.createElement(Text, { dimColor: true }, 'pull request'))
+          ),
+          displayed.map(s => (
+            React.createElement(Box, { key: s.id },
+              React.createElement(Box, { width: 8 }, React.createElement(Text, {}, typeLabel(s.type || s.poolType))),
+              React.createElement(Box, { width: 38 }, React.createElement(Text, {}, truncate(s.title, 36))),
+              React.createElement(Box, { width: 26 }, React.createElement(Text, {}, colorState(s.state || 'UNKNOWN'))),
+              React.createElement(Box, { width: 14 }, React.createElement(Text, { dimColor: true }, ago(s.lastUpdated || s.createdAt))),
+              React.createElement(Box, { width: 25 }, React.createElement(Text, {}, truncate(s.repo || '-', 23))),
+              React.createElement(Box, { width: 20 }, React.createElement(Text, { dimColor: true }, truncate(s.id, 18))),
+              React.createElement(Box, { width: 35 }, React.createElement(Text, { color: 'blueBright' }, s.state === 'COMPLETED' ? truncate(s.pullRequestUrl || '-', 33) : ''))
+            )
+          ))
+        )
+      )
+    )
+  )
+}
+
+let inkInstance = null;
+
+export function renderDashboard(searchTerm = '') {
+  if (!inkInstance) {
+    console.clear()
+    inkInstance = render(React.createElement(Dashboard, { searchTerm }));
   } else {
-    console.log(table.toString())
+    inkInstance.rerender(React.createElement(Dashboard, { searchTerm }));
   }
 }
