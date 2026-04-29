@@ -31,3 +31,10 @@ Date: 2024-05-30
 Status: [ ] Pending
 
 The `Session` object shape has been updated to include `pullRequestUrl` as an optional string.
+
+---
+From: State Agent
+Date: 2024-05-30
+Status: [ ] Pending
+
+The API `getSession()` returns new fields: `title`, `state`, `pullRequestUrl`, `pullRequestTitle`, `lastUpdated`, `createdAt`, `repoDisplay`, and `julesUrl`. Please update `pollAndUpdate()` to extract these fields from the response payload and pass them to `upsertSession(session)` so the local state correctly mirrors the live Jules data.
