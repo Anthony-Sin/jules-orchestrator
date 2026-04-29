@@ -33,6 +33,12 @@ export async function getSession(sessionId) {
   return res.json()
 }
 
+export async function getUsage() {
+  const res = await fetch(`${DEFAULTS.JULES_API_BASE}/usage`, { headers: headers() })
+  if (!res.ok) throw new Error(`Jules API error ${res.status}`)
+  return res.json()
+}
+
 export async function listSessions() {
   const res = await fetch(`${DEFAULTS.JULES_API_BASE}/sessions`, { headers: headers() })
   if (!res.ok) throw new Error(`Jules API error ${res.status}`)

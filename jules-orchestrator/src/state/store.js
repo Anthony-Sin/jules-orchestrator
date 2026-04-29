@@ -1,26 +1,25 @@
 import Conf from 'conf'
 import { DEFAULTS } from '../../config/defaults.js'
+import { getUsage } from './jules-api.js'
 
-const store = new Conf({ projectName: 'jules-orchestrator' })
+export const store = new Conf({ projectName: 'jules-orchestrator' })
 
 // --- Quota ---
 export function getQuotaUsed() {
-  const today = new Date().toISOString().slice(0, 10)
   const record = store.get('quota', {})
-  if (record.date !== today) return 0
   return record.used || 0
 }
 
-export function incrementQuota() {
+export async function syncQuota() {
   const today = new Date().toISOString().slice(0, 10)
-  const record = store.get('quota', {})
-  const used = record.date === today ? (record.used || 0) + 1 : 1
-  store.set('quota', { date: today, used })
-  return used
+  const usage = await getUsage()
+  store.set('quota', { date: today, used: usage.used, limit: usage.limit, remaining: usage.remaining })
+  return usage
 }
 
 export function quotaRemaining() {
-  return DEFAULTS.DAILY_QUOTA - getQuotaUsed()
+  const record = store.get('quota', {})
+  return record.remaining !== undefined ? record.remaining : (record.limit || DEFAULTS.DAILY_QUOTA) - getQuotaUsed()
 }
 
 // --- Sessions ---
@@ -117,4 +116,25 @@ export function setConfig(key, value) {
   const config = getConfig()
   config[key] = value
   store.set('config', config)
+}
+
+export async function syncQuota() {
+  const { listSessions } = await import('./jules-api.js');
+  try {
+    const res = await listSessions();
+    const sessions = res.sessions || res || []; // Handle array or object wrapper
+    const today = new Date().toISOString().slice(0, 10);
+    const apiQuotaUsed = sessions.filter(s => {
+      const d = s.createTime || s.createdAt || s.lastUpdated;
+      if (!d) return false;
+      return new Date(d).toISOString().slice(0, 10) === today;
+    }).length;
+
+    const record = store.get('quota', {});
+    if (record.date !== today || record.used !== apiQuotaUsed) {
+      store.set('quota', { date: today, used: apiQuotaUsed });
+    }
+  } catch (err) {
+    // Silently continue if syncing fails
+  }
 }
