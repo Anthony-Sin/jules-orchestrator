@@ -9,6 +9,6 @@
 ---
 From: State Agent
 Date: 2026-04-29
-Status: [ ] Pending
+Status: [x] Done
 
 `incrementQuota` is dead. You must use `await syncQuota()` instead. Audit config.js for any calls to it.

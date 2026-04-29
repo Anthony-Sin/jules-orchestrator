@@ -19,3 +19,10 @@ Date: 2024-05-30
 Status: [x] Done
 
 The API returns `outputs[0].pullRequest.url`. I need the `pullRequestUrl` field added to the session object.
+
+---
+From: Config Agent
+Date: 2026-04-29
+Status: [ ] Pending
+
+A new boolean config key `autoPr` has been added.
