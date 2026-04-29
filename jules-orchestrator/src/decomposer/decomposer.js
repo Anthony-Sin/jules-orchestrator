@@ -36,12 +36,25 @@ function scoreComplexity(text) {
 
 function estimateFiles(text) {
   // Predict which files will likely be touched based on keywords
+
+  // 1. Look for specific file names
+  const specificFilesMatch = text.match(/[\w\.\-]+\.(?:js|jsx|ts|tsx|json|css|scss|html|md)\b/gi)
+  if (specificFilesMatch && specificFilesMatch.length > 0) {
+    return [...new Set(specificFilesMatch)]
+  }
+
   const lower = text.toLowerCase()
+
+  // 2. Check for domain-level locks if no specific files found
+  if (lower.includes('database') || lower.includes('db') || lower.includes('schema') || lower.includes('model') || lower.includes('migration') || lower.includes('postgres') || lower.includes('prisma')) {
+    return ['DOMAIN:DATABASE']
+  }
+
+  // 3. Fallback to broad globs
   const files = []
   if (lower.includes('route') || lower.includes('api')) files.push('src/app/api/**')
   if (lower.includes('component') || lower.includes('ui')) files.push('src/components/**')
   if (lower.includes('page')) files.push('src/app/**')
-  if (lower.includes('schema') || lower.includes('model')) files.push('src/types/**', 'prisma/**')
   if (lower.includes('style') || lower.includes('css')) files.push('src/styles/**')
   return files.length > 0 ? files : ['unknown']
 }
