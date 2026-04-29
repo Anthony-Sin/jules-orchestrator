@@ -1,26 +1,25 @@
 import Conf from 'conf'
 import { DEFAULTS } from '../../config/defaults.js'
+import { getUsage } from './jules-api.js'
 
-const store = new Conf({ projectName: 'jules-orchestrator' })
+export const store = new Conf({ projectName: 'jules-orchestrator' })
 
 // --- Quota ---
 export function getQuotaUsed() {
-  const today = new Date().toISOString().slice(0, 10)
   const record = store.get('quota', {})
-  if (record.date !== today) return 0
   return record.used || 0
 }
 
-export function incrementQuota() {
+export async function syncQuota() {
   const today = new Date().toISOString().slice(0, 10)
-  const record = store.get('quota', {})
-  const used = record.date === today ? (record.used || 0) + 1 : 1
-  store.set('quota', { date: today, used })
-  return used
+  const usage = await getUsage()
+  store.set('quota', { date: today, used: usage.used, limit: usage.limit, remaining: usage.remaining })
+  return usage
 }
 
 export function quotaRemaining() {
-  return DEFAULTS.DAILY_QUOTA - getQuotaUsed()
+  const record = store.get('quota', {})
+  return record.remaining !== undefined ? record.remaining : (record.limit || DEFAULTS.DAILY_QUOTA) - getQuotaUsed()
 }
 
 // --- Sessions ---
@@ -52,20 +51,8 @@ export function getQueue() {
   return store.get('queue', [])
 }
 
-export function enqueue(task) {
-  const queue = getQueue()
-  queue.push({ ...task, queuedAt: Date.now() })
-  queue.sort((a, b) => b.priority - a.priority)
+export function setQueue(queue) {
   store.set('queue', queue)
-}
-
-export function dequeue(type) {
-  const queue = getQueue()
-  const idx = queue.findIndex(t => t.type === type)
-  if (idx < 0) return null
-  const [task] = queue.splice(idx, 1)
-  store.set('queue', queue)
-  return task
 }
 
 // --- File lock map ---
