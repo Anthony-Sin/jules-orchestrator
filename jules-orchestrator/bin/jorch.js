@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
 import chalk from 'chalk'
+import inquirer from 'inquirer'
 import { splitPrompt, groupByType } from '../src/decomposer/decomposer.js'
 import { dispatchTask, dispatchConflictResolver, killSession, pollAndUpdate, poolSlotsFree } from '../src/pools/pool-manager.js'
 import { renderDashboard } from '../src/tui/renderer.js'
@@ -62,22 +63,52 @@ program
 // ── jorch status ──────────────────────────────────────────────────────────────
 program
   .command('status')
-  .description('Show live dashboard (polls every 5s, Ctrl+C to exit)')
-  .option('-w, --watch', 'Keep polling every 5s')
-  .action(async (opts) => {
-    renderDashboard()
+  .description('Show live dashboard with interactive prompt (polls every 5s, /exit to quit)')
+  .action(async () => {
+    const { DEFAULTS } = await import('../config/defaults.js')
 
-    if (opts.watch) {
-      const { DEFAULTS } = await import('../config/defaults.js')
-      console.log(chalk.dim('  Watching… Ctrl+C to stop\n'))
-      const interval = setInterval(async () => {
-        await pollAndUpdate()
-        renderDashboard()
-      }, DEFAULTS.POLL_INTERVAL_MS)
+    let searchTerm = ''
+    let isRunning = true
 
-      process.on('SIGINT', () => { clearInterval(interval); process.exit(0) })
-    } else {
-      console.log(chalk.dim('  Tip: use --watch to keep polling\n'))
+    // Background polling
+    const interval = setInterval(async () => {
+      await pollAndUpdate()
+      // We don't re-render here to avoid messing up the inquirer prompt,
+      // but state is updated. The user can press Enter to refresh.
+    }, DEFAULTS.POLL_INTERVAL_MS)
+
+    process.on('SIGINT', () => { clearInterval(interval); process.exit(0) })
+
+    while (isRunning) {
+      renderDashboard(searchTerm)
+
+      const { input } = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'input',
+          message: '> Search sessions or type / to use commands:',
+        }
+      ])
+
+      const val = input.trim()
+
+      if (val === '/quit' || val === '/exit') {
+        isRunning = false
+        clearInterval(interval)
+        process.exit(0)
+      } else if (val.startsWith('/kill ')) {
+        const id = val.split(' ')[1]
+        if (id) {
+          await killSession(id)
+          await pollAndUpdate()
+        }
+        searchTerm = '' // Clear search after command
+      } else if (val.startsWith('/')) {
+        // Ignore unknown commands, keep current search term
+        searchTerm = ''
+      } else {
+        searchTerm = val
+      }
     }
   })
 

@@ -1,26 +1,25 @@
 import Conf from 'conf'
 import { DEFAULTS } from '../../config/defaults.js'
+import { getUsage } from './jules-api.js'
 
 export const store = new Conf({ projectName: 'jules-orchestrator' })
 
 // --- Quota ---
 export function getQuotaUsed() {
-  const today = new Date().toISOString().slice(0, 10)
   const record = store.get('quota', {})
-  if (record.date !== today) return 0
   return record.used || 0
 }
 
-export function incrementQuota() {
+export async function syncQuota() {
   const today = new Date().toISOString().slice(0, 10)
-  const record = store.get('quota', {})
-  const used = record.date === today ? (record.used || 0) + 1 : 1
-  store.set('quota', { date: today, used })
-  return used
+  const usage = await getUsage()
+  store.set('quota', { date: today, used: usage.used, limit: usage.limit, remaining: usage.remaining })
+  return usage
 }
 
 export function quotaRemaining() {
-  return DEFAULTS.DAILY_QUOTA - getQuotaUsed()
+  const record = store.get('quota', {})
+  return record.remaining !== undefined ? record.remaining : (record.limit || DEFAULTS.DAILY_QUOTA) - getQuotaUsed()
 }
 
 // --- Sessions ---
@@ -52,11 +51,30 @@ export function getQueue() {
   return store.get('queue', [])
 }
 
-
+export function setQueue(queue) {
+  store.set('queue', queue)
+}
 
 // --- File lock map ---
 export function getFileLocks() {
   return store.get('fileLocks', {})
+}
+
+// Helpers for path locking
+function normalizePath(p) {
+  return p.endsWith('/') ? p.slice(0, -1) : p
+}
+
+function isConflict(lockedKey, reqKey) {
+  if (lockedKey === reqKey) return true
+  // DOMAIN keys are exact match only
+  if (lockedKey.startsWith('DOMAIN:') || reqKey.startsWith('DOMAIN:')) return false
+
+  const lPath = normalizePath(lockedKey)
+  const rPath = normalizePath(reqKey)
+
+  if (lPath === rPath) return true
+  return rPath.startsWith(lPath + '/') || lPath.startsWith(rPath + '/')
 }
 
 export function lockFiles(sessionId, files) {
@@ -75,7 +93,18 @@ export function unlockFiles(sessionId) {
 
 export function checkFileLockConflicts(files) {
   const locks = getFileLocks()
-  return files.filter(f => locks[f]).map(f => ({ file: f, lockedBy: locks[f] }))
+  const conflicts = []
+
+  for (const file of files) {
+    for (const lockedFile of Object.keys(locks)) {
+      if (isConflict(lockedFile, file)) {
+        conflicts.push({ file, lockedBy: locks[lockedFile] })
+        break // Avoid duplicate conflicts for the same requested file
+      }
+    }
+  }
+
+  return conflicts
 }
 
 // --- Config (API key etc) ---
