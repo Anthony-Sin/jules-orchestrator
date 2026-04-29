@@ -73,6 +73,23 @@ export function getFileLocks() {
   return store.get('fileLocks', {})
 }
 
+// Helpers for path locking
+function normalizePath(p) {
+  return p.endsWith('/') ? p.slice(0, -1) : p
+}
+
+function isConflict(lockedKey, reqKey) {
+  if (lockedKey === reqKey) return true
+  // DOMAIN keys are exact match only
+  if (lockedKey.startsWith('DOMAIN:') || reqKey.startsWith('DOMAIN:')) return false
+
+  const lPath = normalizePath(lockedKey)
+  const rPath = normalizePath(reqKey)
+
+  if (lPath === rPath) return true
+  return rPath.startsWith(lPath + '/') || lPath.startsWith(rPath + '/')
+}
+
 export function lockFiles(sessionId, files) {
   const locks = getFileLocks()
   for (const f of files) locks[f] = sessionId
@@ -89,7 +106,18 @@ export function unlockFiles(sessionId) {
 
 export function checkFileLockConflicts(files) {
   const locks = getFileLocks()
-  return files.filter(f => locks[f]).map(f => ({ file: f, lockedBy: locks[f] }))
+  const conflicts = []
+
+  for (const file of files) {
+    for (const lockedFile of Object.keys(locks)) {
+      if (isConflict(lockedFile, file)) {
+        conflicts.push({ file, lockedBy: locks[lockedFile] })
+        break // Avoid duplicate conflicts for the same requested file
+      }
+    }
+  }
+
+  return conflicts
 }
 
 // --- Config (API key etc) ---
