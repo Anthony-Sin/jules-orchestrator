@@ -4,6 +4,7 @@ import {
   syncQuota, quotaRemaining, enqueue, dequeue,
   lockFiles, unlockFiles, checkFileLockConflicts,
 } from '../state/store.js'
+import { enqueue, dequeue } from '../queue/queue.js'
 import { createSession, getSession, deleteSession } from '../state/jules-api.js'
 import { getConfig } from '../state/store.js'
 
