@@ -2,6 +2,7 @@
 // Each task gets: { id, title, prompt, type, priority, estimatedFiles }
 
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import 'dotenv/config'
 
 export async function splitPrompt(rawPrompt) {
   try {
