@@ -130,3 +130,24 @@ export function setConfig(key, value) {
   config[key] = value
   store.set('config', config)
 }
+
+export async function syncQuota() {
+  const { listSessions } = await import('./jules-api.js');
+  try {
+    const res = await listSessions();
+    const sessions = res.sessions || res || []; // Handle array or object wrapper
+    const today = new Date().toISOString().slice(0, 10);
+    const apiQuotaUsed = sessions.filter(s => {
+      const d = s.createTime || s.createdAt || s.lastUpdated;
+      if (!d) return false;
+      return new Date(d).toISOString().slice(0, 10) === today;
+    }).length;
+
+    const record = store.get('quota', {});
+    if (record.date !== today || record.used !== apiQuotaUsed) {
+      store.set('quota', { date: today, used: apiQuotaUsed });
+    }
+  } catch (err) {
+    // Silently continue if syncing fails
+  }
+}
