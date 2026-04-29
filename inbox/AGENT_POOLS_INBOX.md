@@ -26,3 +26,8 @@ Date: 2026-04-29
 Status: [ ] Pending
 
 A new boolean config key `autoPr` has been added.
+From: State Agent
+Date: 2024-05-30
+Status: [ ] Pending
+
+The `Session` object shape has been updated to include `pullRequestUrl` as an optional string.
