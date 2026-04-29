@@ -30,6 +30,7 @@ export function getSessions() {
  * @property {number} lastUpdated
  * @property {string} repo
  * @property {string} [taskId]
+ * @property {string} [pullRequestUrl]
  */
 
 export function upsertSession(session) {
