@@ -39,7 +39,7 @@ function truncate(str, n) {
   return str.length > n ? str.slice(0, n - 1) + '…' : str
 }
 
-export function renderDashboard() {
+export function renderDashboard(filter = '') {
   console.clear()
 
   // Header
@@ -87,7 +87,16 @@ export function renderDashboard() {
     },
   })
 
-  const displayed = sessions.slice(-20).reverse()
+  let filteredSessions = sessions
+  if (filter) {
+    const lowerFilter = filter.toLowerCase()
+    filteredSessions = sessions.filter(s =>
+      (s.title && s.title.toLowerCase().includes(lowerFilter)) ||
+      (s.id && s.id.toLowerCase().includes(lowerFilter))
+    )
+  }
+
+  const displayed = filteredSessions.slice(-20).reverse()
   for (const s of displayed) {
     table.push([
       typeLabel(s.type || s.poolType),

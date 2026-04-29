@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
 import chalk from 'chalk'
+import inquirer from 'inquirer'
 import { splitPrompt, groupByType } from '../src/decomposer/decomposer.js'
 import { dispatchTask, dispatchConflictResolver, killSession, pollAndUpdate, poolSlotsFree } from '../src/pools/pool-manager.js'
 import { renderDashboard } from '../src/tui/renderer.js'
@@ -62,22 +63,59 @@ program
 // ── jorch status ──────────────────────────────────────────────────────────────
 program
   .command('status')
-  .description('Show live dashboard (polls every 5s, Ctrl+C to exit)')
-  .option('-w, --watch', 'Keep polling every 5s')
-  .action(async (opts) => {
-    renderDashboard()
+  .description('Show live dashboard with interactive prompt')
+  .action(async () => {
+    const { DEFAULTS } = await import('../config/defaults.js')
 
-    if (opts.watch) {
-      const { DEFAULTS } = await import('../config/defaults.js')
-      console.log(chalk.dim('  Watching… Ctrl+C to stop\n'))
-      const interval = setInterval(async () => {
-        await pollAndUpdate()
-        renderDashboard()
-      }, DEFAULTS.POLL_INTERVAL_MS)
+    let filter = ''
+    let isPrompting = false
 
-      process.on('SIGINT', () => { clearInterval(interval); process.exit(0) })
-    } else {
-      console.log(chalk.dim('  Tip: use --watch to keep polling\n'))
+    // Background polling quietly updates the state
+    const interval = setInterval(async () => {
+      await pollAndUpdate()
+      // Only re-render if we aren't currently waiting for user input,
+      // but in an async prompt loop, we are basically always waiting for input.
+      // We will let the background updates happen quietly and the UI will reflect
+      // changes when the user enters a command or search.
+    }, DEFAULTS.POLL_INTERVAL_MS)
+
+    process.on('SIGINT', () => {
+      clearInterval(interval)
+      process.exit(0)
+    })
+
+    while (true) {
+      renderDashboard(filter)
+
+      try {
+        const { input } = await inquirer.prompt([{
+          type: 'input',
+          name: 'input',
+          message: '> Search sessions or type / to use commands:'
+        }])
+
+        const trimmed = input.trim()
+
+        if (trimmed.startsWith('/')) {
+          const parts = trimmed.slice(1).split(' ')
+          const cmd = parts[0]
+
+          if (cmd === 'kill' && parts[1]) {
+            await killSession(parts[1])
+          } else if (cmd === 'exit' || cmd === 'quit') {
+            clearInterval(interval)
+            process.exit(0)
+          }
+          filter = '' // Reset filter after a command
+        } else {
+          filter = trimmed
+        }
+      } catch (err) {
+        if (err.name === 'ExitPromptError' || err.message.includes('closed')) {
+          clearInterval(interval)
+          process.exit(0)
+        }
+      }
     }
   })
 
