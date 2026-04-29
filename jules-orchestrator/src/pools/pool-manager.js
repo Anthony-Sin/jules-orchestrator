@@ -23,6 +23,7 @@ export function poolSlotsFree(type) {
 }
 
 export async function dispatchTask(task) {
+  await syncQuota()
   const { type, prompt, title, estimatedFiles, id } = task
   const config = getConfig()
 
@@ -62,7 +63,6 @@ export async function dispatchTask(task) {
   const sessionId = julesSession.name?.split('/').pop() || julesSession.id
 
   // Track it
-  await syncQuota()
   lockFiles(sessionId, estimatedFiles)
   upsertSession({
     id: sessionId,
@@ -73,12 +73,14 @@ export async function dispatchTask(task) {
     state: julesSession.state || 'QUEUED',
     createdAt: Date.now(),
     lastUpdated: Date.now(),
+    repo: config.source,
   })
 
   return { queued: false, sessionId }
 }
 
 export async function dispatchConflictResolver(description, branchA, branchB) {
+  await syncQuota()
   const config = getConfig()
   if (!config.source) throw new Error('No source set.')
 
@@ -100,7 +102,6 @@ Description of the conflict: ${description}`
   })
 
   const sessionId = julesSession.name?.split('/').pop() || julesSession.id
-  await syncQuota()
   upsertSession({
     id: sessionId,
     title: `Conflict resolver: ${branchA} + ${branchB}`,
@@ -109,6 +110,7 @@ Description of the conflict: ${description}`
     state: 'QUEUED',
     createdAt: Date.now(),
     lastUpdated: Date.now(),
+    repo: config.source,
   })
 
   return sessionId
@@ -123,6 +125,7 @@ export async function killSession(sessionId) {
 }
 
 export async function pollAndUpdate() {
+  await syncQuota()
   const active = getActiveSessions()
   const updated = []
 
