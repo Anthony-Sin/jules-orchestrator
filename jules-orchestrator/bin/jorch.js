@@ -63,58 +63,51 @@ program
 // ── jorch status ──────────────────────────────────────────────────────────────
 program
   .command('status')
-  .description('Show live dashboard with interactive prompt')
+  .description('Show live dashboard with interactive prompt (polls every 5s, /exit to quit)')
   .action(async () => {
     const { DEFAULTS } = await import('../config/defaults.js')
 
-    let filter = ''
-    let isPrompting = false
+    let searchTerm = ''
+    let isRunning = true
 
-    // Background polling quietly updates the state
+    // Background polling
     const interval = setInterval(async () => {
       await pollAndUpdate()
-      // Only re-render if we aren't currently waiting for user input,
-      // but in an async prompt loop, we are basically always waiting for input.
-      // We will let the background updates happen quietly and the UI will reflect
-      // changes when the user enters a command or search.
+      // We don't re-render here to avoid messing up the inquirer prompt,
+      // but state is updated. The user can press Enter to refresh.
     }, DEFAULTS.POLL_INTERVAL_MS)
 
-    process.on('SIGINT', () => {
-      clearInterval(interval)
-      process.exit(0)
-    })
+    process.on('SIGINT', () => { clearInterval(interval); process.exit(0) })
 
-    while (true) {
-      renderDashboard(filter)
+    while (isRunning) {
+      renderDashboard(searchTerm)
 
-      try {
-        const { input } = await inquirer.prompt([{
+      const { input } = await inquirer.prompt([
+        {
           type: 'input',
           name: 'input',
-          message: '> Search sessions or type / to use commands:'
-        }])
-
-        const trimmed = input.trim()
-
-        if (trimmed.startsWith('/')) {
-          const parts = trimmed.slice(1).split(' ')
-          const cmd = parts[0]
-
-          if (cmd === 'kill' && parts[1]) {
-            await killSession(parts[1])
-          } else if (cmd === 'exit' || cmd === 'quit') {
-            clearInterval(interval)
-            process.exit(0)
-          }
-          filter = '' // Reset filter after a command
-        } else {
-          filter = trimmed
+          message: '> Search sessions or type / to use commands:',
         }
-      } catch (err) {
-        if (err.name === 'ExitPromptError' || err.message.includes('closed')) {
-          clearInterval(interval)
-          process.exit(0)
+      ])
+
+      const val = input.trim()
+
+      if (val === '/quit' || val === '/exit') {
+        isRunning = false
+        clearInterval(interval)
+        process.exit(0)
+      } else if (val.startsWith('/kill ')) {
+        const id = val.split(' ')[1]
+        if (id) {
+          await killSession(id)
+          await pollAndUpdate()
         }
+        searchTerm = '' // Clear search after command
+      } else if (val.startsWith('/')) {
+        // Ignore unknown commands, keep current search term
+        searchTerm = ''
+      } else {
+        searchTerm = val
       }
     }
   })
