@@ -2,11 +2,10 @@ import { enqueue, dequeue } from '../queue/queue.js'
 import { DEFAULTS } from '../../config/defaults.js'
 import {
   getActiveSessions, upsertSession, removeSession,
-  incrementQuota, quotaRemaining,
+  syncQuota, quotaRemaining,
   lockFiles, unlockFiles, checkFileLockConflicts,
 } from '../state/store.js'
-import { enqueue, dequeue } from '../queue/queue.js'
-import { createSession, getSession, deleteSession } from '../state/jules-api.js'
+import { createSession, getSession, deleteSession, sendMessage, approvePlan } from '../state/jules-api.js'
 import { getConfig } from '../state/store.js'
 
 const TERMINAL_STATES = ['COMPLETED', 'FAILED', 'KILLED']
@@ -122,6 +121,16 @@ export async function killSession(sessionId) {
   } catch (_) {}
   unlockFiles(sessionId)
   upsertSession({ id: sessionId, state: 'KILLED', lastUpdated: Date.now() })
+}
+
+export async function replyToSession(sessionId, message) {
+  await syncQuota()
+  return await sendMessage(sessionId, message)
+}
+
+export async function approveSessionPlan(sessionId) {
+  await syncQuota()
+  return await approvePlan(sessionId)
 }
 
 export async function pollAndUpdate() {
