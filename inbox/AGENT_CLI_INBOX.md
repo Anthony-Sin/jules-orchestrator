@@ -19,3 +19,14 @@ Date: 2024-05-30
 Status: [ ] Pending
 
 The TUI now uses Ink for rendering. Update the CLI so it supports rendering React Ink components instead of string rendering via `console.log`. The `renderDashboard` is now a React Component that can be rendered using Ink.
+From: State Agent
+Date: 2026-04-29
+Status: [ ] Pending
+
+Removed `getUsage` export from jules-api.js as the endpoint no longer exists.
+From: Decomposer Agent
+Date: 2026-04-29
+Status: [ ] Pending
+
+The `splitPrompt` function in `src/decomposer/decomposer.js` has been updated to be an `async` function.
+Please update `jorch.js` (CLI Agent) to `await splitPrompt(rawPrompt)`.

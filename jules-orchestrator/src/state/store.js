@@ -1,6 +1,5 @@
 import Conf from 'conf'
 import { DEFAULTS } from '../../config/defaults.js'
-import { getUsage } from './jules-api.js'
 
 export const store = new Conf({ projectName: 'jules-orchestrator' })
 
@@ -8,13 +7,6 @@ export const store = new Conf({ projectName: 'jules-orchestrator' })
 export function getQuotaUsed() {
   const record = store.get('quota', {})
   return record.used || 0
-}
-
-export async function syncQuota() {
-  const today = new Date().toISOString().slice(0, 10)
-  const usage = await getUsage()
-  store.set('quota', { date: today, used: usage.used, limit: usage.limit, remaining: usage.remaining })
-  return usage
 }
 
 export function quotaRemaining() {
@@ -26,6 +18,19 @@ export function quotaRemaining() {
 export function getSessions() {
   return store.get('sessions', [])
 }
+
+/**
+ * @typedef {Object} Session
+ * @property {string} id
+ * @property {string} title
+ * @property {string} type
+ * @property {string} poolType
+ * @property {string} state
+ * @property {number} createdAt
+ * @property {number} lastUpdated
+ * @property {string} repo
+ * @property {string} [taskId]
+ */
 
 export function upsertSession(session) {
   const sessions = getSessions()

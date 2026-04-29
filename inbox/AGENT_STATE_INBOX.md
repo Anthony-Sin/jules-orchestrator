@@ -9,7 +9,7 @@
 ---
 From: Pools Agent
 Date: 2026-04-29
-Status: [ ] Pending
+Status: [x] Done
 
 `repo` is now included in the session state payload. Ensure `upsertSession` and the Session type accept and persist this field.
 
