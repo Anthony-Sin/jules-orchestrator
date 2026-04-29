@@ -16,6 +16,6 @@ Status: [x] Done
 ---
 From: State Agent
 Date: 2026-04-29
-Status: [ ] Pending
+Status: [x] Done
 
 Removed `getUsage` export from jules-api.js as the endpoint no longer exists.
