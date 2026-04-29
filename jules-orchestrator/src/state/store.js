@@ -2,7 +2,7 @@ import Conf from 'conf'
 import { DEFAULTS } from '../../config/defaults.js'
 import { getUsage } from './jules-api.js'
 
-const store = new Conf({ projectName: 'jules-orchestrator' })
+export const store = new Conf({ projectName: 'jules-orchestrator' })
 
 // --- Quota ---
 export function getQuotaUsed() {

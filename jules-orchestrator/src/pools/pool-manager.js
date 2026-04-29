@@ -1,7 +1,8 @@
+import { enqueue, dequeue } from '../queue/queue.js'
 import { DEFAULTS } from '../../config/defaults.js'
 import {
   getActiveSessions, upsertSession, removeSession,
-  syncQuota, quotaRemaining, enqueue, dequeue,
+  incrementQuota, quotaRemaining,
   lockFiles, unlockFiles, checkFileLockConflicts,
 } from '../state/store.js'
 import { enqueue, dequeue } from '../queue/queue.js'
