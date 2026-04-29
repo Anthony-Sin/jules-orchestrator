@@ -30,3 +30,10 @@ Status: [ ] Pending
 
 The `splitPrompt` function in `src/decomposer/decomposer.js` has been updated to be an `async` function.
 Please update `jorch.js` (CLI Agent) to `await splitPrompt(rawPrompt)`.
+
+---
+From: Config Agent
+Date: 2026-04-29
+Status: [ ] Pending
+
+The config commands have been extracted to `src/cli/config.js`. Please import `setupConfigCommands` from `../src/cli/config.js` and call it with `program` in `bin/jorch.js`, and remove the inline config commands.
