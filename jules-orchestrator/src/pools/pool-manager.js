@@ -1,7 +1,8 @@
+import { enqueue, dequeue } from '../queue/queue.js'
 import { DEFAULTS } from '../../config/defaults.js'
 import {
   getActiveSessions, upsertSession, removeSession,
-  incrementQuota, quotaRemaining, enqueue, dequeue,
+  incrementQuota, quotaRemaining,
   lockFiles, unlockFiles, checkFileLockConflicts,
 } from '../state/store.js'
 import { createSession, getSession, deleteSession } from '../state/jules-api.js'

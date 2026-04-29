@@ -1,7 +1,7 @@
 import Conf from 'conf'
 import { DEFAULTS } from '../../config/defaults.js'
 
-const store = new Conf({ projectName: 'jules-orchestrator' })
+export const store = new Conf({ projectName: 'jules-orchestrator' })
 
 // --- Quota ---
 export function getQuotaUsed() {
@@ -52,21 +52,7 @@ export function getQueue() {
   return store.get('queue', [])
 }
 
-export function enqueue(task) {
-  const queue = getQueue()
-  queue.push({ ...task, queuedAt: Date.now() })
-  queue.sort((a, b) => b.priority - a.priority)
-  store.set('queue', queue)
-}
 
-export function dequeue(type) {
-  const queue = getQueue()
-  const idx = queue.findIndex(t => t.type === type)
-  if (idx < 0) return null
-  const [task] = queue.splice(idx, 1)
-  store.set('queue', queue)
-  return task
-}
 
 // --- File lock map ---
 export function getFileLocks() {
