@@ -9,9 +9,18 @@ export function getQuotaUsed() {
   return record.used || 0
 }
 
+export function getQuotaLimit() {
+  return store.get('quotaLimit', null)
+}
+
+export function setQuotaLimit(n) {
+  store.set('quotaLimit', n)
+}
+
 export function quotaRemaining() {
-  const record = store.get('quota', {})
-  return record.remaining !== undefined ? record.remaining : (record.limit || DEFAULTS.DAILY_QUOTA) - getQuotaUsed()
+  const limit = getQuotaLimit()
+  if (limit === null) return null
+  return limit - getQuotaUsed()
 }
 
 // --- Sessions ---
@@ -25,19 +34,31 @@ export function getSessions() {
  * @property {string} title
  * @property {string} type
  * @property {string} poolType
- * @property {string} state
- * @property {number} createdAt
- * @property {number} lastUpdated
+ * @property {string} state - e.g., QUEUED, AWAITING_USER_FEEDBACK, PAUSED, IN_PROGRESS, COMPLETED, FAILED
+ * @property {number|string} createdAt
+ * @property {number|string} lastUpdated
  * @property {string} repo
+ * @property {string} [repoDisplay]
  * @property {string} [taskId]
  * @property {string} [pullRequestUrl]
+ * @property {string} [pullRequestTitle]
+ * @property {string} [julesUrl]
  */
 
 export function upsertSession(session) {
   const sessions = getSessions()
-  const idx = sessions.findIndex(s => s.id === session.id)
-  if (idx >= 0) sessions[idx] = { ...sessions[idx], ...session }
-  else sessions.push(session)
+
+  // Strip undefined values to prevent overwriting existing fields
+  const cleanSession = { ...session }
+  for (const key of Object.keys(cleanSession)) {
+    if (cleanSession[key] === undefined) {
+      delete cleanSession[key]
+    }
+  }
+
+  const idx = sessions.findIndex(s => s.id === cleanSession.id)
+  if (idx >= 0) sessions[idx] = { ...sessions[idx], ...cleanSession }
+  else sessions.push(cleanSession)
   store.set('sessions', sessions)
 }
 
@@ -114,6 +135,13 @@ export function checkFileLockConflicts(files) {
 }
 
 // --- Config (API key etc) ---
+
+/**
+ * @typedef {Object} Config
+ * @property {string} [apiKey]
+ * @property {boolean} [autoPr]
+ */
+
 export function getConfig() {
   return store.get('config', {})
 }
@@ -127,19 +155,20 @@ export function setConfig(key, value) {
 export async function syncQuota() {
   const { listSessions } = await import('./jules-api.js');
   try {
-    const res = await listSessions();
-    const sessions = res.sessions || res || []; // Handle array or object wrapper
-    const today = new Date().toISOString().slice(0, 10);
-    const apiQuotaUsed = sessions.filter(s => {
-      const d = s.createTime || s.createdAt || s.lastUpdated;
-      if (!d) return false;
-      return new Date(d).toISOString().slice(0, 10) === today;
-    }).length;
+    const data = await listSessions();
+    const sessions = Array.isArray(data) ? data : (data.sessions || []);
 
-    const record = store.get('quota', {});
-    if (record.date !== today || record.used !== apiQuotaUsed) {
-      store.set('quota', { date: today, used: apiQuotaUsed });
+    const today = new Date().toISOString().split('T')[0];
+    let count = 0;
+
+    for (const session of sessions) {
+      const ts = session.createTime || session.createdAt || session.lastUpdated;
+      if (ts && new Date(ts).toISOString().split('T')[0] === today) {
+        count++;
+      }
     }
+
+    store.set('quota', { date: today, used: count });
   } catch (err) {
     // Silently continue if syncing fails
   }
