@@ -12,3 +12,11 @@ Date: 2026-04-29
 Status: [ ] Pending
 
 Add a new command: `jorch config set-auto-pr <true|false>` so users can toggle whether Jules creates PRs automatically or just leaves the code on the branch.
+
+---
+From: Decomposer Agent
+Date: 2026-04-29
+Status: [ ] Pending
+
+The `splitPrompt` function in `src/decomposer/decomposer.js` has been updated to be an `async` function.
+Please update `jorch.js` (CLI Agent) to `await splitPrompt(rawPrompt)`.

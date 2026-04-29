@@ -1,83 +1,85 @@
-// Splits a raw user prompt into atomic tasks scored by complexity and type.
+// Splits a raw user prompt into atomic tasks using Gemini.
 // Each task gets: { id, title, prompt, type, priority, estimatedFiles }
 
-const FRONTEND_KEYWORDS = [
-  'ui', 'component', 'page', 'layout', 'style', 'css', 'button', 'modal',
-  'sidebar', 'navbar', 'form', 'input', 'canvas', 'animation', 'responsive',
-  'hook', 'react', 'next', 'frontend', 'display', 'render', 'view', 'design',
-]
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const BACKEND_KEYWORDS = [
-  'api', 'endpoint', 'route', 'server', 'database', 'db', 'schema', 'query',
-  'auth', 'middleware', 'service', 'backend', 'model', 'migration', 'cron',
-  'webhook', 'job', 'queue', 'cache', 'redis', 'postgres', 'prisma',
-]
+export async function splitPrompt(rawPrompt) {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) {
+      throw new Error('GEMINI_API_KEY environment variable is not set')
+    }
 
-const CONFLICT_AGENT_KEYWORDS = [
-  'merge conflict', 'conflict', 'both changes', 'accept both',
-]
+    const genAI = new GoogleGenerativeAI(apiKey)
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' })
 
-function detectType(text) {
-  const lower = text.toLowerCase()
-  if (CONFLICT_AGENT_KEYWORDS.some(k => lower.includes(k))) return 'conflict'
-  const feScore = FRONTEND_KEYWORDS.filter(k => lower.includes(k)).length
-  const beScore = BACKEND_KEYWORDS.filter(k => lower.includes(k)).length
-  if (feScore === 0 && beScore === 0) return 'frontend' // default to frontend
-  return feScore >= beScore ? 'frontend' : 'backend'
+    const prompt = `
+You are the Decomposer Agent for a multi-agent system.
+Your job is to parse the user's prompt and split it into atomic, typed, prioritized tasks.
+You must return a JSON array of task objects and nothing else. Do not include markdown codeblocks, just raw JSON.
+
+Each task object must have this exact shape:
+{
+  "id": "string - unique id starting with task-, e.g., task-1234-0",
+  "title": "string - short title (up to 60 chars)",
+  "prompt": "string - the full text for this specific atomic chunk",
+  "type": "string - exactly one of 'frontend', 'backend', or 'conflict'",
+  "priority": "number - 1, 2, or 3 (higher is more complex/urgent)",
+  "estimatedFiles": "array of strings - specific files, globs, or DOMAIN: keys (e.g. DOMAIN:DATABASE)"
 }
 
-function scoreComplexity(text) {
-  const words = text.split(/\s+/).length
-  // rough heuristic: longer description = more complex = higher priority
-  if (words > 60) return 3
-  if (words > 25) return 2
-  return 1
-}
+Rules:
+- split on distinct concerns
+- detect type ('conflict' if it involves merge conflicts, otherwise 'frontend' or 'backend')
+- priority: longer description = more complex = higher priority (1 to 3)
+- estimatedFiles: specific files (if mentioned), globs, or DOMAIN: keys.
 
-function estimateFiles(text) {
-  // Predict which files will likely be touched based on keywords
+User Prompt to decompose:
+${rawPrompt}
+  `
 
-  // 1. Look for specific file names
-  const specificFilesMatch = text.match(/[\w\.\-]+\.(?:js|jsx|ts|tsx|json|css|scss|html|md)\b/gi)
-  if (specificFilesMatch && specificFilesMatch.length > 0) {
-    return [...new Set(specificFilesMatch)]
+    const result = await model.generateContent(prompt)
+    const responseText = result.response.text()
+
+    // Try to strip any potential markdown block
+    let cleanedText = responseText.trim()
+    if (cleanedText.startsWith('\`\`\`json')) {
+      cleanedText = cleanedText.slice(7)
+    } else if (cleanedText.startsWith('\`\`\`')) {
+      cleanedText = cleanedText.slice(3)
+    }
+    if (cleanedText.endsWith('\`\`\`')) {
+      cleanedText = cleanedText.slice(0, -3)
+    }
+    cleanedText = cleanedText.trim()
+
+    let tasks = JSON.parse(cleanedText)
+
+    if (!Array.isArray(tasks)) {
+      tasks = [tasks]
+    }
+
+    return tasks.map((task, i) => ({
+      id: task.id || `task-${Date.now()}-${i}`,
+      title: task.title || 'Untitled task',
+      prompt: task.prompt || rawPrompt,
+      type: ['frontend', 'backend', 'conflict'].includes(task.type) ? task.type : 'frontend',
+      priority: [1, 2, 3].includes(task.priority) ? task.priority : 1,
+      estimatedFiles: Array.isArray(task.estimatedFiles) ? task.estimatedFiles : ['unknown'],
+      createdAt: Date.now(),
+    }))
+  } catch (error) {
+    // Graceful fallback
+    return [{
+      id: `task-${Date.now()}-fallback`,
+      title: rawPrompt.slice(0, 60) + (rawPrompt.length > 60 ? '…' : ''),
+      prompt: rawPrompt,
+      type: 'frontend',
+      priority: 1,
+      estimatedFiles: ['unknown'],
+      createdAt: Date.now(),
+    }]
   }
-
-  const lower = text.toLowerCase()
-
-  // 2. Check for domain-level locks if no specific files found
-  if (lower.includes('database') || lower.includes('db') || lower.includes('schema') || lower.includes('model') || lower.includes('migration') || lower.includes('postgres') || lower.includes('prisma')) {
-    return ['DOMAIN:DATABASE']
-  }
-
-  // 3. Fallback to broad globs
-  const files = []
-  if (lower.includes('route') || lower.includes('api')) files.push('src/app/api/**')
-  if (lower.includes('component') || lower.includes('ui')) files.push('src/components/**')
-  if (lower.includes('page')) files.push('src/app/**')
-  if (lower.includes('style') || lower.includes('css')) files.push('src/styles/**')
-  return files.length > 0 ? files : ['unknown']
-}
-
-export function splitPrompt(rawPrompt) {
-  // Split on numbered lists, bullet points, or "and" joining distinct concerns
-  const lines = rawPrompt
-    .split(/\n|(?=\d+\.\s)|(?=[-*•]\s)/)
-    .map(l => l.replace(/^[\d\.\-\*•\s]+/, '').trim())
-    .filter(l => l.length > 10)
-
-  // If no clear splits, treat the whole thing as one task
-  const chunks = lines.length > 1 ? lines : [rawPrompt]
-
-  return chunks.map((chunk, i) => ({
-    id: `task-${Date.now()}-${i}`,
-    title: chunk.slice(0, 60) + (chunk.length > 60 ? '…' : ''),
-    prompt: chunk,
-    type: detectType(chunk),
-    priority: scoreComplexity(chunk),
-    estimatedFiles: estimateFiles(chunk),
-    createdAt: Date.now(),
-  }))
 }
 
 export function groupByType(tasks) {
