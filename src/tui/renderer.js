@@ -98,9 +98,6 @@ function FillBar({ value, tick, width = 7, isDimmed, state }) {
   } else if (state === 'QUEUED' || state === 'PAUSED' || state === 'FAILED' || state === 'KILLED') {
       target = 0;
   }
-  if (line) lines.push(line)
-  return lines
-}
 
   const shown  = Math.min(width, Math.max(0, target))
   const empty  = width - shown
@@ -176,21 +173,21 @@ function wrapText(text, width) {
 function ChatPanel({ messages, input, onChange, onSubmit, focused, scrollOffset, width, height, tab, notes, setNotes }) {
   const inner = Math.max(10, width - 4)
 
-  const allLines = []
+  const allLines = [] 
   if (tab === 'chat') {
-      for (const m of messages) {
-        if (m.role === 'agent') {
-          allLines.push({ type: 'label', text: '▸ AGENT', color: focused ? 'magenta' : 'gray' })
+      for (const m of messages) { 
+        if (m.role === 'agent') { 
+          allLines.push({ type: 'label', text: '▸ AGENT', color: focused ? 'magenta' : 'gray' }) 
         } else if (m.role === 'system') {
-          allLines.push({ type: 'label', text: '  [SYSTEM]', color: 'gray' })
-        } else {
-          allLines.push({ type: 'label', text: '  you', color: 'cyan' })
-        }
-        const wrapped = wrapText(m.text, inner - 2)
-        for (const l of wrapped)
-          allLines.push({ type: 'text', text: l, color: m.role === 'agent' ? (focused ? 'white' : 'gray') : (focused ? 'cyan' : 'gray') })
-        allLines.push({ type: 'gap' })
-      }
+          allLines.push({ type: 'label', text: '  [SYSTEM]', color: 'gray' }) 
+        } else { 
+          allLines.push({ type: 'label', text: '  you', color: 'cyan' }) 
+        } 
+        const wrapped = wrapText(m.text, inner - 2) 
+        for (const l of wrapped) 
+          allLines.push({ type: 'text', text: l, color: m.role === 'agent' ? (focused ? 'white' : 'gray') : (focused ? 'cyan' : 'gray') }) 
+        allLines.push({ type: 'gap' }) 
+      } 
   } else {
       const wrapped = [];
       const lines = (notes || 'Type your notes here. They are saved automatically.').split('\n');
@@ -199,10 +196,10 @@ function ChatPanel({ messages, input, onChange, onSubmit, focused, scrollOffset,
       }
       for (const l of wrapped) allLines.push({ type: 'text', text: l, color: focused ? 'white' : 'gray' })
   }
-
-  const VISIBLE = Math.max(10, height - 8)
-  const total   = allLines.length
-  const start   = Math.max(0, total - VISIBLE - scrollOffset)
+ 
+  const VISIBLE = Math.max(10, height - 8)  
+  const total   = allLines.length 
+  const start   = Math.max(0, total - VISIBLE - scrollOffset) 
   const visible = allLines.slice(start, start + VISIBLE)
 
   return React.createElement(Box, { flexDirection: "column", borderStyle: "single", borderColor: focused ? 'cyan' : 'gray', width: width, height: "100%", paddingX: 1 },
@@ -390,9 +387,9 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
     }
 
     if (key.f4) { setRepoInputMode(true); setRepoInput(''); return }
-    if (key.f1) { setMode('table'); return }
-    if (key.f2) { setMode('graph'); return }
-    if (key.f3) { setMode('chat'); setScrollOffset(0); return }
+    if (key.f1) { setMode('table'); return } 
+    if (key.f2) { setMode('graph'); return } 
+    if (key.f3) { setMode('chat'); setScrollOffset(0); return } 
     if (key.escape) { setMode('table'); return }
 
     if (key.tab) {
@@ -401,7 +398,7 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
       return
     }
 
-    if (mode === 'chat') {
+    if (mode === 'chat') { 
       if (key.shift && (key.leftArrow || key.rightArrow)) { setChatTab(t => t === 'chat' ? 'notes' : 'chat'); return }
       if (key.upArrow)   setScrollOffset(o => o + 1)
       if (key.downArrow) setScrollOffset(o => Math.max(0, o - 1))
@@ -454,9 +451,9 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
     // Existing session
     if (agent.state === 'IN_PROGRESS') {
         setQueuedMessages(prev => ({...prev, [agent.id]: val.trim()}));
-        setMessages(m => [...m,
-          { role: 'user',  text: val.trim() },
-          { role: 'system', text: `[SYSTEM] Node ${agent.id} is IN_PROGRESS. Message queued.` },
+        setMessages(m => [...m, 
+          { role: 'user',  text: val.trim() }, 
+          { role: 'system', text: `[SYSTEM] Node ${agent.id} is IN_PROGRESS. Message queued.` }, 
         ]);
         setChatInput('');
         setScrollOffset(0);
