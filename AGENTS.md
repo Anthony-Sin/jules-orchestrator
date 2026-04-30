@@ -32,6 +32,7 @@ To prevent failing code reviews and wasting time, you MUST follow these strict o
 | **Config** | `agent_roles/AGENT_CONFIG_REQUIREMENTS.md` | **Settings:** Owns `jorch config *` commands (`src/cli/config.js`). |
 | **Conflict** | `agent_roles/AGENT_CONFLICT_REQUIREMENTS.md` | **Resolver:** Owns `jorch conflict` command and dedicated merge sessions. |
 | **Decomposer** | `agent_roles/AGENT_DECOMPOSER_REQUIREMENTS.md` | **Parser:** Splits raw prompts into atomic, typed tasks (`src/decomposer/decomposer.js`). |
+| **Jules Lead Orchestrator** | `agent_roles/AGENT_JULES_LEAD_ORCHESTRATOR_REQUIREMENTS.md` | **Master Dispatcher:** Hybrid brain. Analyzes user intent, provides tools, orchestrates tasks between user and sub-agents (`src/jules_lead_orchestrator/`). |
 | **Pools** | `agent_roles/AGENT_POOLS_REQUIREMENTS.md` | **Lifecycle:** Dispatches tasks, polls state, kills sessions (`src/pools/pool-manager.js`). |
 | **Queue** | `agent_roles/AGENT_QUEUE_REQUIREMENTS.md` | **Traffic Control:** Enqueues, sorts priority, checks file locks (`src/queue/queue.js`). |
 | **State** | `agent_roles/AGENT_STATE_REQUIREMENTS.md` | **Source of Truth:** Owns persistent store and Jules API calls (`src/state/`). |
@@ -80,19 +81,3 @@ Status: [ ] Pending
 
 **Action Required:**
 {Tell the receiving agent exactly what they need to do in their domain.}
-```
-
----
-
-## Inbox Directory
-
-| Agent | Inbox File |
-|---|---|
-| Executive | `inbox/AGENT_EXECUTIVE_INBOX.md` |
-| Config | `inbox/AGENT_CONFIG_INBOX.md` |
-| Conflict | `inbox/AGENT_CONFLICT_INBOX.md` |
-| Decomposer | `inbox/AGENT_DECOMPOSER_INBOX.md` |
-| Pools | `inbox/AGENT_POOLS_INBOX.md` |
-| Queue | `inbox/AGENT_QUEUE_INBOX.md` |
-| State | `inbox/AGENT_STATE_INBOX.md` |
-| TUI | `inbox/AGENT_TUI_INBOX.md` |
