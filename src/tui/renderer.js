@@ -134,11 +134,9 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
       React.createElement(Box, { marginLeft: 2, marginBottom: 1, flexDirection: 'column' },
         React.createElement(Text, { color: 'cyan', bold: true }, 'Available Commands:'),
         React.createElement(Text, {}, '  /quit, /exit   - Exit the dashboard'),
-        React.createElement(Text, {}, '  /kill <id>     - Kill a specific session')
-      )
-    ) : sessions.length === 0 ? (
-      React.createElement(Box, { marginLeft: 2, marginBottom: 1 },
-        React.createElement(Text, { dimColor: true }, 'No sessions yet. Use: jorch run "your task here"\n')
+        React.createElement(Text, {}, '  /kill <id>     - Kill a specific session'),
+        React.createElement(Text, {}, '  /repo <name>   - Set the active repository'),
+        React.createElement(Text, {}, '  /branch <name> - Set the active branch')
       )
     ) : (
       React.createElement(Box, { flexDirection: 'column', marginBottom: 1 },
@@ -150,7 +148,9 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
             React.createElement(Box, { width: 18, borderStyle: 'round', borderColor: 'gray', justifyContent: 'center' }, React.createElement(Text, { dimColor: true, bold: true }, 'Last active')),
             React.createElement(Box, { width: 20, borderStyle: 'round', borderColor: 'gray', justifyContent: 'center' }, React.createElement(Text, { dimColor: true, bold: true }, 'Status'))
           ),
-          displayed.map((s, idx) => {
+          sessions.length === 0 ? React.createElement(Box, { marginLeft: 2, marginBottom: 1 },
+            React.createElement(Text, { dimColor: true }, 'No sessions yet. Use: jorch run "your task here"\n')
+          ) : displayed.map((s, idx) => {
             const isSelected = idx === selectedIndex
             const repoDisplay = s.repoDisplay || (s.repo ? s.repo.replace(/^sources\/github-/, '').replace('-', '/') : '-')
 

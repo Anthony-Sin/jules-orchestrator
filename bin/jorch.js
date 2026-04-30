@@ -5,7 +5,7 @@ import inquirer from 'inquirer'
 import React, { useState, useEffect } from 'react'
 import { render, useInput } from 'ink'
 import { splitPrompt, groupByType } from '../src/decomposer/decomposer.js'
-import { dispatchTask, dispatchConflictResolver, killSession, pollAndUpdate, poolSlotsFree } from '../src/pools/pool-manager.js'
+import { dispatchTask, dispatchConflictResolver, killSession, pollAndUpdate, poolSlotsFree, syncSessions } from '../src/pools/pool-manager.js'
 import { renderDashboard, Dashboard } from '../src/tui/renderer.js'
 import { getSessions, getQueue, getConfig, setConfig, quotaRemaining, getActiveSessions, syncQuota, setQuotaLimit } from '../src/state/store.js'
 import { DEFAULTS } from '../config/defaults.js'
@@ -84,6 +84,7 @@ function StatusApp() {
 
   useEffect(() => {
     syncQuota()
+    syncSessions().then(() => setLastUpdate(Date.now()))
     const interval = setInterval(async () => {
       await pollAndUpdate()
       setLastUpdate(Date.now())
@@ -149,6 +150,16 @@ function StatusApp() {
             await killSession(id)
             await pollAndUpdate()
             setLastUpdate(Date.now())
+          }
+        } else if (inputBuffer.startsWith('/repo ')) {
+          const repo = inputBuffer.split(' ')[1]
+          if (repo) {
+            setConfig('source', repo)
+          }
+        } else if (inputBuffer.startsWith('/branch ')) {
+          const branch = inputBuffer.split(' ')[1]
+          if (branch) {
+            setConfig('branch', branch)
           }
         }
         setInputBuffer('')
