@@ -206,6 +206,28 @@ const ORCHESTRATOR_TOOLS = [
         required: ["agent_id", "new_instructions"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "merge_branches",
+      description: "Creates a temporary branch from a base branch, merges a list of branches into it, automatically commits any merge conflict markers (to allow a reviewer agent to resolve them later), and pushes the temporary branch to origin.",
+      parameters: {
+        type: "object",
+        properties: {
+          base_branch: {
+            type: "string",
+            description: "The name of the base branch to start from (e.g., 'main')."
+          },
+          branches_to_merge: {
+            type: "array",
+            items: { type: "string" },
+            description: "List of branch names to merge into the new temporary branch."
+          }
+        },
+        required: ["base_branch", "branches_to_merge"]
+      }
+    }
   }
 ];
 
