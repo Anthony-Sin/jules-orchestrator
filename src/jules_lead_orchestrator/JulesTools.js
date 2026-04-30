@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import fetch from 'node-fetch'
 import { execSync } from 'child_process'
-import { getActiveSessions, upsertSession, getConfig } from '../state/store.js'
+import { getActiveSessions, upsertSession, getConfig, store } from '../state/store.js'
 import { DEFAULTS } from '../../config/defaults.js'
 
 function getHeaders() {
@@ -72,7 +72,8 @@ export async function handleOrchestratorToolCall(toolCall) {
     }
 
     case 'generate_ink_terminal_diagram': {
-      return { status: 'success', message: `Diagram generated: ${args.architecture_description}` };
+      store.set('architectureDiagram', args.architecture_description);
+      return { status: 'success', message: `Diagram generated and saved: ${args.architecture_description}` };
     }
 
     case 'dispatch_sub_agent': {

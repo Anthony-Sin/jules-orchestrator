@@ -173,3 +173,8 @@ export async function syncQuota() {
     // Silently continue if syncing fails
   }
 }
+
+// --- Architecture Diagram ---
+export function getArchitectureDiagram() {
+  return store.get('architectureDiagram', null)
+}
