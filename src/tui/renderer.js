@@ -116,7 +116,10 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
   let displayed = reversedFiltered.slice(startIdx, startIdx + maxSessions)
   const hasMore = startIdx + maxSessions < reversedFiltered.length
 
-  const logo = `
+  const rows = process.stdout.rows || 24
+  const showFullLogo = rows >= 35
+
+  const fullLogo = `
       ██╗██╗   ██╗██╗     ███████╗███████╗
       ██║██║   ██║██║     ██╔════╝██╔════╝
       ██║██║   ██║██║     █████╗  ███████╗
@@ -131,14 +134,26 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
  ╚██████╗╚██████╔╝███████╗╚██████╔╝██║ ╚████║   ██║
   ╚═════╝ ╚═════╝ ╚══════╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝
 `
+  const smallLogo = `
+      ██╗██╗   ██╗██╗     ███████╗███████╗
+      ██║██║   ██║██║     ██╔════╝██╔════╝
+      ██║██║   ██║██║     █████╗  ███████╗
+ ██   ██║██║   ██║██║     ██╔══╝  ╚════██║
+ ╚█████╔╝╚██████╔╝███████╗███████╗███████║
+  ╚════╝  ╚═════╝ ╚══════╝╚══════╝╚══════╝
+`
+
+  const logo = showFullLogo ? fullLogo : smallLogo
 
   return React.createElement(Box, { flexDirection: 'column' },
     React.createElement(Box, { flexDirection: 'column', marginBottom: 1 },
       React.createElement(Text, { color: 'red', bold: true }, logo),
-      React.createElement(Text, { color: 'magentaBright', bold: true }, '   powered by jules\n'),
+      React.createElement(Text, { color: 'magentaBright', bold: true }, '   powered by jules'),
+      React.createElement(Box, { marginBottom: 1 }),
       React.createElement(Text, { color: 'greenBright', bold: true }, '   Welcome to Jules CLI!'),
       React.createElement(Text, { color: 'white' }, `   v${version}`),
-      React.createElement(Text, { color: 'white', dimColor: true }, '   What would you like to build today?\n')
+      React.createElement(Text, { color: 'white', dimColor: true }, '   What would you like to build today?'),
+      React.createElement(Box, { marginBottom: 1 })
     ),
     React.createElement(Box, { marginBottom: 1, paddingLeft: 3 },
       React.createElement(Text, { color: 'yellow' }, '> '),
@@ -163,7 +178,7 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
             React.createElement(Box, { width: 20, borderStyle: 'round', borderColor: 'gray', justifyContent: 'center' }, React.createElement(Text, { dimColor: true, bold: true }, 'Status'))
           ),
           sessions.length === 0 ? React.createElement(Box, { marginLeft: 2, marginBottom: 1 },
-            React.createElement(Text, { dimColor: true }, 'No sessions yet. Use: jorch run "your task here"\n')
+            React.createElement(Text, { dimColor: true }, 'No sessions yet. Use: jorch run "your task here"')
           ) : [
             ...displayed.map((s, idx) => {
               const actualIdx = startIdx + idx
@@ -195,7 +210,7 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
         : React.createElement(Text, {}, `  Quota limit unknown — set it with: ${chalk.yellow.dim('jorch config set-quota <n>')}`)
     ),
     React.createElement(Box, { flexDirection: 'column', marginTop: 1 },
-      !config.apiKey ? React.createElement(Text, { color: 'red' }, '  Warning: No API key set. Run: jorch config set-key <your-key>\n') : null,
+      !config.apiKey ? React.createElement(Box, { marginBottom: 1 }, React.createElement(Text, { color: 'red' }, '  Warning: No API key set. Run: jorch config set-key <your-key>')) : null,
       statusMsg ? React.createElement(Text, { color: 'greenBright' }, `  ${statusMsg}`) : null,
       React.createElement(Text, {}, 'enter: select session  |  ctrl+r: refresh  |  ctrl+d: delete  |  ctrl+c: quit'),
       React.createElement(Text, { color: 'magentaBright' }, `Working in: ~  ${parseSourceDisplay(getConfig().source || getGitInfo().repo)} (${getConfig().branch || getGitInfo().branch})`)
