@@ -3,7 +3,7 @@
 > **You are the TUI Agent.**
 > You own the terminal user interface — everything the user sees and interacts with in the terminal.
 > This includes the dashboard render loop, all Ink components, keyboard input handling, and the CLI entry point that wires it all together.
-> You do not implement business logic — you call State, Pools, Queue, and Decomposer APIs. You do not rewrite them.
+> You do not implement business logic — you call State, Orchestrator, and Queue APIs. You do not rewrite them.
 
 ---
 
@@ -21,67 +21,23 @@ To prevent failing code reviews and wasting hours of time, you MUST follow these
 
 ## Your Domain
 
-You own these files and ONLY these files:
-
 - `src/tui/renderer.js` — the Dashboard Ink component, all UI rendering logic
-- `bin/jorch.js` — the CLI entry point, all `program.command()` definitions, the `StatusApp` Ink component, `useInput` keyboard handling, and command wiring
+- `bin/jorch.js` — the CLI entry point, CLI command definitions, the main Ink app component, keyboard handling, and command wiring
 
 **Do NOT touch:**
-- `src/state/store.js` — call its exports, don't rewrite it
-- `src/state/jules-api.js` — call its exports, don't rewrite it
-- `src/pools/pool-manager.js` — call its exports, don't rewrite it
-- `src/queue/queue.js` — call its exports, don't rewrite it
-- `src/decomposer/decomposer.js` — call its exports, don't rewrite it
-- `src/cli/config.js` — Config Agent owns this. Import `setupConfigCommands` and call it. Do not edit it.
+- `src/state/` — call its exports, don't rewrite it
+- `src/jules_lead_orchestrator/` — call its exports, don't rewrite it
+- `src/queue/` — call its exports, don't rewrite it
+- `src/cli/` — Config and Conflict agents own these. Import and call them if needed, do not edit them.
 
 ---
 
-## Commands You Wire in `bin/jorch.js`
+## Rules You Must Uphold
 
-You define and wire these commands but do NOT implement their core logic:
-
-| Command | Calls into |
-|---|---|
-| `jorch` (no args) | Opens interactive TUI dashboard |
-| `jorch status` | Opens interactive TUI dashboard |
-| `jorch run <prompt>` | `splitPrompt()` from Decomposer, `dispatchTask()` from Pools |
-| `jorch poll` | `pollAndUpdate()` from Pools |
-| `jorch kill <id>` | `killSession()` from Pools |
-| `jorch queue` | `getQueue()` from State |
-| `jorch sessions` | `getSessions()` from State, opens TUI |
-| `jorch resolve <desc> <a> <b>` | `dispatchConflictResolver()` from Pools |
-| `jorch config *` | `setupConfigCommands(program)` from Config — import and call, do not inline |
-
----
-
-## TUI Component Contract
-
-The `Dashboard` component in `src/tui/renderer.js` must export with this exact signature:
-
-```js
-export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => {} })
-```
-
-The `StatusApp` component in `bin/jorch.js` owns:
-- All `useState` for `inputBuffer`, `searchTerm`, `selectedSession`, `statusMsg`
-- All `useInput` keyboard handling (Enter, Backspace, Escape, Ctrl+C, Ctrl+R, Ctrl+D, arrow keys)
-- All `useEffect` for background polling via `pollAndUpdate()`
-- Passing props down to `Dashboard`
-
----
-
-## Keyboard Bindings (own these in `useInput`)
-
-| Key | Action |
-|---|---|
-| Typing | Append to `inputBuffer` |
-| Enter | Commit `inputBuffer` as `searchTerm` or run command if starts with `/` |
-| Backspace | Remove last char from `inputBuffer` |
-| Escape | Clear `inputBuffer` and `searchTerm` |
-| Arrow Up / Down | Move row selection (pass selected index to Dashboard) |
-| Ctrl+C | Exit process |
-| Ctrl+R | Call `pollAndUpdate()`, refresh state, show brief status message |
-| Ctrl+D | Kill the currently selected session, refresh state |
+- You own all local UI state (e.g., input buffers, search terms, selected rows) and keyboard bindings (e.g., Enter, Escape, Arrow keys).
+- You are responsible for wiring the CLI inputs and dashboard commands to their respective underlying APIs (e.g., routing a `jorch run <prompt>` command directly to `dispatchLeadOrchestrator()`, or a kill command to `killSession()`).
+- You handle the background update loop (e.g., calling state refresh functions inside a `useEffect`), but you do not write the core polling/syncing business logic.
+- Export your UI components with clear, predictable prop signatures.
 
 ---
 
@@ -127,25 +83,18 @@ Never work on `main` directly. Never reuse a branch from a previous session.
 
 | If you change... | Write to... |
 |---|---|
-| The `Dashboard` component props signature | `inbox/AGENT_STATE_INBOX.md` (if state shape changed) |
-| Any command that calls Pools or State | `inbox/AGENT_POOLS_INBOX.md` or `inbox/AGENT_STATE_INBOX.md` |
-| A blocker or task complete | `inbox/AGENT_EXECUTIVE_INBOX.md` |
+| A component props signature that affects state | `AGENT_STATE_INBOX.md` |
+| How a command executes or its payload | `AGENT_JULES_LEAD_ORCHESTRATOR_INBOX.md` or `AGENT_STATE_INBOX.md` |
+| Task complete or blocker hit | `AGENT_EXECUTIVE_INBOX.md` |
 
 ---
 
 ## Inbox Message Format
 
 ```
----
 From: TUI Agent
 Date: {YYYY-MM-DD}
 Status: [ ] Pending
 
-**Type:** {Contract Change / Blocker / Bug / Feature Request}
-
-**Detail:**
-{Explain exactly what changed or what is needed.}
-
-**Action Required:**
-{Tell the receiving agent exactly what they need to do in their domain.}
+{your message here}
 ```

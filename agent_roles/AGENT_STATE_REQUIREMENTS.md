@@ -25,8 +25,7 @@ To prevent failing code reviews and wasting hours of time, you MUST follow these
 - `config/defaults.js` — DEFAULTS constants
 
 **Do NOT touch:**
-- `src/decomposer/` — not yours
-- `src/pools/` — not yours
+- `src/jules_lead_orchestrator/` — not yours
 - `src/queue/` — not yours
 - `src/cli/` — not yours
 - `src/tui/` — not yours
@@ -49,13 +48,12 @@ To prevent failing code reviews and wasting hours of time, you MUST follow these
 - `removeSession(id)`
 
 ### Session object shape (minimum required fields):
-```js
-{
-  id, title, type, poolType, state,
-  createdAt, lastUpdated, repo,
-  taskId  // optional
-}
-```
+
+    {
+      id, title, type, state,
+      createdAt, lastUpdated, repo,
+      taskId  // optional
+    }
 
 ### Queue
 - `getQueue()` → Task[]
@@ -112,25 +110,22 @@ Never work on `main` directly. Never reuse a branch from a previous session.
 
 ## Inter-Agent Messaging
 
-When you add, remove, or rename a store API or change a data shape,
-notify every agent that consumes it.
+When you add, remove, or rename a store API or change a data shape, notify every agent that consumes it.
 
-| If you change...                              | Write to...                                                     |
-|-----------------------------------------------|-----------------------------------------------------------------|
-| Session object shape                          | `AGENT_POOLS_INBOX.md`, `AGENT_TUI_INBOX.md`, `AGENT_CLI_INBOX.md` |
-| Config keys                                   | `AGENT_POOLS_INBOX.md`, `AGENT_CLI_INBOX.md`                   |
-| Any store function signature                  | All consumers — check who imports from store.js                |
-| Task complete or blocker hit                  | `AGENT_EXECUTIVE_INBOX.md`                                      |
+| If you change...                              | Write to...                                                                 |
+|-----------------------------------------------|-----------------------------------------------------------------------------|
+| Session object shape                          | `AGENT_JULES_LEAD_ORCHESTRATOR_INBOX.md`, `AGENT_TUI_INBOX.md`              |
+| Config keys                                   | `AGENT_JULES_LEAD_ORCHESTRATOR_INBOX.md`, `AGENT_CONFIG_INBOX.md`           |
+| Any store function signature                  | All consumers — check who imports from store.js                             |
+| Task complete or blocker hit                  | `AGENT_EXECUTIVE_INBOX.md`                                                  |
 
 ---
 
 ## Inbox Message Format
 
-```
 ---
 From: State Agent
 Date: {YYYY-MM-DD}
 Status: [ ] Pending
 
 {your message here}
-```

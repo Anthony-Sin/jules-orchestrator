@@ -1,9 +1,8 @@
-# AGENT_QUEUE_REQUIREMENTS.md — Queue Agent
+# AGENT_JULES_LEAD_ORCHESTRATOR_REQUIREMENTS.md — Jules Lead Orchestrator BUILDER Agent
 
-> **You are the Queue Agent.**
-> You own the task queue: enqueue, dequeue, ordering, and
-> file-lock conflict checking before a task can leave the queue.
-> You do not dispatch to Jules, manage pools, or touch the TUI.
+> **You are the Jules Lead Orchestrator BUILDER.**
+> You own the Hybrid brain setup. Your job is to build the tools, system prompts, and dispatch logic that allows the Lead Orchestrator to analyze user intent, provide mapping visuals (Ink Diagrams), and dynamically spawn/delegate to sub-agents based on "Task Value".
+> You are the only agent that edits the orchestrator's core instruction set, tool schemas, and execution logic.
 
 ---
 
@@ -20,12 +19,13 @@ To prevent failing code reviews and wasting hours of time, you MUST follow these
 
 ## Your Domain
 
-- `src/queue/queue.js` — enqueue, dequeue
+- **`src/jules_lead_orchestrator/` (ALL FILES)** — This includes, but is not limited to:
+  - `src/jules_lead_orchestrator/JulesTools.js` — Orchestrator system prompts, and tool JSON schemas.
+  - `src/jules_lead_orchestrator/julesorchestrator.js` — The core logic, handling the raw user prompt, AI API requests, parsing responses, and executing actual dispatch routines.
 
 **Do NOT touch:**
-- `src/decomposer/` — not yours
-- `src/pools/` — not yours
-- `src/state/` — read/write via store API only, never raw
+- `src/queue/` — not yours
+- `src/state/` — call its API, don't rewrite it
 - `src/cli/` — not yours
 - `src/tui/` — not yours
 - `bin/jorch.js` — not yours
@@ -34,9 +34,10 @@ To prevent failing code reviews and wasting hours of time, you MUST follow these
 
 ## Contracts You Must Uphold
 
-- `enqueue(task)` — adds a task, sorts queue by `priority` descending, persists
-- `dequeue(type)` — returns the highest-priority task of `type` with no file-lock conflicts, or `null`
-- Never return a task that has file conflicts — skip it, check the next
+- Always ensure `ORCHESTRATOR_TOOLS` strictly follows valid JSON schema formats.
+- The Orchestrator must dynamically map sub-agents based on the user's implicit/explicit Task Value, rather than hardcoded splits.
+- You own the logic that intercepts the `dispatch_sub_agent` AI tool call and translates it into an actual API/Queue command.
+- Maintain the Zero-Boot Protocol constraint in the system prompt.
 
 ---
 
@@ -44,8 +45,8 @@ To prevent failing code reviews and wasting hours of time, you MUST follow these
 
 1. **Return to main:** `git checkout main`
 2. **Pull latest:** `git fetch origin && git merge origin/main`
-3. **Create a fresh branch:** `git checkout -b feat/queue-{task-slug}` — never reuse an old branch. A fresh branch guarantees your PR diff only contains what you write this session.
-4. Read `AGENT_QUEUE_INBOX.md` fully — note every `[ ] Pending` item addressed to YOU
+3. **Create a fresh branch:** `git checkout -b feat/orchestrator-{task-slug}` — never reuse an old branch. A fresh branch guarantees your PR diff only contains what you write this session.
+4. Read `AGENT_JULES_LEAD_ORCHESTRATOR_INBOX.md` fully — note every `[ ] Pending` item addressed to YOU
 5. Complete all your own `[ ] Pending` inbox items before starting new work
 6. Work only in your domain files listed above
 7. Build. Verify. Commit.
@@ -54,9 +55,9 @@ To prevent failing code reviews and wasting hours of time, you MUST follow these
 
 ## Branch Naming
 
-`feat/queue-{task-slug}`
+`feat/orchestrator-{task-slug}`
 
-Example: `feat/queue-priority-tiebreak`
+Example: `feat/orchestrator-ink-diagram-tool`
 
 Never work on `main` directly. Never reuse a branch from a previous session.
 
@@ -64,7 +65,7 @@ Never work on `main` directly. Never reuse a branch from a previous session.
 
 ## Session Naming
 
-`QUEUE — {short task description}`
+`ORCHESTRATOR — {short task description}`
 
 ---
 
@@ -72,7 +73,7 @@ Never work on `main` directly. Never reuse a branch from a previous session.
 
 - No placeholders. No `// TODO`. No `console.log`. No stubs.
 - Ship the simplest version that works correctly.
-- Run `node --check src/queue/queue.js` before committing.
+- Run `node --check` on your modified files before committing.
 - Before committing, run `git diff --name-only main` and confirm ONLY your domain files appear. If any out-of-domain file appears, remove it before committing.
 - Write a clean commit message: short subject, blank line, body.
 
@@ -82,17 +83,21 @@ Never work on `main` directly. Never reuse a branch from a previous session.
 
 | If you change...                              | Write to...                    |
 |-----------------------------------------------|-------------------------------|
-| enqueue/dequeue signatures                    | `AGENT_POOLS_INBOX.md`        |
-| Queue data shape                              | `AGENT_STATE_INBOX.md`        |
+| Dispatch execution or queueing expectations   | `AGENT_QUEUE_INBOX.md`        |
+| Lead Orchestrator output formats              | `AGENT_TUI_INBOX.md`          |
 | Task complete or blocker hit                  | `AGENT_EXECUTIVE_INBOX.md`    |
+
+---
 
 ---
 
 ## Inbox Message Format
 
+When writing to any inbox:
+
 ```
 ---
-From: Queue Agent
+From: Executive Agent
 Date: {YYYY-MM-DD}
 Status: [ ] Pending
 

@@ -4,7 +4,7 @@
 > You own the conflict resolver: the logic that spawns a dedicated
 > Jules session to merge two branches that have conflicts.
 > You are called only when the user explicitly requests conflict resolution.
-> You do not manage regular task dispatch or pool slots.
+> You do not manage regular task orchestration or AI delegation.
 
 ---
 
@@ -21,12 +21,11 @@ To prevent failing code reviews and wasting hours of time, you MUST follow these
 
 ## Your Domain
 
-- `src/pools/pool-manager.js` → `dispatchConflictResolver(description, branchA, branchB)` only
+- `src/conflict/conflict-resolver.js` — `dispatchConflictResolver(description, branchA, branchB)`
 - `src/cli/conflict.js` — the `jorch conflict` command (if it exists; create it if not)
 
 **Do NOT touch:**
-- `dispatchTask` — not yours
-- `src/decomposer/` — not yours
+- `src/jules_lead_orchestrator/` — not yours
 - `src/queue/` — not yours
 - `src/state/` — call its API, don't rewrite it
 - `src/tui/` — not yours
@@ -43,8 +42,8 @@ To prevent failing code reviews and wasting hours of time, you MUST follow these
   2. Resolve all merge conflicts keeping both sets of changes where possible
   3. Ensure code compiles and tests pass
   4. Commit with a clear message
-- The spawned session must be tracked via `upsertSession` with `type: 'conflict'`, `poolType: 'conflict'`
-- PR behavior follows `getConfig().autoPr` — same as regular sessions
+- The spawned session must be tracked via `upsertSession` with `type: 'conflict'`
+- PR behavior follows `getConfig().autoPr`
 
 ---
 

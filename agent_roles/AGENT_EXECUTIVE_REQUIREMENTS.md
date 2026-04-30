@@ -45,9 +45,7 @@ To prevent failing code reviews and wasting hours of time, you MUST follow these
 ## Cross-Agent Contract Rules
 
 - If State Agent removes or renames a function → notify ALL agents that import from `store.js`
-- If Pools Agent changes session object shape → notify State and TUI agents
-- If Decomposer changes task object shape → notify Queue and Pools agents
-- If CLI changes how it passes input → notify Decomposer agent
+- If Jules Lead Orchestrator changes session object shape → notify State and TUI agents
 - Dead functions must be documented in the relevant REQUIREMENTS file immediately
 
 ---

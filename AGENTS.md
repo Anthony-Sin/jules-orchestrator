@@ -28,12 +28,11 @@ To prevent failing code reviews and wasting time, you MUST follow these strict o
 
 | Agent | Requirements File | Core Domain & Job |
 |---|---|---|
-| **Executive** | `agent_roles/AGENT_EXECUTIVE_REQUIREMENTS.md` | **Coordinator:** Reviews work, enforces API contracts, unblocks agents. Writes no product code. |
+| **Executive** | `agent_roles/AGENT_EXECUTIVE_REQUIREMENTS.md` | **god:** can chnage any file it wants, Reviews work, enforces that all inboxs are there then rmeoves it, unblocks, Writes product code. |
 | **Config** | `agent_roles/AGENT_CONFIG_REQUIREMENTS.md` | **Settings:** Owns `jorch config *` commands (`src/cli/config.js`). |
 | **Conflict** | `agent_roles/AGENT_CONFLICT_REQUIREMENTS.md` | **Resolver:** Owns `jorch conflict` command and dedicated merge sessions. |
 | **Decomposer** | `agent_roles/AGENT_DECOMPOSER_REQUIREMENTS.md` | **Parser:** Splits raw prompts into atomic, typed tasks (`src/decomposer/decomposer.js`). |
-| **Jules Lead Orchestrator** | `agent_roles/AGENT_JULES_LEAD_ORCHESTRATOR_REQUIREMENTS.md` | **Master Dispatcher:** Hybrid brain. Analyzes user intent, provides tools, orchestrates tasks between user and sub-agents (`src/jules_lead_orchestrator/`). |
-| **Pools** | `agent_roles/AGENT_POOLS_REQUIREMENTS.md` | **Lifecycle:** Dispatches tasks, polls state, kills sessions (`src/pools/pool-manager.js`). |
+| **Jules Lead Orchestrator BUILDER** | `agent_roles/AGENT_JULES_LEAD_ORCHESTRATOR_REQUIREMENTS.md` | **Master Dispatcher BUILDER** makes the Hybrid brain so that it can analyzes user intent, provides tools, orchestrates tasks between user and sub-agents (`src/jules_lead_orchestrator/`). |
 | **Queue** | `agent_roles/AGENT_QUEUE_REQUIREMENTS.md` | **Traffic Control:** Enqueues, sorts priority, checks file locks (`src/queue/queue.js`). |
 | **State** | `agent_roles/AGENT_STATE_REQUIREMENTS.md` | **Source of Truth:** Owns persistent store and Jules API calls (`src/state/`). |
 | **TUI** | `agent_roles/AGENT_TUI_REQUIREMENTS.md` | **Dashboard + Entry Point:** Owns terminal render loop, UI formatting, and CLI wiring (`src/tui/`, `bin/jorch.js`). |

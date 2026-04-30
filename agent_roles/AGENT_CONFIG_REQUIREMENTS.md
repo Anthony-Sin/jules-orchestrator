@@ -25,9 +25,8 @@ To prevent failing code reviews and wasting hours of time, you MUST follow these
 
 **Do NOT touch:**
 - `src/state/store.js` — call it, don't rewrite it
-- `src/pools/` — not yours
+- `src/jules_lead_orchestrator/` — not yours
 - `src/queue/` — not yours
-- `src/decomposer/` — not yours
 - `src/tui/` — not yours
 - `bin/jorch.js` — not yours
 
@@ -35,13 +34,13 @@ To prevent failing code reviews and wasting hours of time, you MUST follow these
 
 ## Commands You Own
 
-| Command                              | Behavior                                              |
+| Command                                | Behavior                                              |
 |--------------------------------------|-------------------------------------------------------|
-| `jorch config set-key <key>`         | Calls `setConfig('apiKey', key)`                     |
-| `jorch config set-source <source>`   | Calls `setConfig('source', source)`                  |
-| `jorch config set-branch <branch>`   | Calls `setConfig('branch', branch)`                  |
+| `jorch config set-key <key>`         | Calls `setConfig('apiKey', key)`                      |
+| `jorch config set-source <source>`   | Calls `setConfig('source', source)`                   |
+| `jorch config set-branch <branch>`   | Calls `setConfig('branch', branch)`                   |
 | `jorch config set-auto-pr <true\|false>` | Calls `setConfig('autoPr', value === 'true')`    |
-| `jorch config show`                  | Prints current config (mask the API key)             |
+| `jorch config show`                  | Prints current config (mask the API key)              |
 
 ---
 
@@ -87,8 +86,8 @@ Never work on `main` directly. Never reuse a branch from a previous session.
 
 | If you change...                              | Write to...                    |
 |-----------------------------------------------|-------------------------------|
-| A config key name or type                     | `AGENT_STATE_INBOX.md`, `AGENT_POOLS_INBOX.md` |
-| Any command that affects pool behavior        | `AGENT_POOLS_INBOX.md`        |
+| A config key name or type                     | `AGENT_STATE_INBOX.md`, `AGENT_JULES_LEAD_ORCHESTRATOR_INBOX.md` |
+| Any command that affects Orchestrator logic   | `AGENT_JULES_LEAD_ORCHESTRATOR_INBOX.md` |
 | Task complete or blocker hit                  | `AGENT_EXECUTIVE_INBOX.md`    |
 
 ---
