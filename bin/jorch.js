@@ -2,17 +2,28 @@
 import { Command } from 'commander'
 import chalk from 'chalk'
 import inquirer from 'inquirer'
+import React, { useState, useEffect } from 'react'
+import { render, useInput } from 'ink'
 import { splitPrompt, groupByType } from '../src/decomposer/decomposer.js'
 import { dispatchTask, dispatchConflictResolver, killSession, pollAndUpdate, poolSlotsFree } from '../src/pools/pool-manager.js'
-import { renderDashboard } from '../src/tui/renderer.js'
-import { getSessions, getQueue, getConfig, setConfig, quotaRemaining, getActiveSessions, syncQuota } from '../src/state/store.js'
+import { renderDashboard, Dashboard } from '../src/tui/renderer.js'
+import { getSessions, getQueue, getConfig, setConfig, quotaRemaining, getActiveSessions, syncQuota, setQuotaLimit } from '../src/state/store.js'
+import { DEFAULTS } from '../config/defaults.js'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const pkgPath = path.join(__dirname, '..', 'package.json')
+const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+const version = pkg.version
 
 const program = new Command()
 
 program
   .name('jorch')
   .description('Jules multi-agent orchestrator')
-  .version('0.1.0')
+  .version(version)
 
 // ── jorch run "<prompt>" ──────────────────────────────────────────────────────
 program
@@ -62,56 +73,125 @@ program
   })
 
 // ── jorch status ──────────────────────────────────────────────────────────────
-program
-  .command('status')
-  .description('Show live dashboard with interactive prompt (polls every 5s, /exit to quit)')
-  .action(async () => {
-    const { DEFAULTS } = await import('../config/defaults.js')
 
-    let searchTerm = ''
-    let isRunning = true
+function StatusApp() {
+  const [inputBuffer, setInputBuffer] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [statusMsg, setStatusMsg] = useState('')
+  const [selectedSession, setSelectedSession] = useState(null)
 
-    // Background polling
+  useEffect(() => {
+    syncQuota()
     const interval = setInterval(async () => {
       await pollAndUpdate()
-      // We don't re-render here to avoid messing up the inquirer prompt,
-      // but state is updated. The user can press Enter to refresh.
     }, DEFAULTS.POLL_INTERVAL_MS)
+    return () => clearInterval(interval)
+  }, [])
 
-    process.on('SIGINT', () => { clearInterval(interval); process.exit(0) })
-
-    await syncQuota()
-    while (isRunning) {
-      renderDashboard(searchTerm)
-
-      const { input } = await inquirer.prompt([
-        {
-          type: 'input',
-          name: 'input',
-          message: '> Search sessions or type / to use commands:',
-        }
-      ])
-
-      const val = input.trim()
-
-      if (val === '/quit' || val === '/exit') {
-        isRunning = false
-        clearInterval(interval)
-        process.exit(0)
-      } else if (val.startsWith('/kill ')) {
-        const id = val.split(' ')[1]
-        if (id) {
-          await killSession(id)
-          await pollAndUpdate()
-        }
-        searchTerm = '' // Clear search after command
-      } else if (val.startsWith('/')) {
-        // Ignore unknown commands, keep current search term
-        searchTerm = ''
-      } else {
-        searchTerm = val
-      }
+  useInput(async (input, key) => {
+    if (key.ctrl && input === 'c') {
+      process.exit(0)
     }
+
+    const sessions = getSessions()
+    let filteredSessions = sessions
+    if (searchTerm && !searchTerm.startsWith('/')) {
+      const term = searchTerm.toLowerCase()
+      filteredSessions = sessions.filter(s =>
+        (s.title && s.title.toLowerCase().includes(term)) ||
+        (s.id && s.id.toLowerCase().includes(term)) ||
+        (s.state && s.state.toLowerCase().includes(term))
+      )
+    }
+    const displayed = filteredSessions.slice(-20).reverse()
+
+    if (key.ctrl && input === 'r') {
+      await pollAndUpdate()
+      setStatusMsg('Refreshed')
+      setTimeout(() => setStatusMsg(''), 2000)
+      return
+    }
+
+    if (key.ctrl && input === 'd') {
+      if (displayed[selectedIndex]) {
+        await killSession(displayed[selectedIndex].id)
+        await pollAndUpdate()
+        setStatusMsg('Deleted')
+        setTimeout(() => setStatusMsg(''), 2000)
+        setSelectedIndex(0)
+      }
+      return
+    }
+
+    if (key.upArrow) {
+      setSelectedIndex(Math.max(0, selectedIndex - 1))
+      return
+    }
+
+    if (key.downArrow) {
+      setSelectedIndex(Math.min(displayed.length - 1, selectedIndex + 1))
+      return
+    }
+
+    if (key.return) {
+      if (inputBuffer.startsWith('/')) {
+        // command parsing logic if needed
+        if (inputBuffer === '/quit' || inputBuffer === '/exit') {
+          process.exit(0)
+        } else if (inputBuffer.startsWith('/kill ')) {
+          const id = inputBuffer.split(' ')[1]
+          if (id) {
+            await killSession(id)
+            await pollAndUpdate()
+          }
+        }
+        setInputBuffer('')
+        setSearchTerm('')
+      } else if (inputBuffer.length > 0 && searchTerm !== inputBuffer) {
+        setSearchTerm(inputBuffer)
+        setSelectedIndex(0)
+        setInputBuffer('')
+      } else {
+        if (displayed[selectedIndex]) {
+          setSelectedSession(displayed[selectedIndex].id)
+        }
+      }
+      return
+    }
+
+    if (key.escape) {
+      setInputBuffer('')
+      setSearchTerm('')
+      return
+    }
+
+    if (key.delete || key.backspace) {
+      setInputBuffer(prev => prev.slice(0, -1))
+      return
+    }
+
+    if (input && !key.ctrl && !key.meta) {
+      setInputBuffer(prev => prev + input)
+    }
+  })
+
+  return React.createElement(Dashboard, {
+    inputBuffer,
+    searchTerm,
+    selectedIndex,
+    statusMsg,
+    onSelect: (id) => setSelectedSession(id),
+    onRowChange: (index) => setSelectedIndex(index)
+  })
+}
+
+program
+  .command('status')
+  .description('Show live dashboard with interactive TUI (polls every 5s)')
+  .action(async () => {
+    console.clear()
+    render(React.createElement(StatusApp))
   })
 
 // ── jorch poll ────────────────────────────────────────────────────────────────
@@ -184,6 +264,19 @@ program
 const configCmd = program.command('config').description('Manage orchestrator config')
 
 configCmd
+  .command('set-quota <number>')
+  .description('Set the daily quota limit')
+  .action((number) => {
+    const num = parseInt(number, 10)
+    if (isNaN(num) || num <= 0) {
+      console.log(chalk.red('\n  ✗ Quota limit must be a positive integer.\n'))
+      return
+    }
+    setQuotaLimit(num)
+    console.log(chalk.green(`\n  ✓ Quota limit set to: ${num}\n`))
+  })
+
+configCmd
   .command('set-key <apiKey>')
   .description('Set your Jules API key')
   .action((apiKey) => {
@@ -227,5 +320,11 @@ configCmd
     console.log(`  Auto-PR : ${cfg.autoPr !== undefined ? chalk.cyan(cfg.autoPr) : chalk.dim('true (default)')}`)
     console.log()
   })
+
+program.action(() => {
+  if (process.argv.length === 2) {
+    program.commands.find(cmd => cmd.name() === 'status')._actionHandler([]);
+  }
+})
 
 program.parse()
