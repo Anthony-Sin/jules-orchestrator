@@ -80,11 +80,13 @@ function StatusApp() {
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [statusMsg, setStatusMsg] = useState('')
   const [selectedSession, setSelectedSession] = useState(null)
+  const [lastUpdate, setLastUpdate] = useState(Date.now())
 
   useEffect(() => {
     syncQuota()
     const interval = setInterval(async () => {
       await pollAndUpdate()
+      setLastUpdate(Date.now())
     }, DEFAULTS.POLL_INTERVAL_MS)
     return () => clearInterval(interval)
   }, [])
@@ -108,6 +110,7 @@ function StatusApp() {
 
     if (key.ctrl && input === 'r') {
       await pollAndUpdate()
+      setLastUpdate(Date.now())
       setStatusMsg('Refreshed')
       setTimeout(() => setStatusMsg(''), 2000)
       return
@@ -117,6 +120,7 @@ function StatusApp() {
       if (displayed[selectedIndex]) {
         await killSession(displayed[selectedIndex].id)
         await pollAndUpdate()
+        setLastUpdate(Date.now())
         setStatusMsg('Deleted')
         setTimeout(() => setStatusMsg(''), 2000)
         setSelectedIndex(0)
@@ -144,6 +148,7 @@ function StatusApp() {
           if (id) {
             await killSession(id)
             await pollAndUpdate()
+            setLastUpdate(Date.now())
           }
         }
         setInputBuffer('')
@@ -181,6 +186,7 @@ function StatusApp() {
     searchTerm,
     selectedIndex,
     statusMsg,
+    lastUpdate,
     onSelect: (id) => setSelectedSession(id),
     onRowChange: (index) => setSelectedIndex(index)
   })

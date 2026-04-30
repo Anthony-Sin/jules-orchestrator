@@ -73,7 +73,8 @@ function getGitInfo() {
   return { repo: cachedGitRepo, branch: cachedGitBranch }
 }
 
-export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => {}, onRowChange = () => {}, selectedIndex = 0, statusMsg = '' }) {
+export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => {}, onRowChange = () => {}, selectedIndex = 0, statusMsg = '', lastUpdate }) {
+  const config = getConfig()
   const used = getQuotaUsed()
   const remaining = quotaRemaining()
   const limit = getQuotaLimit()
@@ -129,7 +130,13 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
       React.createElement(Text, { color: 'yellow' }, '> '),
       React.createElement(Text, { dimColor: inputBuffer.length === 0 }, inputBuffer.length > 0 ? inputBuffer + '█' : 'Search sessions or type / to use commands█')
     ),
-    sessions.length === 0 ? (
+    inputBuffer.startsWith('/') ? (
+      React.createElement(Box, { marginLeft: 2, marginBottom: 1, flexDirection: 'column' },
+        React.createElement(Text, { color: 'cyan', bold: true }, 'Available Commands:'),
+        React.createElement(Text, {}, '  /quit, /exit   - Exit the dashboard'),
+        React.createElement(Text, {}, '  /kill <id>     - Kill a specific session')
+      )
+    ) : sessions.length === 0 ? (
       React.createElement(Box, { marginLeft: 2, marginBottom: 1 },
         React.createElement(Text, { dimColor: true }, 'No sessions yet. Use: jorch run "your task here"\n')
       )
@@ -166,12 +173,13 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
     ),
     // Hide quota message entirely if hasLimit is true and not zero.
     // Show only if there are no sessions, or if quota limit is actually unknown (null).
-    (sessions.length === 0 || !hasLimit) && React.createElement(Box, { marginBottom: 1, flexDirection: 'column' },
+    React.createElement(Box, { marginBottom: 1, flexDirection: 'column' },
       hasLimit
         ? React.createElement(Text, {}, `  Quota  [${bar}]  ${quotaColor(`${used}/${limit}`)} used  ${chalk.dim(`(${remaining} remaining)`)}`)
         : React.createElement(Text, {}, `  Quota limit unknown — set it with: ${chalk.yellow.dim('jorch config set-quota <n>')}`)
     ),
     React.createElement(Box, { flexDirection: 'column', marginTop: 1 },
+      !config.apiKey ? React.createElement(Text, { color: 'red' }, '  Warning: No API key set. Run: jorch config set-key <your-key>\n') : null,
       statusMsg ? React.createElement(Text, { color: 'greenBright' }, `  ${statusMsg}`) : null,
       React.createElement(Text, {}, 'enter: select session  |  ctrl+r: refresh  |  ctrl+d: delete  |  ctrl+c: quit'),
       React.createElement(Text, { color: 'magentaBright' }, `Working in: ~  ${(getConfig().source || getGitInfo().repo).replace(/^sources\/github-/, '').replace('-', '/')} (${getConfig().branch || getGitInfo().branch})`)
