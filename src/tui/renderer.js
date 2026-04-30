@@ -98,6 +98,9 @@ function FillBar({ value, tick, width = 7, isDimmed, state }) {
   } else if (state === 'QUEUED' || state === 'PAUSED' || state === 'FAILED' || state === 'KILLED') {
       target = 0;
   }
+  if (line) lines.push(line)
+  return lines
+}
 
   const shown  = Math.min(width, Math.max(0, target))
   const empty  = width - shown
