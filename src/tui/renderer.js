@@ -1,4 +1,4 @@
-import { parseSourceDisplay, getActivities, sendMessage } from '../state/jules-api.js'
+import { parseSourceDisplay, getActivities, sendMessage, listSources } from '../state/jules-api.js'
 import React, { useState, useEffect, useRef } from 'react'
 import { render, Box, Text, useInput, useApp } from 'ink'
 import TextInput from 'ink-text-input'
@@ -173,7 +173,7 @@ function wrapText(text, width) {
   return lines
 }
 
-function ChatPanel({ messages, input, onChange, onSubmit, focused, scrollOffset, width, height, tab, notes, setNotes }) {
+function ChatPanel({ messages, input, onChange, onSubmit, focused, scrollOffset, width, height, tab, notes, setNotes, isRepoInputMode }) {
   const inner = Math.max(10, width - 4)
 
   const allLines = []
@@ -199,15 +199,15 @@ function ChatPanel({ messages, input, onChange, onSubmit, focused, scrollOffset,
       }
       for (const l of wrapped) allLines.push({ type: 'text', text: l, color: focused ? 'white' : 'gray' })
   }
- 
-  const VISIBLE = Math.max(10, height - 8)  
-  const total   = allLines.length 
-  const start   = Math.max(0, total - VISIBLE - scrollOffset) 
+
+  const VISIBLE = Math.max(10, height - 8)
+  const total   = allLines.length
+  const start   = Math.max(0, total - VISIBLE - scrollOffset)
   const visible = allLines.slice(start, start + VISIBLE)
 
   return React.createElement(Box, { flexDirection: "column", borderStyle: "single", borderColor: focused ? 'cyan' : 'gray', width: width, height: "100%", paddingX: 1 },
       React.createElement(Box, { flexShrink: 0, height: 1 },
-          React.createElement(Text, { color: focused ? 'magenta' : 'gray', bold: true, wrap: "truncate" }, tab === 'chat' ? '▌ AGENT CHAT  [Chat | Notes >]' : '▌ NOTES      [< Chat | Notes ]'),
+          React.createElement(Text, { color: focused ? 'magenta' : 'gray', bold: true, wrap: "truncate" }, tab === 'chat' ? '▌ AGENT CHAT  [*Chat* | Notes >]' : '▌ NOTES      [< Chat | *Notes*]'),
           scrollOffset > 0 && React.createElement(Text, { color: "gray", dimColor: true }, '  ↑' + scrollOffset)
       ),
       React.createElement(Box, { overflow: "hidden", flexShrink: 0, height: 1 },
@@ -229,7 +229,7 @@ function ChatPanel({ messages, input, onChange, onSubmit, focused, scrollOffset,
       ),
       React.createElement(Box, { borderStyle: focused ? 'single' : undefined, borderColor: "cyan", paddingX: focused ? 1 : 0, flexShrink: 0 },
           React.createElement(Text, { color: focused ? 'green' : 'gray' }, '> '),
-          React.createElement(TextInput, { value: tab === 'chat' ? input : (notes || ''), onChange: tab === 'chat' ? onChange : (val) => setNotes(val), onSubmit: tab === 'chat' ? onSubmit : () => {}, placeholder: focused ? (tab === 'chat' ? 'type message…' : 'type notes...') : 'F3 to focus', focus: focused })
+          React.createElement(TextInput, { value: tab === 'chat' ? input : (notes || ''), onChange: tab === 'chat' ? onChange : (val) => setNotes(val), onSubmit: tab === 'chat' ? onSubmit : () => {}, placeholder: focused ? (tab === 'chat' ? 'type message…' : 'type notes...') : 'Ctrl+E to focus', focus: focused && !isRepoInputMode })
       )
   )
 }
@@ -286,6 +286,8 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
   const [chatTab, setChatTab] = useState('chat') // 'chat' or 'notes'
   const [notes, setNotes] = useState(() => store.get('tuiNotes', ''))
   const [queuedMessages, setQueuedMessages] = useState({})
+  const [sourcesList, setSourcesList] = useState([])
+  const [sourceSel, setSourceSel] = useState(0)
 
   const VISIBLE_AGENTS = Math.max(2, rows - 21)
 
@@ -293,6 +295,9 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
   const reversedFiltered = sessions.slice().reverse()
   const AGENTS = reversedFiltered
 
+  useEffect(() => {
+    listSources().then(res => setSourcesList(res || [])).catch(() => {})
+  }, [])
   useEffect(() => {
     const t = setInterval(() => {
         setTick(n => n + 1)
@@ -380,7 +385,16 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
 
   useInput(async (input, key) => {
     if (repoInputMode) {
-        if (key.escape) setRepoInputMode(false);
+        if (key.escape) { setRepoInputMode(false); return; }
+        if (repoInput.startsWith('/')) {
+            const filtered = sourcesList.filter(s => ('/' + (s.displayName || s.name)).toLowerCase().includes(repoInput.toLowerCase()));
+            if (key.upArrow) { setSourceSel(i => Math.max(0, i - 1)); return; }
+            if (key.downArrow) { setSourceSel(i => Math.min(Math.max(0, filtered.length - 1), i + 1)); return; }
+            if (key.return && filtered[sourceSel]) {
+                handleRepoSubmit(filtered[sourceSel].name);
+                return;
+            }
+        }
         return; // Let TextInput handle the rest
     }
 
@@ -396,10 +410,10 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
         return;
     }
 
-    if (key.f4) { setRepoInputMode(true); setRepoInput(''); return }
-    if (key.f1) { setMode('table'); return } 
-    if (key.f2) { setMode('graph'); return } 
-    if (key.f3) { setMode('chat'); setScrollOffset(0); return } 
+    if (key.ctrl && input === 'm') { setRepoInputMode(true); setRepoInput(''); return }
+    if (key.ctrl && input === 't') { setMode('table'); return }
+    if (key.ctrl && input === 'g') { setMode('graph'); return }
+    if (key.ctrl && input === 'e') { setMode('chat'); setScrollOffset(0); return }
     if (key.escape) { setMode('table'); return }
 
     if (key.tab) {
@@ -522,15 +536,8 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
       setRepoInputMode(false);
   }
 
-  const MIN_COLS = 55
+  const MIN_COLS = 70
   const MIN_ROWS = 24
-  if (columns < MIN_COLS || rows < MIN_ROWS) {
-    return React.createElement(Box, { padding: 1, flexDirection: "column", borderStyle: "round", borderColor: "red" },
-        React.createElement(Text, { color: "red", bold: true }, '⚠ TERMINAL TOO SMALL'),
-        React.createElement(Text, { color: "gray" }, `Expand to > ${MIN_COLS}x${MIN_ROWS}`)
-    )
-  }
-
   const WIDE_BREAKPOINT = 115
   const GRAPH_MIN_WIDTH = 160
   const isWide = columns >= WIDE_BREAKPOINT
@@ -538,6 +545,13 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
   const showRightPanel = isWide || mode === 'chat'
   const chatWidth = isWide ? 38 : columns - 2
   const showGraph = columns >= GRAPH_MIN_WIDTH
+
+  if (columns < MIN_COLS || rows < MIN_ROWS) {
+    return React.createElement(Box, { padding: 1, flexDirection: "column", borderStyle: "round", borderColor: "red" },
+        React.createElement(Text, { color: "red", bold: true }, '⚠ TERMINAL TOO SMALL'),
+        React.createElement(Text, { color: "gray" }, `Expand to > ${MIN_COLS}x${MIN_ROWS}`)
+    )
+  }
   const visibleAgents = AGENTS.slice(tableOffset, tableOffset + VISIBLE_AGENTS)
   const leftDimmed = mode === 'chat'
   const tColor = (color) => leftDimmed ? 'gray' : color
@@ -558,9 +572,16 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
           )
       ),
 
-      repoInputMode && React.createElement(Box, { flexDirection: "row", paddingX: 2, paddingY: 1, borderStyle: "round", borderColor: "cyan", flexShrink: 0 },
-          React.createElement(Text, { color: "cyan" }, 'Enter new repository source (e.g. sources/github-owner-repo): '),
-          React.createElement(TextInput, { value: repoInput, onChange: setRepoInput, onSubmit: handleRepoSubmit })
+      repoInputMode && React.createElement(Box, { flexDirection: "column", paddingX: 2, paddingY: 1, borderStyle: "round", borderColor: "cyan", flexShrink: 0 },
+          React.createElement(Box, { flexDirection: "row" },
+            React.createElement(Text, { color: "cyan" }, 'Enter new repository source (type / to search): '),
+            React.createElement(TextInput, { value: repoInput, onChange: (v) => { setRepoInput(v); setSourceSel(0); }, onSubmit: handleRepoSubmit })
+          ),
+          repoInput.startsWith('/') && React.createElement(Box, { flexDirection: "column", marginTop: 1 },
+              sourcesList.filter(s => ('/' + (s.displayName || s.name)).toLowerCase().includes(repoInput.toLowerCase())).slice(0, 5).map((s, i) =>
+                  React.createElement(Text, { key: s.name, color: i === sourceSel ? 'magenta' : 'gray' }, i === sourceSel ? '> ' + (s.displayName || s.name) : '  ' + (s.displayName || s.name))
+              )
+          )
       ),
 
       showHelp ? React.createElement(HelpScreen) : React.createElement(Box, { flexDirection: "column", flexGrow: 1, marginTop: 1, overflow: "hidden" },
@@ -596,7 +617,7 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
               )
           ),
           showRightPanel && React.createElement(Box, { flexDirection: "column", width: chatWidth, flexShrink: 0, justifyContent: "flex-end" },
-              React.createElement(ChatPanel, { messages: messages, input: chatInput, onChange: setChatInput, onSubmit: handleSend, focused: mode === 'chat', scrollOffset: scrollOffset, width: chatWidth, height: 15, tab: chatTab, notes: notes, setNotes: setNotes })
+              React.createElement(ChatPanel, { messages: messages, input: chatInput, onChange: setChatInput, onSubmit: handleSend, focused: mode === 'chat', scrollOffset: scrollOffset, width: chatWidth, height: 15, tab: chatTab, notes: notes, setNotes: setNotes, isRepoInputMode: repoInputMode })
           )
       )
       ),
