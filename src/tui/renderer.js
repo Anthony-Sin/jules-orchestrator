@@ -73,7 +73,59 @@ function getGitInfo() {
   return { repo: cachedGitRepo, branch: cachedGitBranch }
 }
 
-export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => {}, onRowChange = () => {}, selectedIndex = 0, statusMsg = '', lastUpdate }) {
+
+function ParallelStreams({ sessions, termWidth }) {
+  const activeSessions = sessions.filter(s => !['COMPLETED', 'FAILED', 'KILLED'].includes(s.state)).slice(-4)
+
+  if (activeSessions.length === 0) {
+    return React.createElement(Box, { marginLeft: 2, marginBottom: 1 },
+      React.createElement(Text, { dimColor: true }, 'No active streams to monitor.\n')
+    )
+  }
+
+  const boxWidth = Math.floor((termWidth - 6) / 2)
+
+  return React.createElement(Box, { flexDirection: 'column', marginBottom: 1 },
+    React.createElement(Box, { marginBottom: 1 }, React.createElement(Text, { dimColor: true }, '> Monitoring parallel streams...')),
+    React.createElement(Box, { flexDirection: 'row', flexWrap: 'wrap', gap: 2 },
+      activeSessions.map((s, idx) => {
+        let pct = 5
+        let log = 'Initializing task...'
+        const state = s.state || 'UNKNOWN'
+
+        if (state === 'QUEUED') { pct = 5; log = 'Waiting for worker pool...' }
+        else if (state === 'PLANNING') { pct = 25; log = 'Analyzing repository state...' }
+        else if (state === 'AWAITING_PLAN_APPROVAL') { pct = 45; log = 'Waiting for user approval...' }
+        else if (state === 'IN_PROGRESS') { pct = 62; log = 'Injecting PR URLs...' }
+        else if (state === 'COMPLETED') { pct = 100; log = 'Weights verified.' }
+        else if (state === 'FAILED') { pct = 100; log = 'Execution failed.' }
+
+        const title = s.title.replace(/^"(.*?)(?: Agent)?\. First, please name this session.*?:\s*"(?:.*?—\s*)?/i, '$1 ')
+        let cleanTitle = title
+        if (cleanTitle.includes('—')) {
+          cleanTitle = cleanTitle.split('—').slice(1).join('—').trim()
+        }
+        cleanTitle = cleanTitle.replace(/^"|"$/g, '')
+
+        const barLength = 20
+        const filled = Math.floor((pct / 100) * barLength)
+        const bar = chalk.blue('█'.repeat(filled)) + chalk.gray('░'.repeat(Math.max(0, barLength - filled)))
+        const displayRepo = s.repoDisplay || (s.repo ? s.repo.replace(/^sources\/github-/, '').replace('-', '/') : '-')
+        const agentName = s.poolType === 'frontend' ? 'FE' : s.poolType === 'backend' ? 'BE' : 'CR'
+
+        return React.createElement(Box, { key: s.id, width: boxWidth, borderStyle: 'single', borderColor: 'gray', flexDirection: 'column', paddingX: 1, marginBottom: 1 },
+          React.createElement(Box, { position: 'absolute', marginTop: -1, marginLeft: 1 }, React.createElement(Text, { color: 'cyan' }, ` AGENT-0${idx + 1} [${agentName}] `)),
+          React.createElement(Box, {}, React.createElement(Text, { color: 'white' }, 'TASK: '), React.createElement(Text, { dimColor: true, wrap: 'truncate' }, cleanTitle)),
+          React.createElement(Box, {}, React.createElement(Text, { color: 'white' }, 'REPO: '), React.createElement(Text, { dimColor: true, wrap: 'truncate' }, displayRepo)),
+          React.createElement(Box, {}, React.createElement(Text, { color: 'white' }, 'STATUS: '), React.createElement(Text, {}, `${bar}  ${pct}%`)),
+          React.createElement(Box, {}, React.createElement(Text, { color: 'white' }, 'LOG: '), React.createElement(Text, { dimColor: true, wrap: 'truncate' }, log))
+        )
+      })
+    )
+  )
+}
+
+export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => {}, onRowChange = () => {}, selectedIndex = 0, statusMsg = '', lastUpdate, monitorMode = false }) {
   const config = getConfig()
   const used = getQuotaUsed()
   const termWidth = process.stdout?.columns || 118
@@ -138,8 +190,11 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
         React.createElement(Text, {}, '  /quit, /exit   - Exit the dashboard'),
         React.createElement(Text, {}, '  /kill <id>     - Kill a specific session'),
         React.createElement(Text, {}, '  /repo <name>   - Set the active repository'),
-        React.createElement(Text, {}, '  /branch <name> - Set the active branch')
+        React.createElement(Text, {}, '  /branch <name> - Set the active branch'),
+        React.createElement(Text, {}, '  /monitor       - Toggle parallel streams grid')
       )
+    ) : monitorMode ? (
+      React.createElement(ParallelStreams, { sessions, termWidth })
     ) : (
       React.createElement(Box, { flexDirection: 'column', marginBottom: 1 },
         React.createElement(Box, { borderStyle: 'round', borderColor: 'gray', flexDirection: 'column', paddingX: 1 },

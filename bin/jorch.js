@@ -81,6 +81,7 @@ function StatusApp() {
   const [statusMsg, setStatusMsg] = useState('')
   const [selectedSession, setSelectedSession] = useState(null)
   const [lastUpdate, setLastUpdate] = useState(Date.now())
+  const [monitorMode, setMonitorMode] = useState(false)
 
   useEffect(() => {
     syncQuota()
@@ -161,6 +162,8 @@ function StatusApp() {
           if (branch) {
             setConfig('branch', branch)
           }
+        } else if (inputBuffer === '/monitor') {
+          setMonitorMode(m => !m)
         }
         setInputBuffer('')
         setSearchTerm('')
@@ -198,6 +201,7 @@ function StatusApp() {
     selectedIndex,
     statusMsg,
     lastUpdate,
+    monitorMode,
     onSelect: (id) => setSelectedSession(id),
     onRowChange: (index) => setSelectedIndex(index)
   })

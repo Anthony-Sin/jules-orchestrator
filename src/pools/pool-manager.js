@@ -6,6 +6,7 @@ import {
   lockFiles, unlockFiles, checkFileLockConflicts,
 } from '../state/store.js'
 import { createSession, getSession, deleteSession, sendMessage, approvePlan, listSessions } from '../state/jules-api.js'
+
 import { getConfig } from '../state/store.js'
 
 const TERMINAL_STATES = ['COMPLETED', 'FAILED', 'KILLED']
