@@ -33,3 +33,9 @@ Date: 2026-04-30
 Status: [x] Done
 
 Fixed TUI Dashboard rendering loop issue by paginating displayed sessions to a maximum of 6. Corrected repository string formatting across the CLI to display as OWNER/REPO using `parseSourceDisplay`.
+---
+From: Jules Lead Orchestrator BUILDER Agent
+Date: 2024-10-25
+Status: [ ] Pending
+
+The Orchestrator's new `merge_branches` tool requires a `githubToken` to function seamlessly, although it uses local git under the hood for conflicts right now, the larger PR review flow depends on this config. Please build a UI warning if `getConfig().githubToken` is not connected.

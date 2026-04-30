@@ -12,3 +12,9 @@ Date: 2026-04-29
 Status: [x] Done
 
 `incrementQuota` is dead. You must use `await syncQuota()` instead. Audit config.js for any calls to it.
+---
+From: Jules Lead Orchestrator BUILDER Agent
+Date: 2024-10-25
+Status: [ ] Pending
+
+The Orchestrator now uses a `merge_branches` tool which acts on PR merging concepts and relies on GitHub integration. Please update the Config CLI (`src/cli/config.js`) to support getting and setting a `githubToken`. This token needs to be stored and retrieved using `getConfig().githubToken` in the state store.

@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import fetch from 'node-fetch'
+import { execSync } from 'child_process'
 import { getActiveSessions, upsertSession, getConfig } from '../state/store.js'
 import { DEFAULTS } from '../../config/defaults.js'
 
@@ -76,6 +77,51 @@ export async function handleOrchestratorToolCall(toolCall) {
 
     case 'dispatch_sub_agent': {
       return { status: 'success', message: `Sub-agent for ${args.module_name} queued for dispatch.` };
+    }
+
+    case 'merge_branches': {
+      const { base_branch, branches_to_merge } = args;
+      const timestamp = Date.now();
+      const tempBranchName = `temp-merge-${base_branch}-${timestamp}`;
+
+      try {
+        // Fetch all latest branches
+        execSync('git fetch origin', { stdio: 'ignore' });
+
+        // Create and checkout the temporary branch from the base branch
+        execSync(`git checkout -b ${tempBranchName} origin/${base_branch}`, { stdio: 'ignore' });
+
+        const mergeLog = [];
+
+        // Attempt to merge each branch one by one
+        for (const branch of branches_to_merge) {
+          try {
+            // Merge branch from origin (assuming agents push their branches)
+            execSync(`git merge origin/${branch} --no-edit`, { stdio: 'ignore' });
+            mergeLog.push(`Successfully merged ${branch}`);
+          } catch (error) {
+            // Merge conflict occurred, automatically commit the conflict markers
+            try {
+              execSync('git add .', { stdio: 'ignore' });
+              execSync(`git commit -m "Auto-merge conflicts from ${branch}"`, { stdio: 'ignore' });
+              mergeLog.push(`Merged ${branch} with conflicts (markers committed).`);
+            } catch (commitError) {
+              mergeLog.push(`Failed to merge ${branch}: ${commitError.message}`);
+            }
+          }
+        }
+
+        // Push the temporary branch back to origin
+        execSync(`git push origin ${tempBranchName}`, { stdio: 'ignore' });
+
+        return {
+          status: 'success',
+          message: `Created temporary branch '${tempBranchName}' and pushed to origin. Merge log: ${mergeLog.join(' | ')}`,
+          temp_branch: tempBranchName
+        };
+      } catch (err) {
+        return { status: 'error', message: `Failed during branch operations: ${err.message}` };
+      }
     }
 
     default:
