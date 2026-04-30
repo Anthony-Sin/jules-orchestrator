@@ -69,7 +69,7 @@ export async function sendMessage(sessionId, message) {
   const res = await fetch(`${DEFAULTS.JULES_API_BASE}/sessions/${sessionId}:sendMessage`, {
     method: 'POST',
     headers: headers(),
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ prompt: message }),
   })
   if (!res.ok) throw new Error(`Jules API error ${res.status}`)
   return res.json()

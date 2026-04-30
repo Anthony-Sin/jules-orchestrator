@@ -2,7 +2,7 @@ import { parseSourceDisplay, getActivities, sendMessage } from '../state/jules-a
 import React, { useState, useEffect, useRef } from 'react'
 import { render, Box, Text, useInput, useApp } from 'ink'
 import TextInput from 'ink-text-input'
-import { getSessions, getQueue, getQuotaUsed, quotaRemaining, getQuotaLimit, getConfig, getArchitectureDiagram, setConfig } from '../state/store.js'
+import { getSessions, getQueue, getQuotaUsed, quotaRemaining, getQuotaLimit, getConfig, getArchitectureDiagram, setConfig, store } from '../state/store.js'
 import { DEFAULTS } from '../../config/defaults.js'
 import fs from 'fs'
 import path from 'path'
@@ -98,6 +98,9 @@ function FillBar({ value, tick, width = 7, isDimmed, state }) {
   } else if (state === 'QUEUED' || state === 'PAUSED' || state === 'FAILED' || state === 'KILLED') {
       target = 0;
   }
+  if (line) lines.push(line)
+  return lines
+}
 
   const shown  = Math.min(width, Math.max(0, target))
   const empty  = width - shown
@@ -127,7 +130,9 @@ function AgentRow({ agent, selected, tick, isDimmed }) {
 
   const displayId = (agent.id || '').substring(0, 6).padEnd(6)
   const displayTitle = (agent.title || '').substring(0, 12).padEnd(12)
-  const displayRepo = parseSourceDisplay(agent.repoDisplay || agent.repo || '').substring(0, 20).padEnd(20)
+  const parsedRepo = parseSourceDisplay(agent.repoDisplay || agent.repo || '')
+  const repoNameOnly = parsedRepo.includes('/') ? parsedRepo.split('/')[1] : parsedRepo
+  const displayRepo = repoNameOnly.substring(0, 20).padEnd(20)
 
   return React.createElement(Box, { paddingX: 1, width: "100%", height: 1, overflow: "hidden", backgroundColor: hi ? 'magenta' : undefined, flexDirection: "row" },
       React.createElement(Box, { width: 2, flexShrink: 0 }, React.createElement(Text, { color: tColor('magenta'), bold: true, dimColor: isDimmed }, hi ? '> ' : '  ')),
@@ -168,22 +173,31 @@ function wrapText(text, width) {
   return lines
 }
 
-function ChatPanel({ messages, input, onChange, onSubmit, focused, scrollOffset, width, height }) {
+function ChatPanel({ messages, input, onChange, onSubmit, focused, scrollOffset, width, height, tab, notes, setNotes }) {
   const inner = Math.max(10, width - 4)
 
   const allLines = []
-  for (const m of messages) {
-    if (m.role === 'agent') {
-      allLines.push({ type: 'label', text: '▸ AGENT', color: focused ? 'magenta' : 'gray' })
-    } else if (m.role === 'system') {
-      allLines.push({ type: 'label', text: '  [SYSTEM]', color: 'gray' })
-    } else {
-      allLines.push({ type: 'label', text: '  you', color: 'gray' })
-    }
-    const wrapped = wrapText(m.text, inner - 2)
-    for (const l of wrapped)
-      allLines.push({ type: 'text', text: l, color: m.role === 'agent' ? (focused ? 'white' : 'gray') : (focused ? 'cyan' : 'gray') })
-    allLines.push({ type: 'gap' })
+  if (tab === 'chat') {
+      for (const m of messages) {
+        if (m.role === 'agent') {
+          allLines.push({ type: 'label', text: '▸ AGENT', color: focused ? 'magenta' : 'gray' })
+        } else if (m.role === 'system') {
+          allLines.push({ type: 'label', text: '  [SYSTEM]', color: 'gray' })
+        } else {
+          allLines.push({ type: 'label', text: '  you', color: 'cyan' })
+        }
+        const wrapped = wrapText(m.text, inner - 2)
+        for (const l of wrapped)
+          allLines.push({ type: 'text', text: l, color: m.role === 'agent' ? (focused ? 'white' : 'gray') : (focused ? 'cyan' : 'gray') })
+        allLines.push({ type: 'gap' })
+      }
+  } else {
+      const wrapped = [];
+      const lines = (notes || 'Type your notes here. They are saved automatically.').split('\n');
+      for (const line of lines) {
+         wrapped.push(...wrapText(line, inner - 2));
+      }
+      for (const l of wrapped) allLines.push({ type: 'text', text: l, color: focused ? 'white' : 'gray' })
   }
 
   const VISIBLE = Math.max(10, height - 8)
@@ -193,7 +207,7 @@ function ChatPanel({ messages, input, onChange, onSubmit, focused, scrollOffset,
 
   return React.createElement(Box, { flexDirection: "column", borderStyle: "single", borderColor: focused ? 'cyan' : 'gray', width: width, height: "100%", paddingX: 1 },
       React.createElement(Box, { flexShrink: 0, height: 1 },
-          React.createElement(Text, { color: focused ? 'magenta' : 'gray', bold: true, wrap: "truncate" }, '▌ AGENT CHAT'),
+          React.createElement(Text, { color: focused ? 'magenta' : 'gray', bold: true, wrap: "truncate" }, tab === 'chat' ? '▌ AGENT CHAT  [Chat | Notes >]' : '▌ NOTES      [< Chat | Notes ]'),
           scrollOffset > 0 && React.createElement(Text, { color: "gray", dimColor: true }, '  ↑' + scrollOffset)
       ),
       React.createElement(Box, { overflow: "hidden", flexShrink: 0, height: 1 },
@@ -215,7 +229,7 @@ function ChatPanel({ messages, input, onChange, onSubmit, focused, scrollOffset,
       ),
       React.createElement(Box, { borderStyle: focused ? 'single' : undefined, borderColor: "cyan", paddingX: focused ? 1 : 0, flexShrink: 0 },
           React.createElement(Text, { color: focused ? 'green' : 'gray' }, '> '),
-          React.createElement(TextInput, { value: input, onChange: onChange, onSubmit: onSubmit, placeholder: focused ? 'type message…' : 'ctrl+e to focus', focus: focused })
+          React.createElement(TextInput, { value: tab === 'chat' ? input : (notes || ''), onChange: tab === 'chat' ? onChange : (val) => setNotes(val), onSubmit: tab === 'chat' ? onSubmit : () => {}, placeholder: focused ? (tab === 'chat' ? 'type message…' : 'type notes...') : 'F3 to focus', focus: focused })
       )
   )
 }
@@ -265,6 +279,9 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
   const [repoInput, setRepoInput]       = useState('')
   const [lastActivityIds, setLastActivityIds] = useState({})
   const [selectedSessionId, setSelectedSessionId] = useState(null)
+  const [chatTab, setChatTab] = useState('chat') // 'chat' or 'notes'
+  const [notes, setNotes] = useState(() => store.get('tuiNotes', ''))
+  const [queuedMessages, setQueuedMessages] = useState({})
 
   const VISIBLE_AGENTS = Math.max(2, rows - 21)
 
@@ -331,6 +348,23 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
     }
   }, [sel, VISIBLE_AGENTS, tableOffset])
 
+  useEffect(() => { store.set('tuiNotes', notes) }, [notes])
+  useEffect(() => {
+      // Check for queued messages that belong to COMPLETED agents
+      for (const [id, msg] of Object.entries(queuedMessages)) {
+          const agent = AGENTS.find(a => a.id === id);
+          if (agent && agent.state === 'COMPLETED') {
+              // Send message and remove from queue
+              sendMessage(id, msg).catch(() => {});
+              setMessages(m => [...m, { role: 'system', text: `[SYSTEM] Sent queued message to ${id}` }]);
+              setQueuedMessages(prev => {
+                  const newQ = {...prev};
+                  delete newQ[id];
+                  return newQ;
+              });
+          }
+      }
+  }, [tick, queuedMessages, AGENTS])
   useEffect(() => {
       if (AGENTS[sel]) {
           setSelectedSessionId(AGENTS[sel].id);
@@ -355,10 +389,10 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
         return;
     }
 
-    if (key.ctrl && input === 'm') { setRepoInputMode(true); setRepoInput(''); return }
-    if (key.ctrl && input === 't') { setMode('table'); return }
-    if (key.ctrl && input === 'g') { setMode('graph'); return }
-    if (key.ctrl && input === 'e') { setMode('chat'); setScrollOffset(0); return }
+    if (key.f4) { setRepoInputMode(true); setRepoInput(''); return }
+    if (key.f1) { setMode('table'); return }
+    if (key.f2) { setMode('graph'); return }
+    if (key.f3) { setMode('chat'); setScrollOffset(0); return }
     if (key.escape) { setMode('table'); return }
 
     if (key.tab) {
@@ -368,6 +402,7 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
     }
 
     if (mode === 'chat') {
+      if (key.shift && (key.leftArrow || key.rightArrow)) { setChatTab(t => t === 'chat' ? 'notes' : 'chat'); return }
       if (key.upArrow)   setScrollOffset(o => o + 1)
       if (key.downArrow) setScrollOffset(o => Math.max(0, o - 1))
       if (key.pageUp)    setScrollOffset(o => o + 5)
@@ -417,6 +452,17 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
     }
 
     // Existing session
+    if (agent.state === 'IN_PROGRESS') {
+        setQueuedMessages(prev => ({...prev, [agent.id]: val.trim()}));
+        setMessages(m => [...m,
+          { role: 'user',  text: val.trim() },
+          { role: 'system', text: `[SYSTEM] Node ${agent.id} is IN_PROGRESS. Message queued.` },
+        ]);
+        setChatInput('');
+        setScrollOffset(0);
+        return;
+    }
+
     setMessages(m => [...m,
       { role: 'user',  text: val.trim() },
       { role: 'system', text: 'Sending to node ' + agent.id + '...' },
@@ -477,9 +523,10 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
           React.createElement(TextInput, { value: repoInput, onChange: setRepoInput, onSubmit: handleRepoSubmit })
       ),
 
-      showHelp ? React.createElement(HelpScreen) : React.createElement(Box, { flexDirection: "row", flexGrow: 1, marginTop: 1, overflow: "hidden" },
+      showHelp ? React.createElement(HelpScreen) : React.createElement(Box, { flexDirection: "column", flexGrow: 1, marginTop: 1, overflow: "hidden" },
+        React.createElement(MiniGraph, { tick: tick, isDimmed: mode !== 'graph' }),
+        React.createElement(Box, { flexDirection: "row", flexGrow: 1, overflow: "hidden" },
           showLeftPanel && React.createElement(Box, { flexDirection: "column", flexGrow: 1, flexShrink: 1, marginRight: isWide ? 1 : 0, overflow: "hidden" },
-              React.createElement(MiniGraph, { tick: tick, isDimmed: mode !== 'graph' }),
               React.createElement(Box, { paddingX: 1, flexDirection: "row", height: 1, flexShrink: 0 },
                   React.createElement(Box, { width: 2, flexShrink: 0 }, React.createElement(Text, null, ' ')),
                   React.createElement(Box, { width: 8, flexShrink: 0 }, React.createElement(Text, { color: tColor('gray'), bold: true, dimColor: leftDimmed, wrap: "truncate" }, 'ID')),
@@ -508,9 +555,10 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
                   tableOffset + VISIBLE_AGENTS < AGENTS.length && React.createElement(Box, { flexShrink: 0 }, React.createElement(Text, { color: tColor('cyan'), bold: true, dimColor: leftDimmed }, ' ↓ MORE ↓ '))
               )
           ),
-          showRightPanel && React.createElement(Box, { flexDirection: "column", width: chatWidth, flexShrink: 0 },
-              React.createElement(ChatPanel, { messages: messages, input: chatInput, onChange: setChatInput, onSubmit: handleSend, focused: mode === 'chat', scrollOffset: scrollOffset, width: chatWidth, height: rows - (repoInputMode ? 4 : 0) })
+          showRightPanel && React.createElement(Box, { flexDirection: "column", width: chatWidth, flexShrink: 0, justifyContent: "flex-end" },
+              React.createElement(ChatPanel, { messages: messages, input: chatInput, onChange: setChatInput, onSubmit: handleSend, focused: mode === 'chat', scrollOffset: scrollOffset, width: chatWidth, height: 15, tab: chatTab, notes: notes, setNotes: setNotes })
           )
+      )
       ),
       React.createElement(Box, { width: "100%", height: 1, overflow: "hidden", flexShrink: 0 },
           React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, '━'.repeat(200))
@@ -518,10 +566,10 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
       React.createElement(Box, { width: "100%", height: 1, flexDirection: "row", overflow: "hidden", flexShrink: 0 },
           !showHelp ? React.createElement(React.Fragment, null,
               React.createElement(Box, { flexShrink: 0 },
-                  React.createElement(Text, { color: "cyan", bold: true, wrap: "truncate" }, ' ctrl+t'), React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, ':table '),
-                  React.createElement(Text, { color: "cyan", bold: true, wrap: "truncate" }, ' ctrl+g'), React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, ':graph '),
-                  React.createElement(Text, { color: "cyan", bold: true, wrap: "truncate" }, ' ctrl+e'), React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, ':chat '),
-                  React.createElement(Text, { color: "cyan", bold: true, wrap: "truncate" }, ' ctrl+m'), React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, ':repo │')
+                  React.createElement(Text, { color: "cyan", bold: true, wrap: "truncate" }, ' F1'), React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, ':table '),
+                  React.createElement(Text, { color: "cyan", bold: true, wrap: "truncate" }, ' F2'), React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, ':graph '),
+                  React.createElement(Text, { color: "cyan", bold: true, wrap: "truncate" }, ' F3'), React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, ':chat '),
+                  React.createElement(Text, { color: "cyan", bold: true, wrap: "truncate" }, ' F4'), React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, ':repo │')
               ),
               React.createElement(Box, { flexShrink: 0 },
                   React.createElement(Text, { color: mode === 'table' ? 'magenta' : 'gray', bold: mode === 'table', dimColor: mode !== 'table', wrap: "truncate" }, ' [TABLE]'),
@@ -529,7 +577,7 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
                   React.createElement(Text, { color: mode === 'chat'  ? 'magenta' : 'gray', bold: mode === 'chat',  dimColor: mode !== 'chat', wrap: "truncate" }, ' [CHAT]')
               ),
               React.createElement(Box, { flexGrow: 1, flexShrink: 1, overflow: "hidden" },
-                  React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, `  │ ↑↓/←→:nav  enter:action  ?:help  │ sess ${AGENTS[sel]?.id || 'NONE'}`)
+                  React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, `  │ ↑↓:nav Shift+←→:tabs enter:action ?:help │ sess ${AGENTS[sel]?.id || 'NONE'}`)
               )
           ) : React.createElement(Box, { flexGrow: 1, flexShrink: 1, overflow: "hidden" },
               React.createElement(Text, { color: "yellow", bold: true, wrap: "truncate" }, '  [HELP MODE ACTIVE] '),
