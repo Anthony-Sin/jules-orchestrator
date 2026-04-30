@@ -16,8 +16,10 @@
     "conf": "^12.0.0",
     "dotenv": "^17.4.2",
     "ink": "^4.4.1",
+    "ink-text-input": "^6.0.0",
     "inquirer": "^13.4.2",
     "node-fetch": "^3.3.2",
-    "react": "^18.2.0"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   }
 }
