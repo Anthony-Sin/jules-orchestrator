@@ -91,11 +91,16 @@ export async function getActivities(sessionId) {
 }
 
 export function parseSourceDisplay(source) {
-  if (!source || !source.startsWith('sources/github-')) return source
-  const stripped = source.slice('sources/github-'.length)
-  const firstDashIdx = stripped.indexOf('-')
-  if (firstDashIdx === -1) return stripped
-  return stripped.slice(0, firstDashIdx) + '/' + stripped.slice(firstDashIdx + 1)
+  if (!source) return source
+  const match = source.match(/^sources\/github[-/](.*)/)
+  if (!match) return source
+
+  let stripped = match[1]
+  if (!stripped.includes('/') && stripped.includes('-')) {
+    const firstDashIdx = stripped.indexOf('-')
+    stripped = stripped.slice(0, firstDashIdx) + '/' + stripped.slice(firstDashIdx + 1)
+  }
+  return stripped
 }
 
 export async function listSources() {
