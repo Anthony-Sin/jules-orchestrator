@@ -6,9 +6,19 @@
 
 ---
 
+## ⚡ SPEED & ANTI-LOOP DIRECTIVES (CRITICAL)
+To prevent failing code reviews and wasting time, you MUST follow these strict operational rules:
+
+1. **NEVER touch out-of-domain files:** If you are the TUI agent, do NOT edit `src/pools` or `src/state`. If a bug exists in another domain, you MUST leave it alone and write a message to that agent's inbox. Cross-domain edits result in instant code review failure.
+2. **NEVER commit junk files:** Do NOT commit `node_modules/`, `package-lock.json` (unless explicitly updating dependencies), or leftover manual test scripts like `test.js` or `test_upsert.js`. Delete your test scripts before committing.
+3. **Write Code FIRST, Inbox SECOND:** Do NOT mark an inbox task `[x] Done` until you have actually written and verified the code to fulfill it.
+4. **Safe Markdown Edits:** When appending to inboxes via CLI, ensure line breaks are formatted correctly. Do not corrupt markdown formatting with literal `\n` strings.
+
+---
+
 ## Strict Context Isolation
 
-**To avoid confusion and keep your context window focused, you must ONLY read your own `AGENT_{ROLE}_REQUIREMENTS.md` file.** Do not read the requirements files of other agents unless explicitly instructed by the user or the Executive Agent. 
+**To avoid confusion and keep your context window focused, you must ONLY read your own `AGENT_{ROLE}_REQUIREMENTS.md` file.** Do not read the requirements files of other agents.
 
 ---
 
@@ -20,14 +30,14 @@
 | **Config** | `agent_roles/AGENT_CONFIG_REQUIREMENTS.md` | **Settings:** Owns `jorch config *` commands (`src/cli/config.js`). |
 | **Conflict** | `agent_roles/AGENT_CONFLICT_REQUIREMENTS.md` | **Resolver:** Owns `jorch conflict` command and dedicated merge sessions. |
 | **Decomposer** | `agent_roles/AGENT_DECOMPOSER_REQUIREMENTS.md` | **Parser:** Splits raw prompts into atomic, typed tasks (`src/decomposer/decomposer.js`). |
-| **Pools** | `agent_roles/AGENT_POOLS_REQUIREMENTS.md` | **Lifecycle:** Dispatches tasks, polls state, kills sessions (`src/pool/pool-manager.js`). |
+| **Pools** | `agent_roles/AGENT_POOLS_REQUIREMENTS.md` | **Lifecycle:** Dispatches tasks, polls state, kills sessions (`src/pools/pool-manager.js`). |
 | **Queue** | `agent_roles/AGENT_QUEUE_REQUIREMENTS.md` | **Traffic Control:** Enqueues, sorts priority, checks file locks (`src/queue/queue.js`). |
 | **State** | `agent_roles/AGENT_STATE_REQUIREMENTS.md` | **Source of Truth:** Owns persistent store and Jules API calls (`src/state/`). |
-| **TUI** | `agent_roles/AGENT_TUI_REQUIREMENTS.md` | **Dashboard:** Owns terminal render loop and UI formatting (`src/tui/`). |
+| **TUI** | `agent_roles/AGENT_TUI_REQUIREMENTS.md` | **Dashboard + Entry Point:** Owns terminal render loop, UI formatting, and CLI wiring (`src/tui/`, `bin/jorch.js`). |
 
 ---
 
-## Start of Every Task — The Golden Path
+## Start of Every Task — The Speed Path
 
 Before writing a single line of code, every agent MUST do the following:
 
@@ -35,6 +45,7 @@ Before writing a single line of code, every agent MUST do the following:
 2. **Read Inbox:** Check your specific inbox file located in the `inbox/` folder (e.g., `inbox/AGENT_STATE_INBOX.md`).
 3. **Clear Inbox:** Complete all `[ ] Pending` items before starting any new user tasks.
 4. **Stay in your lane:** Only edit files explicitly listed in your Domain.
+5. **Syntax Check:** Run `node --check <your-file>` before submitting.
 
 ---
 
@@ -46,9 +57,6 @@ Agents do not edit each other's requirement files. Instead, they write to dedica
 
 1. **When writing to ANOTHER agent's inbox:** You must **ONLY APPEND** your message to the bottom of their file. You are strictly forbidden from overwriting, deleting, or modifying any existing text in another agent's inbox.
 2. **When reading YOUR OWN inbox:** This is the *only* time you are allowed to modify an inbox file. Once you have completed a requested task, you must edit your own inbox to change the status from `[ ] Pending` to `[x] Done`. Never delete the message.
-
-### How to Send a Message
-Append your message to the **bottom** of the receiving agent's file (e.g., `inbox/AGENT_POOLS_INBOX.md`).
 
 ### Message Format
 
@@ -65,3 +73,19 @@ Status: [ ] Pending
 
 **Action Required:**
 {Tell the receiving agent exactly what they need to do in their domain.}
+```
+
+---
+
+## Inbox Directory
+
+| Agent | Inbox File |
+|---|---|
+| Executive | `inbox/AGENT_EXECUTIVE_INBOX.md` |
+| Config | `inbox/AGENT_CONFIG_INBOX.md` |
+| Conflict | `inbox/AGENT_CONFLICT_INBOX.md` |
+| Decomposer | `inbox/AGENT_DECOMPOSER_INBOX.md` |
+| Pools | `inbox/AGENT_POOLS_INBOX.md` |
+| Queue | `inbox/AGENT_QUEUE_INBOX.md` |
+| State | `inbox/AGENT_STATE_INBOX.md` |
+| TUI | `inbox/AGENT_TUI_INBOX.md` |

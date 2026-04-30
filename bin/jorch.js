@@ -21,7 +21,7 @@ program
   .action(async (rawPrompt) => {
     console.log(chalk.dim('\n  Decomposing prompt…'))
 
-    const tasks = splitPrompt(rawPrompt)
+    const tasks = await splitPrompt(rawPrompt)
     const grouped = groupByType(tasks)
 
     console.log(chalk.white(`\n  Found ${tasks.length} task(s):`))
@@ -208,6 +208,14 @@ configCmd
   })
 
 configCmd
+  .command('set-auto-pr <value>')
+  .description('Set whether Jules creates PRs automatically (true or false)')
+  .action((value) => {
+    setConfig('autoPr', value === 'true')
+    console.log(chalk.green(`\n  ✓ Auto-PR set to: ${value === 'true'}\n`))
+  })
+
+configCmd
   .command('show')
   .description('Show current config')
   .action(() => {
@@ -216,6 +224,7 @@ configCmd
     console.log(`  API key : ${cfg.apiKey ? chalk.green('set') : chalk.red('not set')}`)
     console.log(`  Source  : ${cfg.source || chalk.dim('not set')}`)
     console.log(`  Branch  : ${cfg.branch || chalk.dim('main (default)')}`)
+    console.log(`  Auto-PR : ${cfg.autoPr !== undefined ? chalk.cyan(cfg.autoPr) : chalk.dim('true (default)')}`)
     console.log()
   })
 

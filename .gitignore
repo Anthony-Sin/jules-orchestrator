@@ -1,0 +1,7 @@
+node_modules/
+logs/
+*.env
+.env
+temp_test.js
+test_*.js
+*.log
