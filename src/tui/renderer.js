@@ -104,13 +104,13 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
       )
     ) : (
       React.createElement(Box, { flexDirection: 'column', marginBottom: 1 },
-        React.createElement(Box, { borderStyle: 'single', borderColor: 'gray', flexDirection: 'column', paddingX: 1 },
-          React.createElement(Box, {},
-            React.createElement(Box, { width: 10 }, React.createElement(Text, { dimColor: true }, 'ID')),
-            React.createElement(Box, { width: 45 }, React.createElement(Text, { dimColor: true }, 'Description')),
-            React.createElement(Box, { width: 25 }, React.createElement(Text, { dimColor: true }, 'Repo')),
-            React.createElement(Box, { width: 18 }, React.createElement(Text, { dimColor: true }, 'Last active')),
-            React.createElement(Box, { width: 20 }, React.createElement(Text, { dimColor: true }, 'Status'))
+        React.createElement(Box, { borderStyle: 'round', borderColor: 'gray', flexDirection: 'column', paddingX: 1 },
+          React.createElement(Box, { marginBottom: 0 },
+            React.createElement(Box, { width: 8, borderStyle: 'round', borderColor: 'gray', justifyContent: 'center' }, React.createElement(Text, { dimColor: true, bold: true }, 'ID')),
+            React.createElement(Box, { width: 45, borderStyle: 'round', borderColor: 'gray', justifyContent: 'center' }, React.createElement(Text, { dimColor: true, bold: true }, 'Description')),
+            React.createElement(Box, { width: 25, borderStyle: 'round', borderColor: 'gray', justifyContent: 'center' }, React.createElement(Text, { dimColor: true, bold: true }, 'Repo')),
+            React.createElement(Box, { width: 18, borderStyle: 'round', borderColor: 'gray', justifyContent: 'center' }, React.createElement(Text, { dimColor: true, bold: true }, 'Last active')),
+            React.createElement(Box, { width: 20, borderStyle: 'round', borderColor: 'gray', justifyContent: 'center' }, React.createElement(Text, { dimColor: true, bold: true }, 'Status'))
           ),
           displayed.map((s, idx) => {
             const isSelected = idx === selectedIndex
@@ -120,8 +120,8 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
             // Inverse colors in the entire text blocks using Chalk if selected, or Ink Text backgrounds.
             const bgProps = isSelected ? { backgroundColor: 'blue', color: 'white' } : {}
 
-            return React.createElement(Box, { key: s.id, width: 118 },
-              React.createElement(Box, { width: 10 }, React.createElement(Text, { ...bgProps, wrap: 'truncate' }, truncate(s.id, 8).padEnd(10))),
+            return React.createElement(Box, { key: s.id, width: 118, paddingLeft: 1 },
+              React.createElement(Box, { width: 8 }, React.createElement(Text, { ...bgProps, wrap: 'truncate' }, truncate(s.id, 6).padEnd(8))),
               React.createElement(Box, { width: 45 }, React.createElement(Text, { ...bgProps, wrap: 'truncate' }, truncate(s.title, 43).padEnd(45))),
               React.createElement(Box, { width: 25 }, React.createElement(Text, { ...bgProps, wrap: 'truncate' }, truncate(repoDisplay, 23).padEnd(25))),
               React.createElement(Box, { width: 18 }, React.createElement(Text, { ...bgProps, wrap: 'truncate' }, ago(s.lastUpdated || s.createdAt).padEnd(18))),
