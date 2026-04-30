@@ -98,9 +98,6 @@ function FillBar({ value, tick, width = 7, isDimmed, state }) {
   } else if (state === 'QUEUED' || state === 'PAUSED' || state === 'FAILED' || state === 'KILLED') {
       target = 0;
   }
-  if (line) lines.push(line)
-  return lines
-}
 
   const shown  = Math.min(width, Math.max(0, target))
   const empty  = width - shown
@@ -128,6 +125,9 @@ function AgentRow({ agent, selected, tick, isDimmed }) {
   const hi = selected && !isDimmed
   const tColor = (base, activeBase = 'black') => isDimmed ? 'gray' : (hi ? activeBase : base)
 
+  const isOrchestrator = agent.type === 'orchestrator' || (agent.title && agent.title.toLowerCase().includes('orchestrator'));
+  const titleColor = isOrchestrator ? 'yellowBright' : 'green';
+
   const displayId = (agent.id || '').substring(0, 6).padEnd(6)
   const displayTitle = (agent.title || '').substring(0, 12).padEnd(12)
   const parsedRepo = parseSourceDisplay(agent.repoDisplay || agent.repo || '')
@@ -137,7 +137,7 @@ function AgentRow({ agent, selected, tick, isDimmed }) {
   return React.createElement(Box, { paddingX: 1, width: "100%", height: 1, overflow: "hidden", backgroundColor: hi ? 'magenta' : undefined, flexDirection: "row" },
       React.createElement(Box, { width: 2, flexShrink: 0 }, React.createElement(Text, { color: tColor('magenta'), bold: true, dimColor: isDimmed }, hi ? '> ' : '  ')),
       React.createElement(Box, { width: 8, flexShrink: 0 }, React.createElement(Text, { color: tColor('yellow'), bold: true, wrap: "truncate", dimColor: isDimmed }, displayId)),
-      React.createElement(Box, { width: 14, flexShrink: 0 }, React.createElement(Text, { color: tColor('green'), bold: true, wrap: "truncate", dimColor: isDimmed }, displayTitle)),
+      React.createElement(Box, { width: 14, flexShrink: 0 }, React.createElement(Text, { color: tColor(titleColor), bold: true, wrap: "truncate", dimColor: isDimmed }, displayTitle)),
       React.createElement(Box, { flexGrow: 1, flexShrink: 1 }, React.createElement(Text, { color: tColor('white'), wrap: "truncate", dimColor: isDimmed }, displayRepo)),
       React.createElement(Box, { width: 8, flexShrink: 0 }, React.createElement(Text, { color: tColor(sc), bold: true, dimColor: isDimmed }, ss)),
       React.createElement(Box, { width: 16, flexShrink: 0 }, React.createElement(FillBar, { value: 0, tick: tick, width: 7, isDimmed: isDimmed, state: agent.state })),
@@ -257,6 +257,10 @@ function HelpScreen() {
           React.createElement(Box, { flexGrow: 1 }, React.createElement(Text, { color: "white" }, 'Change working repository'))
       ),
       React.createElement(Box, { flexDirection: "row", marginBottom: 1, width: 50 },
+          React.createElement(Box, { width: 20, justifyContent: "flex-end", paddingRight: 2 }, React.createElement(Text, { color: "cyan", bold: true }, 'Ctrl + N')),
+          React.createElement(Box, { flexGrow: 1 }, React.createElement(Text, { color: "white" }, 'Toggle Notes/Chat tabs'))
+      ),
+      React.createElement(Box, { flexDirection: "row", marginBottom: 1, width: 50 },
           React.createElement(Box, { width: 20, justifyContent: "flex-end", paddingRight: 2 }, React.createElement(Text, { color: "magenta", bold: true }, '?')),
           React.createElement(Box, { flexGrow: 1 }, React.createElement(Text, { color: "white" }, 'Toggle this Help Screen'))
       )
@@ -314,13 +318,19 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
                   for (const act of sorted) {
                       if (!lastId || foundNew || (!foundNew && act.name > lastId)) {
                           foundNew = true;
-                          if (act.originator === 'agent' || act.originator === 'system') {
+                          if (act.userMessaged) {
+                              newMessages.push({ role: 'user', text: act.userMessaged.userMessage || '' });
+                          } else if (act.agentMessaged) {
+                              newMessages.push({ role: 'agent', text: act.agentMessaged.agentMessage || '' });
+                          } else if (act.originator === 'agent' || act.originator === 'system') {
                               let text = act.description || '';
                               if (act.planGenerated) text += '\nPlan Generated:\n' + JSON.stringify(act.planGenerated);
                               if (act.artifacts && act.artifacts.length > 0) {
                                 text += '\nArtifacts generated.';
                               }
-                              newMessages.push({ role: act.originator, text: text });
+                              if (text.trim() !== '') {
+                                  newMessages.push({ role: act.originator, text: text });
+                              }
                           }
                       }
                   }
@@ -335,7 +345,7 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
           } catch(e) {}
       };
 
-      const p = setInterval(poll, 3000);
+      const p = setInterval(poll, 5000);
       poll();
       return () => { active = false; clearInterval(p); }
   }, [mode, selectedSessionId, lastActivityIds]);
@@ -365,11 +375,8 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
           }
       }
   }, [tick, queuedMessages, AGENTS])
-  useEffect(() => {
-      if (AGENTS[sel]) {
-          setSelectedSessionId(AGENTS[sel].id);
-      }
-  }, [sel, AGENTS]);
+// Auto-updating selectedSessionId on scroll causes chat history mixing.
+  // We only set it when they hit Enter.
 
   useInput(async (input, key) => {
     if (repoInputMode) {
@@ -389,10 +396,10 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
         return;
     }
 
-    if (key.f4) { setRepoInputMode(true); setRepoInput(''); return }
-    if (key.f1) { setMode('table'); return }
-    if (key.f2) { setMode('graph'); return }
-    if (key.f3) { setMode('chat'); setScrollOffset(0); return }
+    if (key.ctrl && input === 'm') { setRepoInputMode(true); setRepoInput(''); return }
+    if (key.ctrl && input === 't') { setMode('table'); return }
+    if (key.ctrl && input === 'g') { setMode('graph'); return }
+    if (key.ctrl && input === 'e') { setMode('chat'); setScrollOffset(0); return }
     if (key.escape) { setMode('table'); return }
 
     if (key.tab) {
@@ -402,6 +409,7 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
     }
 
     if (mode === 'chat') {
+      if (key.ctrl && input === 'n') { setChatTab(t => t === 'chat' ? 'notes' : 'chat'); return }
       if (key.shift && (key.leftArrow || key.rightArrow)) { setChatTab(t => t === 'chat' ? 'notes' : 'chat'); return }
       if (key.upArrow)   setScrollOffset(o => o + 1)
       if (key.downArrow) setScrollOffset(o => Math.max(0, o - 1))
@@ -415,15 +423,36 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
       if (key.downArrow) setSel(i => Math.min(Math.max(0, AGENTS.length - 1), i + 1))
 
       if (key.return) {
-        const agent = AGENTS[sel]
+        const agent = selectedSessionId ? AGENTS.find(a => a.id === selectedSessionId) : null
         if (agent) {
-            setMessages(m => [
-              ...m,
-              { role: 'system', text: `[SYSTEM] Context switched to ${agent.id}. Node is currently ${agent.state}. Standing by.` },
-            ])
             setSelectedSessionId(agent.id);
             setMode('chat')
             setScrollOffset(0)
+
+            // Fetch chat history asynchronously
+            getActivities(agent.id).then(res => {
+                const acts = res.activities || res || [];
+                const history = [];
+                if (Array.isArray(acts)) {
+                    const sorted = acts.sort((a,b) => new Date(a.createTime || 0) - new Date(b.createTime || 0));
+                    for (const act of sorted) {
+                        if (act.userMessaged) {
+                            history.push({ role: 'user', text: act.userMessaged.userMessage || '' });
+                        } else if (act.agentMessaged) {
+                            history.push({ role: 'agent', text: act.agentMessaged.agentMessage || '' });
+                        } else if (act.originator === 'agent' || act.originator === 'system') {
+                            let text = act.description || '';
+                            if (act.planGenerated) text += '\nPlan Generated:\n' + JSON.stringify(act.planGenerated);
+                            if (act.artifacts && act.artifacts.length > 0) text += '\nArtifacts generated.';
+                            if (text.trim() !== '') history.push({ role: act.originator, text: text });
+                        }
+                    }
+                }
+                history.push({ role: 'system', text: `[SYSTEM] Context switched to ${agent.id}. Node is currently ${agent.state}. Standing by.` });
+                setMessages(history);
+            }).catch(e => {
+                setMessages([{ role: 'system', text: `[SYSTEM] Context switched to ${agent.id}. Error loading history: ${e.message}` }]);
+            });
         }
       }
     }
@@ -431,22 +460,31 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
 
   async function handleSend(val) {
     if (!val.trim()) return
+
+    const source = getConfig().source || getGitInfo().repo;
+    if (!source || source === 'unknown' || source === 'unknown/unknown') {
+        setMessages(m => [...m,
+            { role: 'user', text: val.trim() },
+            { role: 'system', text: 'Error: Unable to send message. No repository is selected. Please select a repository using Ctrl+M first.' }
+        ]);
+        setChatInput('');
+        setScrollOffset(0);
+        return;
+    }
+
     const agent = AGENTS[sel]
 
     if (!agent) {
         // No session selected, create a new one via orchestrator
-        setMessages(m => [...m,
-          { role: 'user',  text: val.trim() },
-          { role: 'system', text: 'Initializing Orchestrator to handle request...' },
-        ])
+        // Don't log the orchestrator init text to chat since we just want a clean slate
         setChatInput('')
         setScrollOffset(0)
         try {
             const { sessionId } = await dispatchLeadOrchestrator(val.trim(), 1, val.trim().substring(0, 30));
-            setMessages(m => [...m, { role: 'system', text: `Dispatched Orchestrator Session: ${sessionId}`}]);
+            setMessages([{ role: 'user', text: val.trim() }, { role: 'system', text: `Dispatched Orchestrator Session: ${sessionId}`}]);
             setSelectedSessionId(sessionId);
         } catch(e) {
-            setMessages(m => [...m, { role: 'system', text: `Error: ${e.message}`}]);
+            setMessages(m => [...m, { role: 'user', text: val.trim() }, { role: 'system', text: `Error: ${e.message}`}]);
         }
         return;
     }
@@ -494,10 +532,12 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
   }
 
   const WIDE_BREAKPOINT = 115
+  const GRAPH_MIN_WIDTH = 160
   const isWide = columns >= WIDE_BREAKPOINT
   const showLeftPanel = isWide || mode !== 'chat'
   const showRightPanel = isWide || mode === 'chat'
   const chatWidth = isWide ? 38 : columns - 2
+  const showGraph = columns >= GRAPH_MIN_WIDTH
   const visibleAgents = AGENTS.slice(tableOffset, tableOffset + VISIBLE_AGENTS)
   const leftDimmed = mode === 'chat'
   const tColor = (color) => leftDimmed ? 'gray' : color
@@ -524,7 +564,7 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
       ),
 
       showHelp ? React.createElement(HelpScreen) : React.createElement(Box, { flexDirection: "column", flexGrow: 1, marginTop: 1, overflow: "hidden" },
-        React.createElement(MiniGraph, { tick: tick, isDimmed: mode !== 'graph' }),
+        showGraph && React.createElement(MiniGraph, { tick: tick, isDimmed: mode !== 'graph' }),
         React.createElement(Box, { flexDirection: "row", flexGrow: 1, overflow: "hidden" },
           showLeftPanel && React.createElement(Box, { flexDirection: "column", flexGrow: 1, flexShrink: 1, marginRight: isWide ? 1 : 0, overflow: "hidden" },
               React.createElement(Box, { paddingX: 1, flexDirection: "row", height: 1, flexShrink: 0 },
@@ -566,10 +606,11 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
       React.createElement(Box, { width: "100%", height: 1, flexDirection: "row", overflow: "hidden", flexShrink: 0 },
           !showHelp ? React.createElement(React.Fragment, null,
               React.createElement(Box, { flexShrink: 0 },
-                  React.createElement(Text, { color: "cyan", bold: true, wrap: "truncate" }, ' F1'), React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, ':table '),
-                  React.createElement(Text, { color: "cyan", bold: true, wrap: "truncate" }, ' F2'), React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, ':graph '),
-                  React.createElement(Text, { color: "cyan", bold: true, wrap: "truncate" }, ' F3'), React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, ':chat '),
-                  React.createElement(Text, { color: "cyan", bold: true, wrap: "truncate" }, ' F4'), React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, ':repo │')
+                  React.createElement(Text, { color: "cyan", bold: true, wrap: "truncate" }, ' ctrl+t'), React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, ':table '),
+                  React.createElement(Text, { color: "cyan", bold: true, wrap: "truncate" }, ' ctrl+g'), React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, ':graph '),
+                  React.createElement(Text, { color: "cyan", bold: true, wrap: "truncate" }, ' ctrl+e'), React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, ':chat '),
+                  React.createElement(Text, { color: "cyan", bold: true, wrap: "truncate" }, ' ctrl+m'), React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, ':repo '),
+                  React.createElement(Text, { color: "cyan", bold: true, wrap: "truncate" }, ' ctrl+n'), React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, ':notes │')
               ),
               React.createElement(Box, { flexShrink: 0 },
                   React.createElement(Text, { color: mode === 'table' ? 'magenta' : 'gray', bold: mode === 'table', dimColor: mode !== 'table', wrap: "truncate" }, ' [TABLE]'),
