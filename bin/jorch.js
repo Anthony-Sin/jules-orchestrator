@@ -4,10 +4,63 @@ import chalk from 'chalk'
 import inquirer from 'inquirer'
 import React, { useState, useEffect } from 'react'
 import { render, useInput } from 'ink'
-import { splitPrompt, groupByType } from '../src/decomposer/decomposer.js'
-import { dispatchTask, dispatchConflictResolver, killSession, pollAndUpdate, poolSlotsFree, syncSessions } from '../src/pools/pool-manager.js'
+import { dispatchLeadOrchestrator } from '../src/jules_lead_orchestrator/julesorchestrator.js'
+
+import { deleteSession, listSessions, getSession } from '../src/state/jules-api.js'
+
+const TERMINAL_STATES = ['COMPLETED', 'FAILED', 'KILLED']
+
+export async function killSession(sessionId) {
+  try {
+    await deleteSession(sessionId)
+  } catch (_) {}
+  unlockFiles(sessionId)
+  upsertSession({ id: sessionId, state: 'KILLED', lastUpdated: Date.now() })
+}
+
+export async function pollAndUpdate() {
+  await syncQuota()
+  const active = getActiveSessions()
+  const updated = []
+
+  for (const session of active) {
+    try {
+      const fresh = await getSession(session.id)
+      const newState = fresh.state || session.state
+      const updates = { id: session.id, state: newState, lastUpdated: Date.now() }
+      if (fresh.title) updates.title = fresh.title
+      if (fresh.createdAt) updates.createdAt = fresh.createdAt
+      if (fresh.julesUrl) updates.julesUrl = fresh.julesUrl
+      upsertSession(updates)
+      if (TERMINAL_STATES.includes(newState)) unlockFiles(session.id)
+      updated.push({ id: session.id, state: newState, title: updates.title || session.title })
+    } catch (_) {}
+  }
+  return updated
+}
+
+export async function syncSessions() {
+  await syncQuota()
+  try {
+    const data = await listSessions()
+    const sessions = Array.isArray(data) ? data : (data.sessions || [])
+    for (const remote of sessions) {
+      const sessionData = {
+        id: remote.id || (remote.name ? remote.name.split('/').pop() : ''),
+        title: remote.title || 'Unknown task',
+        state: remote.state || 'UNKNOWN',
+        createdAt: remote.createTime || Date.now(),
+        lastUpdated: remote.updateTime || Date.now(),
+        repo: remote.sourceContext?.source || 'unknown',
+        julesUrl: remote.url
+      }
+      if (sessionData.id) upsertSession(sessionData)
+    }
+  } catch (_) {}
+}
+
 import { renderDashboard, Dashboard } from '../src/tui/renderer.js'
-import { getSessions, getQueue, getConfig, setConfig, quotaRemaining, getActiveSessions, syncQuota, setQuotaLimit } from '../src/state/store.js'
+import { getSessions, getQueue, getConfig, setConfig, quotaRemaining, getActiveSessions, syncQuota, setQuotaLimit, upsertSession, unlockFiles } from '../src/state/store.js'
 import { DEFAULTS } from '../config/defaults.js'
 import fs from 'fs'
 import path from 'path'
@@ -30,45 +83,21 @@ program
   .command('run <prompt>')
   .description('Decompose and dispatch a task (or multiple tasks) to the agent pools')
   .action(async (rawPrompt) => {
-    console.log(chalk.dim('\n  Decomposing prompt…'))
-
-    const tasks = await splitPrompt(rawPrompt)
-    const grouped = groupByType(tasks)
-
-    console.log(chalk.white(`\n  Found ${tasks.length} task(s):`))
-    for (const t of tasks) {
-      const typeLabel = t.type === 'frontend' ? chalk.greenBright('FE') : t.type === 'backend' ? chalk.blueBright('BE') : chalk.redBright('CR')
-      console.log(`  ${typeLabel}  ${chalk.dim('priority ' + t.priority)}  ${t.title}`)
-    }
-    console.log()
+    console.log(chalk.dim('\n  Dispatching Lead Orchestrator…'))
 
     await syncQuota()
     if (quotaRemaining() <= 5) {
       console.log(chalk.yellow(`  Warning: only ${quotaRemaining()} sessions remaining today.\n`))
     }
 
-    let dispatched = 0
-    let queued = 0
-    const errors = []
-
-    for (const task of tasks) {
-      try {
-        const result = await dispatchTask(task)
-        if (result.queued) {
-          queued++
-          console.log(chalk.yellow(`  ↷ Queued    ${task.title.slice(0, 50)} (${result.reason})`))
-        } else {
-          dispatched++
-          console.log(chalk.green(`  ✓ Launched  ${task.title.slice(0, 50)} → ${result.sessionId}`))
-        }
-      } catch (err) {
-        errors.push({ task, err })
-        console.log(chalk.red(`  ✗ Failed    ${task.title.slice(0, 50)}: ${err.message}`))
-      }
+    try {
+      const result = await dispatchLeadOrchestrator(rawPrompt, 1, "Orchestrator Session")
+      console.log(chalk.green(`  ✓ Launched Lead Orchestrator → ${result.sessionId}`))
+    } catch (err) {
+      console.log(chalk.red(`  ✗ Failed to launch: ${err.message}`))
     }
 
     console.log()
-    console.log(chalk.dim(`  ${dispatched} launched  ${queued} queued  ${errors.length} failed`))
     console.log(chalk.dim('  Run: jorch status  to watch progress\n'))
   })
 
@@ -258,9 +287,7 @@ program
   .command('resolve <description> <branchA> <branchB>')
   .description('Spawn a conflict-resolver session for two branches')
   .action(async (description, branchA, branchB) => {
-    console.log(chalk.dim(`\n  Spawning conflict resolver for ${branchA} + ${branchB}…`))
-    const sessionId = await dispatchConflictResolver(description, branchA, branchB)
-    console.log(chalk.green(`  ✓ Resolver session started: ${sessionId}\n`))
+    console.log(chalk.dim(`\n  Conflict resolver not available without pool manager…`))
   })
 
 // ── jorch sessions ────────────────────────────────────────────────────────────
