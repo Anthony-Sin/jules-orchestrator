@@ -1,5 +1,6 @@
 import { syncQuota, getConfig, upsertSession } from '../state/store.js'
 import { createSession } from '../state/jules-api.js'
+import { NEW_ORCHESTRATOR_TOOLS } from './JulesTools.js'
 
 // ------------------------------------------------------------------
 // 1. SYSTEM IDENTITY & PROMPT
@@ -78,7 +79,8 @@ const ORCHESTRATOR_TOOLS = [
         required: ["module_name", "agent_instructions", "target_files"]
       }
     }
-  }
+  },
+  ...NEW_ORCHESTRATOR_TOOLS
 ];
 
 // ------------------------------------------------------------------
