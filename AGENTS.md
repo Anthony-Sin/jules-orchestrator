@@ -89,4 +89,3 @@ Status: [ ] Pending
 | Queue | `inbox/AGENT_QUEUE_INBOX.md` |
 | State | `inbox/AGENT_STATE_INBOX.md` |
 | TUI | `inbox/AGENT_TUI_INBOX.md` |
-

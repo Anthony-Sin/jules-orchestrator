@@ -63,7 +63,7 @@ export async function dispatchTask(task) {
 
   // Track it
   lockFiles(sessionId, estimatedFiles)
-  upsertSession({
+  const sessionData = {
     id: sessionId,
     taskId: id,
     title,
@@ -73,7 +73,21 @@ export async function dispatchTask(task) {
     createdAt: Date.now(),
     lastUpdated: Date.now(),
     repo: config.source,
-  })
+  }
+
+  try {
+    const fresh = await getSession(sessionId)
+    if (fresh.title) sessionData.title = fresh.title
+    if (fresh.state) sessionData.state = fresh.state
+    if (fresh.createdAt) sessionData.createdAt = fresh.createdAt
+    if (fresh.julesUrl) sessionData.julesUrl = fresh.julesUrl
+    if (fresh.repoDisplay) sessionData.repoDisplay = fresh.repoDisplay
+    else if (fresh.sourceContext?.source) sessionData.repoDisplay = parseSourceDisplay(fresh.sourceContext.source)
+    if (fresh.pullRequestUrl) sessionData.pullRequestUrl = fresh.pullRequestUrl
+    if (fresh.pullRequestTitle) sessionData.pullRequestTitle = fresh.pullRequestTitle
+  } catch (_) {}
+
+  upsertSession(sessionData)
 
   return { queued: false, sessionId }
 }
@@ -143,16 +157,33 @@ export async function pollAndUpdate() {
       const fresh = await getSession(session.id)
       const newState = fresh.state || session.state
 
-      upsertSession({ id: session.id, state: newState, lastUpdated: Date.now() })
+      const updates = { id: session.id, state: newState, lastUpdated: Date.now() }
+
+      if (fresh.title) updates.title = fresh.title
+      if (fresh.createdAt) updates.createdAt = fresh.createdAt
+      if (fresh.julesUrl) updates.julesUrl = fresh.julesUrl
+      if (fresh.pullRequestUrl) updates.pullRequestUrl = fresh.pullRequestUrl
+      if (fresh.pullRequestTitle) updates.pullRequestTitle = fresh.pullRequestTitle
+      if (fresh.repoDisplay) updates.repoDisplay = fresh.repoDisplay
+      else if (fresh.sourceContext?.source) updates.repoDisplay = parseSourceDisplay(fresh.sourceContext.source)
 
       if (TERMINAL_STATES.includes(newState)) {
+        // Specifically for terminal state, do one last check for outputs
+        if (fresh.outputs?.[0]?.pullRequest) {
+          updates.pullRequestUrl = fresh.outputs[0].pullRequest.url
+          updates.pullRequestTitle = fresh.outputs[0].pullRequest.title
+        }
+
+        upsertSession(updates)
         unlockFiles(session.id)
         // Try to fill the freed slot from queue
         const next = dequeue(session.poolType)
         if (next) await dispatchTask(next)
+      } else {
+        upsertSession(updates)
       }
 
-      updated.push({ id: session.id, state: newState, title: session.title })
+      updated.push({ id: session.id, state: newState, title: updates.title || session.title })
     } catch (_) {}
   }
 
@@ -174,4 +205,12 @@ TASK: ${title}
 
 DETAILS:
 ${task}`
+}
+
+function parseSourceDisplay(source) {
+  if (!source || !source.startsWith('sources/github-')) return source
+  const stripped = source.slice('sources/github-'.length)
+  const firstDashIdx = stripped.indexOf('-')
+  if (firstDashIdx === -1) return stripped
+  return stripped.slice(0, firstDashIdx) + '/' + stripped.slice(firstDashIdx + 1)
 }

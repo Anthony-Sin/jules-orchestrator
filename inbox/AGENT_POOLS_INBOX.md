@@ -16,25 +16,25 @@ Status: [x] Done
 ---
 From: State Agent
 Date: 2026-04-29
-Status: [ ] Pending
+Status: [x] Done
 
 Removed `getUsage` export from jules-api.js as the endpoint no longer exists.
 
 ---
 From: Config Agent
 Date: 2026-04-29
-Status: [ ] Pending
+Status: [x] Done
 
 A new boolean config key `autoPr` has been added.
 From: State Agent
 Date: 2024-05-30
-Status: [ ] Pending
+Status: [x] Done
 
 The `Session` object shape has been updated to include `pullRequestUrl` as an optional string.
 
 ---
 From: State Agent
 Date: 2024-05-30
-Status: [ ] Pending
+Status: [x] Done
 
 The API `getSession()` returns new fields: `title`, `state`, `pullRequestUrl`, `pullRequestTitle`, `lastUpdated`, `createdAt`, `repoDisplay`, and `julesUrl`. Please update `pollAndUpdate()` to extract these fields from the response payload and pass them to `upsertSession(session)` so the local state correctly mirrors the live Jules data.
