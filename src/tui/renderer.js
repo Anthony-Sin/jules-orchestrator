@@ -199,10 +199,10 @@ function ChatPanel({ messages, input, onChange, onSubmit, focused, scrollOffset,
       }
       for (const l of wrapped) allLines.push({ type: 'text', text: l, color: focused ? 'white' : 'gray' })
   }
-
-  const VISIBLE = Math.max(10, height - 8)
-  const total   = allLines.length
-  const start   = Math.max(0, total - VISIBLE - scrollOffset)
+ 
+  const VISIBLE = Math.max(10, height - 8)  
+  const total   = allLines.length 
+  const start   = Math.max(0, total - VISIBLE - scrollOffset) 
   const visible = allLines.slice(start, start + VISIBLE)
 
   return React.createElement(Box, { flexDirection: "column", borderStyle: "single", borderColor: focused ? 'cyan' : 'gray', width: width, height: "100%", paddingX: 1 },
@@ -396,10 +396,10 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
         return;
     }
 
-    if (key.ctrl && input === 'm') { setRepoInputMode(true); setRepoInput(''); return }
-    if (key.ctrl && input === 't') { setMode('table'); return }
-    if (key.ctrl && input === 'g') { setMode('graph'); return }
-    if (key.ctrl && input === 'e') { setMode('chat'); setScrollOffset(0); return }
+    if (key.f4) { setRepoInputMode(true); setRepoInput(''); return }
+    if (key.f1) { setMode('table'); return } 
+    if (key.f2) { setMode('graph'); return } 
+    if (key.f3) { setMode('chat'); setScrollOffset(0); return } 
     if (key.escape) { setMode('table'); return }
 
     if (key.tab) {
