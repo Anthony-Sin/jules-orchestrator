@@ -5,7 +5,7 @@ import {
   syncQuota, quotaRemaining,
   lockFiles, unlockFiles, checkFileLockConflicts,
 } from '../state/store.js'
-import { createSession, getSession, deleteSession, sendMessage, approvePlan } from '../state/jules-api.js'
+import { createSession, getSession, deleteSession, sendMessage, approvePlan, listSessions } from '../state/jules-api.js'
 import { getConfig } from '../state/store.js'
 
 const TERMINAL_STATES = ['COMPLETED', 'FAILED', 'KILLED']
@@ -213,4 +213,47 @@ function parseSourceDisplay(source) {
   const firstDashIdx = stripped.indexOf('-')
   if (firstDashIdx === -1) return stripped
   return stripped.slice(0, firstDashIdx) + '/' + stripped.slice(firstDashIdx + 1)
+}
+
+export async function syncSessions() {
+  await syncQuota()
+  try {
+    const data = await listSessions()
+    const sessions = Array.isArray(data) ? data : (data.sessions || [])
+
+    for (const remote of sessions) {
+      let repoDisplay = remote.sourceContext?.source || ''
+      if (repoDisplay.startsWith('sources/github-')) {
+        let stripped = repoDisplay.slice('sources/github-'.length)
+        let firstDash = stripped.indexOf('-')
+        if (firstDash !== -1) {
+          repoDisplay = stripped.slice(0, firstDash) + '/' + stripped.slice(firstDash + 1)
+        } else {
+          repoDisplay = stripped
+        }
+      }
+
+      const sessionData = {
+        id: remote.id || (remote.name ? remote.name.split('/').pop() : ''),
+        title: remote.title || 'Unknown task',
+        state: remote.state || 'UNKNOWN',
+        createdAt: remote.createTime || Date.now(),
+        lastUpdated: remote.updateTime || Date.now(),
+        repo: remote.sourceContext?.source || 'unknown',
+        repoDisplay,
+        julesUrl: remote.url
+      }
+
+      if (remote.outputs?.[0]?.pullRequest) {
+        sessionData.pullRequestUrl = remote.outputs[0].pullRequest.url
+        sessionData.pullRequestTitle = remote.outputs[0].pullRequest.title
+      }
+
+      if (sessionData.id) {
+        upsertSession(sessionData)
+      }
+    }
+  } catch (err) {
+    // Ignore fail
+  }
 }
