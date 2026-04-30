@@ -6,6 +6,7 @@ import { DEFAULTS } from '../../config/defaults.js'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { execSync } from 'child_process'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const pkgPath = path.join(__dirname, '..', '..', 'package.json')
@@ -49,6 +50,29 @@ function truncate(str, n) {
   return str.length > n ? str.slice(0, n - 1) + '…' : str
 }
 
+let cachedGitRepo = null;
+let cachedGitBranch = null;
+
+function getGitInfo() {
+  if (cachedGitRepo && cachedGitBranch) return { repo: cachedGitRepo, branch: cachedGitBranch }
+  try {
+    const originUrl = execSync('git config --get remote.origin.url', { stdio: 'pipe' }).toString().trim()
+    let repoName = originUrl.split(':').pop().replace('.git', '')
+    if (repoName.includes('/')) {
+      const parts = repoName.split('/')
+      repoName = `${parts[parts.length - 2]}/${parts[parts.length - 1]}`
+    }
+    cachedGitRepo = repoName
+
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', { stdio: 'pipe' }).toString().trim()
+    cachedGitBranch = branch
+  } catch (err) {
+    cachedGitRepo = 'unknown/unknown'
+    cachedGitBranch = 'unknown'
+  }
+  return { repo: cachedGitRepo, branch: cachedGitBranch }
+}
+
 export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => {}, onRowChange = () => {}, selectedIndex = 0, statusMsg = '' }) {
   const used = getQuotaUsed()
   const remaining = quotaRemaining()
@@ -78,12 +102,19 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
   const displayed = filteredSessions.slice(-20).reverse()
 
   const logo = `
-   ██╗██╗   ██╗██╗     ███████╗███████╗
-   ██║██║   ██║██║     ██╔════╝██╔════╝
-   ██║██║   ██║██║     █████╗  ███████╗
-   ██║██║   ██║██║     ██╔══╝  ╚════██║
-   ██║╚██████╔╝███████╗███████╗███████║
-   ╚═╝ ╚═════╝ ╚══════╝╚══════╝╚══════╝
+      ██╗██╗   ██╗██╗     ███████╗███████╗
+      ██║██║   ██║██║     ██╔════╝██╔════╝
+      ██║██║   ██║██║     █████╗  ███████╗
+ ██   ██║██║   ██║██║     ██╔══╝  ╚════██║
+ ╚█████╔╝╚██████╔╝███████╗███████╗███████║
+  ╚════╝  ╚═════╝ ╚══════╝╚══════╝╚══════╝
+
+  ██████╗ ██████╗ ██╗      ██████╗ ███╗   ██╗██╗   ██╗
+ ██╔════╝██╔═══██╗██║     ██╔═══██╗████╗  ██║╚██╗ ██╔╝
+ ██║     ██║   ██║██║     ██║   ██║██╔██╗ ██║ ╚████╔╝
+ ██║     ██║   ██║██║     ██║   ██║██║╚██╗██║  ╚██╔╝
+ ╚██████╗╚██████╔╝███████╗╚██████╔╝██║ ╚████║   ██║
+  ╚═════╝ ╚═════╝ ╚══════╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝
 `
 
   return React.createElement(Box, { flexDirection: 'column' },
@@ -118,7 +149,7 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
 
             // To get full row highlight while preserving box columns:
             // Inverse colors in the entire text blocks using Chalk if selected, or Ink Text backgrounds.
-            const bgProps = isSelected ? { backgroundColor: 'blue', color: 'white' } : {}
+            const bgProps = isSelected ? { backgroundColor: 'magenta', color: 'white', bold: true } : {}
 
             return React.createElement(Box, { key: s.id, width: 118, paddingLeft: 1 },
               React.createElement(Box, { width: 8 }, React.createElement(Text, { ...bgProps, wrap: 'truncate' }, truncate(s.id, 6).padEnd(8))),
@@ -126,14 +157,16 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
               React.createElement(Box, { width: 25 }, React.createElement(Text, { ...bgProps, wrap: 'truncate' }, truncate(repoDisplay, 23).padEnd(25))),
               React.createElement(Box, { width: 18 }, React.createElement(Text, { ...bgProps, wrap: 'truncate' }, ago(s.lastUpdated || s.createdAt).padEnd(18))),
               React.createElement(Box, { width: 20 }, React.createElement(Text, { ...bgProps, wrap: 'truncate' },
-                colorState(s.state || 'UNKNOWN') + ' '.repeat(Math.max(0, 20 - (s.state || 'UNKNOWN').length))
+                (isSelected ? (s.state || 'UNKNOWN') : colorState(s.state || 'UNKNOWN')) + ' '.repeat(Math.max(0, 20 - (s.state || 'UNKNOWN').length))
               ))
             )
           })
         )
       )
     ),
-    React.createElement(Box, { marginBottom: 1, flexDirection: 'column' },
+    // Hide quota message entirely if hasLimit is true and not zero.
+    // Show only if there are no sessions, or if quota limit is actually unknown (null).
+    (sessions.length === 0 || !hasLimit) && React.createElement(Box, { marginBottom: 1, flexDirection: 'column' },
       hasLimit
         ? React.createElement(Text, {}, `  Quota  [${bar}]  ${quotaColor(`${used}/${limit}`)} used  ${chalk.dim(`(${remaining} remaining)`)}`)
         : React.createElement(Text, {}, `  Quota limit unknown — set it with: ${chalk.yellow.dim('jorch config set-quota <n>')}`)
@@ -141,7 +174,7 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
     React.createElement(Box, { flexDirection: 'column', marginTop: 1 },
       statusMsg ? React.createElement(Text, { color: 'greenBright' }, `  ${statusMsg}`) : null,
       React.createElement(Text, {}, 'enter: select session  |  ctrl+r: refresh  |  ctrl+d: delete  |  ctrl+c: quit'),
-      React.createElement(Text, { dimColor: true }, `Working in: ~  ${(getConfig().source || 'unknown/unknown').replace(/^sources\/github-/, '').replace('-', '/')} (${getConfig().branch || 'main'})`)
+      React.createElement(Text, { color: 'magentaBright' }, `Working in: ~  ${(getConfig().source || getGitInfo().repo).replace(/^sources\/github-/, '').replace('-', '/')} (${getConfig().branch || getGitInfo().branch})`)
     )
   )
 }
