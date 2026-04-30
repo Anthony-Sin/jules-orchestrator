@@ -15,7 +15,8 @@ To prevent failing code reviews and wasting time, you MUST follow these strict o
 4. **Safe Markdown Edits:** When appending to inboxes via CLI, ensure line breaks are formatted correctly. Do not corrupt markdown formatting with literal `\n` strings.
 5. **NEVER act on another agent's `[ ] Pending` inbox items.** If you see pending tasks addressed to a different agent, ignore them. You are only allowed to read them for context. Acting on them is an instant code review failure.
 6. **NEVER move, rename, or restructure directories.** If you believe a restructure is needed, write to `inbox/AGENT_EXECUTIVE_INBOX.md` and stop. Do not touch directory structure under any circumstance.
-
+## Rules for Code Review Failures
+If you present code for review and it fails or is marked "Mostly Correct" **TWO times in a row**, you MUST STOP immediately. Do not attempt a third fix. Pause your work and send me a message to the user explaining the reviewer's feedback and what you are doing and ask them what they think.
 ---
 
 ## Strict Context Isolation
@@ -28,7 +29,7 @@ To prevent failing code reviews and wasting time, you MUST follow these strict o
 
 | Agent | Requirements File | Core Domain & Job |
 |---|---|---|
-| **Executive** | `agent_roles/AGENT_EXECUTIVE_REQUIREMENTS.md` | **god:** can chnage any file it wants, Reviews work, enforces that all inboxs are there then rmeoves it, unblocks, Writes product code. |
+| **Executive** | `agent_roles/AGENT_EXECUTIVE_REQUIREMENTS.md` | **god:** can chnage any file it wants, Reviews work, enforces that all inboxs are there then rmeoves it, Writes product code. |
 | **Config** | `agent_roles/AGENT_CONFIG_REQUIREMENTS.md` | **Settings:** Owns `jorch config *` commands (`src/cli/config.js`). |
 | **Conflict** | `agent_roles/AGENT_CONFLICT_REQUIREMENTS.md` | **Resolver:** Owns `jorch conflict` command and dedicated merge sessions. |
 | **Decomposer** | `agent_roles/AGENT_DECOMPOSER_REQUIREMENTS.md` | **Parser:** Splits raw prompts into atomic, typed tasks (`src/decomposer/decomposer.js`). |

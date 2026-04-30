@@ -16,7 +16,8 @@ To prevent failing code reviews and wasting hours of time, you MUST follow these
 4. **Safe Markdown Edits:** When appending to inboxes, ensure line breaks are formatted correctly. Do not corrupt markdown formatting with literal `\n` strings.
 5. **NEVER act on another agent's `[ ] Pending` inbox items.** If you see pending tasks in another agent's inbox, ignore them entirely. Acting on them is an instant code review failure.
 6. **NEVER move, rename, or restructure directories.** Write to `inbox/AGENT_EXECUTIVE_INBOX.md` if you think it's needed and stop.
-
+## Rules for Code Review Failures
+If you present code for review and it fails or is marked "Mostly Correct" **TWO times in a row**, you MUST STOP immediately. Do not attempt a third fix. Pause your work and send me a message to the user explaining the reviewer's feedback and what you are doing and ask them what they think.
 ---
 
 ## Your Domain
