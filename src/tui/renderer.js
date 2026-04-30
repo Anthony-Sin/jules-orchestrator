@@ -1,3 +1,4 @@
+import { parseSourceDisplay } from '../state/jules-api.js'
 import React from 'react'
 import { render, Box, Text } from 'ink'
 import chalk from 'chalk'
@@ -100,7 +101,20 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
     )
   }
 
-  const displayed = filteredSessions.slice(-20).reverse()
+  const reversedFiltered = filteredSessions.slice().reverse()
+  const maxSessions = 6
+  // Ensure selectedIndex is within bounds if filtered length changed
+  const safeSelectedIndex = Math.max(0, Math.min(selectedIndex, reversedFiltered.length - 1))
+
+  // Calculate window to display so selected item is always visible
+  // Simple pagination: center the view around the selected index
+  let startIdx = 0
+  if (safeSelectedIndex >= maxSessions) {
+    startIdx = safeSelectedIndex - maxSessions + 1
+  }
+
+  let displayed = reversedFiltered.slice(startIdx, startIdx + maxSessions)
+  const hasMore = startIdx + maxSessions < reversedFiltered.length
 
   const logo = `
       ██╗██╗   ██╗██╗     ███████╗███████╗
@@ -150,24 +164,26 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
           ),
           sessions.length === 0 ? React.createElement(Box, { marginLeft: 2, marginBottom: 1 },
             React.createElement(Text, { dimColor: true }, 'No sessions yet. Use: jorch run "your task here"\n')
-          ) : displayed.map((s, idx) => {
-            const isSelected = idx === selectedIndex
-            const repoDisplay = s.repoDisplay || (s.repo ? s.repo.replace(/^sources\/github-/, '').replace('-', '/') : '-')
+          ) : [
+            ...displayed.map((s, idx) => {
+              const actualIdx = startIdx + idx
+              const isSelected = actualIdx === safeSelectedIndex
+              const repoDisplay = parseSourceDisplay(s.repoDisplay || s.repo || '') || '-'
 
-            // To get full row highlight while preserving box columns:
-            // Inverse colors in the entire text blocks using Chalk if selected, or Ink Text backgrounds.
-            const bgProps = isSelected ? { backgroundColor: 'magenta', color: 'white', bold: true } : {}
+              const bgProps = isSelected ? { backgroundColor: 'magenta', color: 'white', bold: true } : {}
 
-            return React.createElement(Box, { key: s.id, width: 118, paddingLeft: 1 },
-              React.createElement(Box, { width: 8 }, React.createElement(Text, { ...bgProps, wrap: 'truncate' }, truncate(s.id, 6).padEnd(8))),
-              React.createElement(Box, { width: 45 }, React.createElement(Text, { ...bgProps, wrap: 'truncate' }, truncate(s.title, 43).padEnd(45))),
-              React.createElement(Box, { width: 25 }, React.createElement(Text, { ...bgProps, wrap: 'truncate' }, truncate(repoDisplay, 23).padEnd(25))),
-              React.createElement(Box, { width: 18 }, React.createElement(Text, { ...bgProps, wrap: 'truncate' }, ago(s.lastUpdated || s.createdAt).padEnd(18))),
-              React.createElement(Box, { width: 20 }, React.createElement(Text, { ...bgProps, wrap: 'truncate' },
-                (isSelected ? (s.state || 'UNKNOWN') : colorState(s.state || 'UNKNOWN')) + ' '.repeat(Math.max(0, 20 - (s.state || 'UNKNOWN').length))
-              ))
-            )
-          })
+              return React.createElement(Box, { key: s.id, width: 118, paddingLeft: 1 },
+                React.createElement(Box, { width: 8 }, React.createElement(Text, { ...bgProps, wrap: 'truncate' }, truncate(s.id, 6).padEnd(8))),
+                React.createElement(Box, { width: 45 }, React.createElement(Text, { ...bgProps, wrap: 'truncate' }, truncate(s.title, 43).padEnd(45))),
+                React.createElement(Box, { width: 25 }, React.createElement(Text, { ...bgProps, wrap: 'truncate' }, truncate(repoDisplay, 23).padEnd(25))),
+                React.createElement(Box, { width: 18 }, React.createElement(Text, { ...bgProps, wrap: 'truncate' }, ago(s.lastUpdated || s.createdAt).padEnd(18))),
+                React.createElement(Box, { width: 20 }, React.createElement(Text, { ...bgProps, wrap: 'truncate' },
+                  (isSelected ? (s.state || 'UNKNOWN') : colorState(s.state || 'UNKNOWN')) + ' '.repeat(Math.max(0, 20 - (s.state || 'UNKNOWN').length))
+                ))
+              )
+            }),
+            hasMore ? React.createElement(Box, { key: 'more', paddingLeft: 1, paddingBottom: 1 }, React.createElement(Text, { dimColor: true }, '...')) : null
+          ]
         )
       )
     ),
@@ -182,7 +198,7 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
       !config.apiKey ? React.createElement(Text, { color: 'red' }, '  Warning: No API key set. Run: jorch config set-key <your-key>\n') : null,
       statusMsg ? React.createElement(Text, { color: 'greenBright' }, `  ${statusMsg}`) : null,
       React.createElement(Text, {}, 'enter: select session  |  ctrl+r: refresh  |  ctrl+d: delete  |  ctrl+c: quit'),
-      React.createElement(Text, { color: 'magentaBright' }, `Working in: ~  ${(getConfig().source || getGitInfo().repo).replace(/^sources\/github-/, '').replace('-', '/')} (${getConfig().branch || getGitInfo().branch})`)
+      React.createElement(Text, { color: 'magentaBright' }, `Working in: ~  ${parseSourceDisplay(getConfig().source || getGitInfo().repo)} (${getConfig().branch || getGitInfo().branch})`)
     )
   )
 }

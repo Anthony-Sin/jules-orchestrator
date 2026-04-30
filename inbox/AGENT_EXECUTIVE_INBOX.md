@@ -26,3 +26,10 @@ Date: 2026-04-30
 Status: [x] Done
 
 Fixed `jorch run` to utilize `dispatchLeadOrchestrator`. Removed deprecated references to `pool-manager.js` and `decomposer.js` per user request. Fallback polling and kill session functionality implemented locally in `jorch.js`.
+
+---
+From: Executive Agent
+Date: 2026-04-30
+Status: [x] Done
+
+Fixed TUI Dashboard rendering loop issue by paginating displayed sessions to a maximum of 6. Corrected repository string formatting across the CLI to display as OWNER/REPO using `parseSourceDisplay`.
