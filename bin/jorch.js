@@ -6,7 +6,7 @@ import React, { useState, useEffect } from 'react'
 import { render, useInput } from 'ink'
 import { dispatchLeadOrchestrator } from '../src/jules_lead_orchestrator/julesorchestrator.js'
 
-import { deleteSession, listSessions, getSession } from '../src/state/jules-api.js'
+import { deleteSession, listSessions, getSession, parseSourceDisplay } from '../src/state/jules-api.js'
 
 const TERMINAL_STATES = ['COMPLETED', 'FAILED', 'KILLED']
 
@@ -31,6 +31,8 @@ export async function pollAndUpdate() {
       if (fresh.title) updates.title = fresh.title
       if (fresh.createdAt) updates.createdAt = fresh.createdAt
       if (fresh.julesUrl) updates.julesUrl = fresh.julesUrl
+      if (fresh.sourceContext?.source) updates.repoDisplay = parseSourceDisplay(fresh.sourceContext.source)
+      else if (fresh.repoDisplay) updates.repoDisplay = fresh.repoDisplay
       upsertSession(updates)
       if (TERMINAL_STATES.includes(newState)) unlockFiles(session.id)
       updated.push({ id: session.id, state: newState, title: updates.title || session.title })
@@ -52,6 +54,7 @@ export async function syncSessions() {
         createdAt: remote.createTime || Date.now(),
         lastUpdated: remote.updateTime || Date.now(),
         repo: remote.sourceContext?.source || 'unknown',
+        repoDisplay: parseSourceDisplay(remote.sourceContext?.source),
         julesUrl: remote.url
       }
       if (sessionData.id) upsertSession(sessionData)
@@ -164,7 +167,7 @@ function StatusApp() {
     }
 
     if (key.downArrow) {
-      setSelectedIndex(Math.min(displayed.length - 1, selectedIndex + 1))
+      setSelectedIndex(Math.min(filteredSessions.length - 1, selectedIndex + 1))
       return
     }
 
