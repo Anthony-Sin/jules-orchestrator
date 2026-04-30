@@ -13,6 +13,8 @@ To prevent failing code reviews and wasting time, you MUST follow these strict o
 2. **NEVER commit junk files:** Do NOT commit `node_modules/`, `package-lock.json` (unless explicitly updating dependencies), or leftover manual test scripts like `test.js` or `test_upsert.js`. Delete your test scripts before committing.
 3. **Write Code FIRST, Inbox SECOND:** Do NOT mark an inbox task `[x] Done` until you have actually written and verified the code to fulfill it.
 4. **Safe Markdown Edits:** When appending to inboxes via CLI, ensure line breaks are formatted correctly. Do not corrupt markdown formatting with literal `\n` strings.
+5. **NEVER act on another agent's `[ ] Pending` inbox items.** If you see pending tasks addressed to a different agent, ignore them. You are only allowed to read them for context. Acting on them is an instant code review failure.
+6. **NEVER move, rename, or restructure directories.** If you believe a restructure is needed, write to `inbox/AGENT_EXECUTIVE_INBOX.md` and stop. Do not touch directory structure under any circumstance.
 
 ---
 
@@ -39,13 +41,17 @@ To prevent failing code reviews and wasting time, you MUST follow these strict o
 
 ## Start of Every Task — The Speed Path
 
-Before writing a single line of code, every agent MUST do the following:
+Before writing a single line of code, every agent MUST do the following **in this exact order**:
 
-1. **Sync branch:** `git fetch origin && git merge origin/main`
-2. **Read Inbox:** Check your specific inbox file located in the `inbox/` folder (e.g., `inbox/AGENT_STATE_INBOX.md`).
-3. **Clear Inbox:** Complete all `[ ] Pending` items before starting any new user tasks.
-4. **Stay in your lane:** Only edit files explicitly listed in your Domain.
-5. **Syntax Check:** Run `node --check <your-file>` before submitting.
+1. **Return to main:** `git checkout main`
+2. **Pull latest:** `git fetch origin && git merge origin/main`
+3. **Create a fresh branch:** `git checkout -b feat/{role}-{task-slug}` — this guarantees your PR diff only contains what YOU write this session. Never reuse an old branch.
+4. **Read Inbox:** Check your specific inbox file located in the `inbox/` folder (e.g., `inbox/AGENT_STATE_INBOX.md`).
+5. **Clear Inbox:** Complete all `[ ] Pending` items addressed to YOU before starting any new user tasks.
+6. **Stay in your lane:** Only edit files explicitly listed in your Domain.
+7. **Syntax Check:** Run `node --check <your-file>` before submitting.
+
+> **Why a fresh branch matters:** If you reuse an old branch, the PR diff will contain all previous session commits — including out-of-domain changes from earlier failed attempts. The code reviewer will fail the PR even if your current work is correct. A fresh branch from `main` means a clean diff every time.
 
 ---
 
@@ -57,6 +63,7 @@ Agents do not edit each other's requirement files. Instead, they write to dedica
 
 1. **When writing to ANOTHER agent's inbox:** You must **ONLY APPEND** your message to the bottom of their file. You are strictly forbidden from overwriting, deleting, or modifying any existing text in another agent's inbox.
 2. **When reading YOUR OWN inbox:** This is the *only* time you are allowed to modify an inbox file. Once you have completed a requested task, you must edit your own inbox to change the status from `[ ] Pending` to `[x] Done`. Never delete the message.
+3. **Never mark another agent's inbox task `[x] Done`** — even if you believe you have fulfilled it. Only the receiving agent marks their own tasks done.
 
 ### Message Format
 
