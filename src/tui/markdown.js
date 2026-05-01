@@ -270,7 +270,9 @@ export function buildMarkdownLines(text, wrapLimit, focused) {
         // the new diagram format directly into the store so PlannedGraphViewer updates immediately!
         try { 
           store.set('architectureDiagrams', [args]); // OVERWRITE
-          store.set('diagramLastUpdated', Date.now()); 
+          // DO NOT call store.set('diagramLastUpdated', Date.now()) here!
+          // This function runs on every re-render. Setting Date.now() here causes an infinite
+          // auto-switching loop locking the user in the plan view. JulesTools already handles it.
         } catch (_) {}
         lines.push({ type: 'gap' })
         lines.push({ type: 'jsx', element: React.createElement(Box, { key: `tc_diag_hint_${i}`, minWidth: 0, overflow: 'hidden', flexDirection: 'row' },
