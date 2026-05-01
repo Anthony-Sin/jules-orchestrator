@@ -343,7 +343,7 @@ export function Dashboard({
           setChatMenuOpen(false)
           setChatInput('')
           if (chatMenuSel === 0)
-            setMessages(m => [...m, { role: 'system', text: 'Ready for new task prompt...' }])
+            setMessages(m => [...m, { role: 'system', text: '[SYSTEM] Warning: This will create a new session/task.' }])
           return
         }
         return
@@ -423,6 +423,7 @@ export function Dashboard({
           { role: 'system', text: `Dispatched orchestrator: ${sessionId}` }
         ])
         setSelectedSessionId(sessionId)
+        setChatTargetMode('TALK_TO_SELECTED_AGENT')
       } catch (e) {
         setMessages(m => [...m,
           { role: 'user',   text: val.trim() },
