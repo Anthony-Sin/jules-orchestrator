@@ -122,8 +122,8 @@ export function AgentRow({ agent, selected, tick, isDimmed }) {
 }
 
 // ── GraphNode ─────────────────────────────────────────────────────
-export const GRAPH_NODE_W = 28
-const GRAPH_NODE_H = 6
+export const GRAPH_NODE_W = 24
+const GRAPH_NODE_H = 5
 
 function GraphNode({ agent, isSelected, tick, isDimmed }) {
   const isOrch  = agent.type === 'orchestrator' || (agent.title || '').toLowerCase().includes('orchestrator')
@@ -131,21 +131,26 @@ function GraphNode({ agent, isSelected, tick, isDimmed }) {
   const ss      = STATUS_SHORT[agent.state || 'UNKNOWN'] || '???'
   const hi      = isSelected && !isDimmed
 
-  const borderColor = isDimmed ? 'gray' : hi ? 'magentaBright' : '#444444' // Mockup shows a darker unselected border
+  const borderColor = isDimmed ? 'gray' : hi ? 'white' : isOrch ? 'yellow' : 'cyan'
+  const titleColor  = isDimmed ? 'gray' : hi ? 'white' : isOrch ? 'yellowBright' : 'cyanBright'
+  const statusColor = isDimmed ? 'gray' : sc
 
   const IW = GRAPH_NODE_W - 4
 
   const parsed    = parseSourceDisplay(agent.repoDisplay || agent.repo || '')
   const repoShort = (parsed.includes('/') ? parsed.split('/')[1] : parsed).substring(0, IW)
-
-  const spin = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-  const isActive = agent.state === 'IN_PROGRESS' || agent.state === 'PLANNING'
-  const spinChar = isActive && !isDimmed ? ' ' + spin[tick % spin.length] : ''
-  const baseTitle = (agent.title || 'agent').toUpperCase()
-  const titleStr = (baseTitle.length + spinChar.length > IW ? baseTitle.substring(0, IW - spinChar.length) : baseTitle) + spinChar
+  const titleStr  = (agent.title || 'agent').toUpperCase().substring(0, IW)
+  const shortId   = (agent.id || '').substring(0, 6)
   const agoStr    = ago(agent.lastUpdated || agent.createdAt)
   
-  const timeColor   = isDimmed ? 'gray' : 'gray' // Mockup shows grey text for time
+  // Apply distinct coloring for time depending on failure or pause
+  const isWaitState = ['PAUSED', 'AWAITING_PLAN_APPROVAL', 'AWAITING_USER_FEEDBACK'].includes(agent.state)
+  const isFailState = ['FAILED', 'KILLED'].includes(agent.state)
+  const timeColor   = isDimmed ? 'gray' : (isFailState ? 'red' : (isWaitState ? 'yellow' : 'green'))
+
+  // Layout the bottom string keeping spacing intact
+  const idStatusSpace = IW - agoStr.length - ss.length - shortId.length - 1
+  const paddingStr = ' '.repeat(Math.max(0, idStatusSpace))
 
   let barFilled
   if      (agent.state === 'IN_PROGRESS' || agent.state === 'PLANNING') barFilled = Math.floor(IW * (0.5 + 0.5 * Math.sin(tick / 5)))
@@ -153,50 +158,39 @@ function GraphNode({ agent, isSelected, tick, isDimmed }) {
   else                                   barFilled = 0
   barFilled = Math.max(0, Math.min(IW, barFilled))
 
-  // Match mockup colors: green for active/orch, blue for done, red for fail, yellow for wait
   const barColor = isDimmed ? 'gray'
-    : agent.state === 'COMPLETED'   ? '#2255ff' // blue for done
-    : agent.state === 'IN_PROGRESS' || agent.state === 'PLANNING' || isOrch ? '#44aa44' // green for active
-    : agent.state === 'FAILED'      ? '#ff4444' // red for fail
-    : '#aaaa22' // yellow for wait
-
-  // Tag styling
-  const tagBgColor = isDimmed ? undefined
-    : agent.state === 'COMPLETED'   ? 'blue'
-    : isOrch                        ? 'magenta'
-    : agent.state === 'IN_PROGRESS' || agent.state === 'PLANNING' ? 'green'
+    : agent.state === 'COMPLETED'   ? 'green'
+    : agent.state === 'IN_PROGRESS' ? 'magenta'
+    : agent.state === 'PLANNING'    ? 'cyan'
     : agent.state === 'FAILED'      ? 'red'
     : 'yellow'
 
-  const tagTextColor = isDimmed ? 'gray' : 'white'
-
   return React.createElement(Box, {
-    borderStyle: 'round',
+    borderStyle: hi ? 'double' : 'round',
     borderColor,
     width:  GRAPH_NODE_W,
-    height: GRAPH_NODE_H + 1,
+    height: GRAPH_NODE_H,
     flexShrink: 0,
     flexDirection: 'column',
     paddingX: 1,
-    marginX: 1,
-    marginY: 1,
     overflow: 'hidden'
   },
     React.createElement(Box, { height: 1, width: IW, overflow: 'hidden' },
-      React.createElement(Text, { color: 'gray', wrap: 'truncate' }, repoShort)
+      React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, repoShort)
     ),
-    React.createElement(Box, { height: 1, width: IW, overflow: 'hidden', marginBottom: 1 },
-      React.createElement(Text, { color: hi ? 'white' : 'white', bold: true, wrap: 'truncate' }, titleStr)
+    React.createElement(Box, { height: 1, width: IW, overflow: 'hidden' },
+      React.createElement(Text, { color: titleColor, bold: !isDimmed, wrap: 'truncate', dimColor: isDimmed }, titleStr)
     ),
-    React.createElement(Box, { height: 1, width: IW, overflow: 'hidden', marginBottom: 1 },
+    React.createElement(Box, { height: 1, width: IW, overflow: 'hidden' },
       React.createElement(Text, { wrap: 'truncate' },
         React.createElement(Text, { color: barColor, dimColor: isDimmed }, '█'.repeat(barFilled)),
-        React.createElement(Text, { color: '#333333', dimColor: true }, '█'.repeat(IW - barFilled))
+        React.createElement(Text, { color: 'gray',   dimColor: true     }, '░'.repeat(IW - barFilled))
       )
     ),
-    React.createElement(Box, { height: 1, width: IW, overflow: 'hidden', flexDirection: 'row', justifyContent: 'space-between' },
-      React.createElement(Text, { color: tagTextColor, backgroundColor: tagBgColor, bold: true }, ` ${isOrch && agent.state !== 'COMPLETED' && agent.state !== 'FAILED' ? 'ORCH' : ss} `),
-      React.createElement(Text, { color: timeColor }, agoStr)
+    React.createElement(Box, { height: 1, width: IW, overflow: 'hidden', flexDirection: 'row' },
+      React.createElement(Text, { color: statusColor, bold: !isDimmed, dimColor: isDimmed }, `${ss} `),
+      React.createElement(Text, { color: 'white', dimColor: isDimmed }, `${shortId}${paddingStr}`),
+      React.createElement(Text, { color: timeColor, bold: !isDimmed, dimColor: isDimmed }, agoStr)
     )
   )
 }
@@ -221,10 +215,10 @@ export function MiniGraph({ tick, isDimmed, height, width, sessions, graphSel, o
   // Dynamic layout processing based on available width
   const safeWidth = width || 80
   const usableWidth = Math.max(20, safeWidth - 4)
-  const CPR = Math.max(1, Math.floor(usableWidth / (GRAPH_NODE_W + 2)))
+  const CPR = Math.max(1, Math.floor(usableWidth / (GRAPH_NODE_W + 1)))
 
   // Overhead allocation: borders(2) + header(1) + footer(1) + scroll arrows max(2) = 6
-  const cardRows     = Math.max(1, Math.floor((height - 8) / (GRAPH_NODE_H + 3)))
+  const cardRows     = Math.max(1, Math.floor((height - 6) / GRAPH_NODE_H))
   const visibleTotal = CPR * cardRows
 
   const selRow   = Math.floor(safeIdx / CPR)
@@ -257,38 +251,24 @@ export function MiniGraph({ tick, isDimmed, height, width, sessions, graphSel, o
     overflow: 'hidden'
   },
     // ── Header ──
-
-    // ── Header ──
-    React.createElement(Box, { flexDirection: 'column', flexShrink: 0, minWidth: 0, marginBottom: 1 },
-      React.createElement(Box, { flexDirection: 'row', justifyContent: 'space-between', width: '100%' },
-        React.createElement(Text, { color: isDimmed ? 'gray' : 'cyanBright', bold: !isDimmed, wrap: 'truncate' },
+    React.createElement(Box, { flexDirection: 'column', flexShrink: 0, minWidth: 0 },
+      React.createElement(Box, { height: 1, justifyContent: 'center' },
+        React.createElement(Text, {
+          color: isDimmed ? 'gray' : 'cyan',
+          bold: !isDimmed, dimColor: isDimmed, wrap: 'truncate'
+        },
           total > 0
-            ? `LIVE AGENTS GRID [${safeIdx + 1}/${total}]`
-            : `LIVE AGENTS GRID`
-        ),
-        React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' },
-          `alt+g: planned arch`
+            ? `│   LIVE AGENTS GRID  [${safeIdx + 1}/${total}]   │`
+            : `│   LIVE AGENTS GRID   │`
         )
       ),
-      React.createElement(Box, { height: 1, overflow: 'hidden', marginY: 0 },
-        React.createElement(Text, { color: isDimmed ? 'gray' : '#333333', dimColor: true }, '━'.repeat(200))
-      ),
-      React.createElement(Box, { flexDirection: 'row', width: '100%' },
-        React.createElement(Text, { color: 'gray', dimColor: true }, ' '),
-        React.createElement(Text, { color: '#44aa44' }, '█ '),
-        React.createElement(Text, { color: 'gray', dimColor: true }, 'active  '),
-        React.createElement(Text, { color: '#2255ff' }, '█ '),
-        React.createElement(Text, { color: 'gray', dimColor: true }, 'done  '),
-        React.createElement(Text, { color: '#aaaa22' }, '█ '),
-        React.createElement(Text, { color: 'gray', dimColor: true }, 'wait  '),
-        React.createElement(Text, { color: '#ff4444' }, '█ '),
-        React.createElement(Text, { color: 'gray', dimColor: true }, 'fail  ')
+      React.createElement(Box, { height: 1, overflow: 'hidden' },
+        React.createElement(Text, { color: isDimmed ? 'gray' : 'cyan', dimColor: true }, '─'.repeat(100))
       )
     ),
     // ── Top scroll indicator ──
-
-    canScrollUp && React.createElement(Box, { height: 1, marginY: 1, justifyContent: 'center', flexShrink: 0 },
-      React.createElement(Text, { color: 'cyanBright', bold: true }, '▲ MORE ABOVE ▲')
+    canScrollUp && React.createElement(Box, { height: 1, justifyContent: 'center', flexShrink: 0 },
+      React.createElement(Text, { color: 'cyan', bold: true }, '▲ MORE ABOVE ▲')
     ),
 
     // ── Cards area ──
@@ -336,8 +316,8 @@ export function MiniGraph({ tick, isDimmed, height, width, sessions, graphSel, o
         ),
 
     // ── Bottom scroll indicator ──
-    canScrollDown && React.createElement(Box, { height: 1, marginY: 1, justifyContent: 'center', flexShrink: 0 },
-      React.createElement(Text, { color: 'cyanBright', bold: true }, '▼ MORE BELOW ▼')
+    canScrollDown && React.createElement(Box, { height: 1, justifyContent: 'center', flexShrink: 0 },
+      React.createElement(Text, { color: 'cyan', bold: true }, '▼ MORE BELOW ▼')
     ),
 
     // ── Footer ──
@@ -377,17 +357,18 @@ export function ChatPanel({
       } else {
         for (const m of messages) {
           if (m.role === 'agent') {
-            lines.push({ type: 'label', text: '▸ AGENT', color: focused ? 'magentaBright' : 'magenta' })
+            lines.push({ type: 'label', text: '▸ AGENT', color: focused ? 'magenta' : 'gray' })
             for (const ml of buildMarkdownLines(m.text, wrapLimit, focused)) lines.push(ml)
             lines.push({ type: 'gap' })
           } else if (m.role === 'system') {
-            for (const l of wrapText('  ' + m.text, wrapLimit))
+            lines.push({ type: 'label', text: '  [SYS]', color: 'gray' })
+            for (const l of wrapText(m.text, wrapLimit))
               lines.push({ type: 'text', text: l, color: 'gray' })
             lines.push({ type: 'gap' })
           } else {
-            lines.push({ type: 'label', text: 'YOU', color: 'cyanBright' })
+            lines.push({ type: 'label', text: '  you', color: 'cyan' })
             for (const l of wrapText(m.text, wrapLimit))
-              lines.push({ type: 'text', text: l, color: focused ? 'white' : 'gray' })
+              lines.push({ type: 'text', text: l, color: focused ? 'cyan' : 'gray' })
             lines.push({ type: 'gap' })
           }
         }
@@ -416,7 +397,7 @@ export function ChatPanel({
   },
     React.createElement(Box, { flexShrink: 0, height: 1, minWidth: 0, overflow: 'hidden' },
       React.createElement(Text, { color: focused ? 'magenta' : 'gray', bold: true, wrap: 'truncate' },
-        tab === 'chat' ? `▌ CHAT: ${shortTitle.padEnd(20, ' ')} | NOTES ` : `▌ NOTES: ${shortTitle.padEnd(20, ' ')} | CHAT `
+        tab === 'chat' ? `▌ CHAT: ${shortTitle} | NOTES` : `▌ NOTES: ${shortTitle} | CHAT`
       ),
       scrollOffset > 0 && React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ` ↑${scrollOffset}`)
     ),
@@ -530,7 +511,7 @@ export function HelpScreen() {
     row('← / →',       'Navigate graph cards left / right'),
     row('Enter',       'Open agent chat'),
     row('/ (in chat)', 'Open action menu'),
-    row('Alt + ?',     'Toggle this help screen', 'magenta')
+    row('?',           'Toggle this help screen', 'magenta')
   )
 }
 
@@ -571,14 +552,13 @@ export function PlannedGraphViewer({ diagram, selectedNodeIdx, height, isDimmed 
     }, React.createElement(Text, { color: 'gray', dimColor: true }, 'No architecture diagrams generated yet.'));
   }
 
-    // --- Auto-Layout Algorithm ---
+  // --- Auto-Layout Algorithm ---
   const nodes = diagram.nodes || [];
   const conns = diagram.connections || [];
   const adj = {};
   const inDegree = {};
-  const revAdj = {};
   
-  nodes.forEach(n => { adj[n] = []; revAdj[n] = []; inDegree[n] = 0; });
+  nodes.forEach(n => { adj[n] = []; inDegree[n] = 0; });
   
   conns.forEach(c => {
     const parts = c.split('->').map(s => s.trim());
@@ -586,47 +566,14 @@ export function PlannedGraphViewer({ diagram, selectedNodeIdx, height, isDimmed 
       const [u, v] = parts;
       if (inDegree[v] !== undefined && adj[u] !== undefined) {
         adj[u].push(v);
-        revAdj[v].push(u);
         inDegree[v]++;
       }
     }
   });
 
-  // Flow restriction: only show ancestors and descendants of the selected node
-  const selNodeLabel = nodes[selectedNodeIdx] || 'Unknown';
-  const flowSet = new Set([selNodeLabel]);
-
-  // DFS UP
-  const upStack = [selNodeLabel];
-  while (upStack.length > 0) {
-    const curr = upStack.pop();
-    (revAdj[curr] || []).forEach(parent => {
-      if (!flowSet.has(parent)) {
-        flowSet.add(parent);
-        upStack.push(parent);
-      }
-    });
-  }
-
-  // DFS DOWN
-  const downStack = [selNodeLabel];
-  while (downStack.length > 0) {
-    const curr = downStack.pop();
-    (adj[curr] || []).forEach(child => {
-      if (!flowSet.has(child)) {
-        flowSet.add(child);
-        downStack.push(child);
-      }
-    });
-  }
-
   const tiers = [];
-  let currentTier = nodes.filter(n => inDegree[n] === 0 && flowSet.has(n));
-  // Fallback if the strict root filtering yields nothing but the flowSet is valid
-  if (currentTier.length === 0 && flowSet.size > 0) {
-    const arr = Array.from(flowSet);
-    currentTier = [arr.find(n => inDegree[n] === 0) || arr[0]];
-  }
+  let currentTier = nodes.filter(n => inDegree[n] === 0);
+  if (currentTier.length === 0 && nodes.length > 0) currentTier = [nodes[0]];
 
   const visited = new Set(currentTier);
 
@@ -634,8 +581,8 @@ export function PlannedGraphViewer({ diagram, selectedNodeIdx, height, isDimmed 
     tiers.push(currentTier);
     const nextTier = [];
     currentTier.forEach(u => {
-      (adj[u] || []).forEach(v => {
-        if (!visited.has(v) && flowSet.has(v)) {
+      adj[u].forEach(v => {
+        if (!visited.has(v)) {
           visited.add(v);
           nextTier.push(v);
         }
@@ -644,10 +591,11 @@ export function PlannedGraphViewer({ diagram, selectedNodeIdx, height, isDimmed 
     currentTier = nextTier;
   }
 
-  const unconnected = nodes.filter(n => !visited.has(n) && flowSet.has(n));
+  const unconnected = nodes.filter(n => !visited.has(n));
   if (unconnected.length > 0) tiers.push(unconnected);
 
   // --- CAMERA TRACKING MATH ---
+  const selNodeLabel = nodes[selectedNodeIdx] || 'Unknown';
   let selTierIdx = 0;
   for (let t = 0; t < tiers.length; t++) {
     if (tiers[t].includes(selNodeLabel)) {
