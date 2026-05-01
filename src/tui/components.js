@@ -176,7 +176,7 @@ function GraphNode({ agent, isSelected, tick, isDimmed }) {
     overflow: 'hidden'
   },
     React.createElement(Box, { height: 1, width: IW, overflow: 'hidden' },
-      React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, repoShort)
+      React.createElement(Text, { color: isDimmed ? 'gray' : 'cyanBright', bold: !isDimmed, wrap: 'truncate' }, repoShort)
     ),
     React.createElement(Box, { height: 1, width: IW, overflow: 'hidden' },
       React.createElement(Text, { color: titleColor, bold: !isDimmed, wrap: 'truncate', dimColor: isDimmed }, titleStr)
@@ -251,19 +251,16 @@ export function MiniGraph({ tick, isDimmed, height, width, sessions, graphSel, o
     overflow: 'hidden'
   },
     // ── Header ──
-    React.createElement(Box, { flexDirection: 'column', flexShrink: 0, minWidth: 0 },
+    React.createElement(Box, { flexDirection: 'column', flexShrink: 0, minWidth: 0, marginBottom: 1 },
       React.createElement(Box, { height: 1, justifyContent: 'center' },
-        React.createElement(Text, {
-          color: isDimmed ? 'gray' : 'cyan',
-          bold: !isDimmed, dimColor: isDimmed, wrap: 'truncate'
-        },
+        React.createElement(Text, { color: isDimmed ? 'gray' : 'yellow', bold: true, wrap: 'truncate' },
           total > 0
-            ? `│   LIVE AGENTS GRID  [${safeIdx + 1}/${total}]   │`
-            : `│   LIVE AGENTS GRID   │`
+            ? `★  L I V E   A G E N T S   [ ${safeIdx + 1} / ${total} ]  ★`
+            : `★  L I V E   A G E N T S  ★`
         )
       ),
       React.createElement(Box, { height: 1, overflow: 'hidden' },
-        React.createElement(Text, { color: isDimmed ? 'gray' : 'cyan', dimColor: true }, '─'.repeat(100))
+        React.createElement(Text, { color: isDimmed ? 'gray' : 'yellow', dimColor: true }, '━'.repeat(100))
       )
     ),
     // ── Top scroll indicator ──
@@ -511,7 +508,7 @@ export function HelpScreen() {
     row('← / →',       'Navigate graph cards left / right'),
     row('Enter',       'Open agent chat'),
     row('/ (in chat)', 'Open action menu'),
-    row('?',           'Toggle this help screen', 'magenta')
+    row('Alt + ?',     'Toggle this help screen', 'magenta')
   )
 }
 
@@ -552,13 +549,14 @@ export function PlannedGraphViewer({ diagram, selectedNodeIdx, height, isDimmed 
     }, React.createElement(Text, { color: 'gray', dimColor: true }, 'No architecture diagrams generated yet.'));
   }
 
-  // --- Auto-Layout Algorithm ---
+    // --- Auto-Layout Algorithm ---
   const nodes = diagram.nodes || [];
   const conns = diagram.connections || [];
   const adj = {};
   const inDegree = {};
+  const revAdj = {};
   
-  nodes.forEach(n => { adj[n] = []; inDegree[n] = 0; });
+  nodes.forEach(n => { adj[n] = []; revAdj[n] = []; inDegree[n] = 0; });
   
   conns.forEach(c => {
     const parts = c.split('->').map(s => s.trim());
@@ -566,14 +564,47 @@ export function PlannedGraphViewer({ diagram, selectedNodeIdx, height, isDimmed 
       const [u, v] = parts;
       if (inDegree[v] !== undefined && adj[u] !== undefined) {
         adj[u].push(v);
+        revAdj[v].push(u);
         inDegree[v]++;
       }
     }
   });
 
+  // Flow restriction: only show ancestors and descendants of the selected node
+  const selNodeLabel = nodes[selectedNodeIdx] || 'Unknown';
+  const flowSet = new Set([selNodeLabel]);
+
+  // DFS UP
+  const upStack = [selNodeLabel];
+  while (upStack.length > 0) {
+    const curr = upStack.pop();
+    (revAdj[curr] || []).forEach(parent => {
+      if (!flowSet.has(parent)) {
+        flowSet.add(parent);
+        upStack.push(parent);
+      }
+    });
+  }
+
+  // DFS DOWN
+  const downStack = [selNodeLabel];
+  while (downStack.length > 0) {
+    const curr = downStack.pop();
+    (adj[curr] || []).forEach(child => {
+      if (!flowSet.has(child)) {
+        flowSet.add(child);
+        downStack.push(child);
+      }
+    });
+  }
+
   const tiers = [];
-  let currentTier = nodes.filter(n => inDegree[n] === 0);
-  if (currentTier.length === 0 && nodes.length > 0) currentTier = [nodes[0]];
+  let currentTier = nodes.filter(n => inDegree[n] === 0 && flowSet.has(n));
+  // Fallback if the strict root filtering yields nothing but the flowSet is valid
+  if (currentTier.length === 0 && flowSet.size > 0) {
+    const arr = Array.from(flowSet);
+    currentTier = [arr.find(n => inDegree[n] === 0) || arr[0]];
+  }
 
   const visited = new Set(currentTier);
 
@@ -581,8 +612,8 @@ export function PlannedGraphViewer({ diagram, selectedNodeIdx, height, isDimmed 
     tiers.push(currentTier);
     const nextTier = [];
     currentTier.forEach(u => {
-      adj[u].forEach(v => {
-        if (!visited.has(v)) {
+      (adj[u] || []).forEach(v => {
+        if (!visited.has(v) && flowSet.has(v)) {
           visited.add(v);
           nextTier.push(v);
         }
@@ -591,11 +622,10 @@ export function PlannedGraphViewer({ diagram, selectedNodeIdx, height, isDimmed 
     currentTier = nextTier;
   }
 
-  const unconnected = nodes.filter(n => !visited.has(n));
+  const unconnected = nodes.filter(n => !visited.has(n) && flowSet.has(n));
   if (unconnected.length > 0) tiers.push(unconnected);
 
   // --- CAMERA TRACKING MATH ---
-  const selNodeLabel = nodes[selectedNodeIdx] || 'Unknown';
   let selTierIdx = 0;
   for (let t = 0; t < tiers.length; t++) {
     if (tiers[t].includes(selNodeLabel)) {
