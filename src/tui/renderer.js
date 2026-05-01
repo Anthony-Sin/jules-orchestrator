@@ -153,7 +153,7 @@ function wrapText(text, width) {
   return lines
 }
 
-function ChatPanel({ messages, input, onChange, onSubmit, focused, scrollOffset, width, tab, notes, setNotes, isRepoInputMode, repoName, agentId, visibleAgentsCount }) {
+function ChatPanel({ messages, input, onChange, onSubmit, focused, scrollOffset, width, tab, notes, setNotes, isRepoInputMode, repoName, agentTitle, agentId, visibleAgentsCount, chatMenuOpen, chatMenuSel }) {
   const inner = Math.max(10, width - 2);
 
   const allLines = []
@@ -196,11 +196,11 @@ function ChatPanel({ messages, input, onChange, onSubmit, focused, scrollOffset,
   if (displayRepo !== 'NOT SET' && displayRepo && displayRepo.includes('/')) {
       displayRepo = displayRepo.split('/')[1];
   }
-  const maxRepoLen = 15;
-  const shortRepo = displayRepo && displayRepo.length > maxRepoLen ? displayRepo.substring(0, maxRepoLen) + '…' : displayRepo;
-  const chatTitleText = displayRepo === 'NOT SET' ? 'PLEASE CHOOSE REPO' : `${agentId === 'NEW TASK' ? 'NEW' : agentId} @ ${shortRepo}`;
+  const maxTitleLen = 20;
+  const shortTitle = agentTitle && agentTitle.length > maxTitleLen ? agentTitle.substring(0, maxTitleLen) + '…' : (agentTitle || 'jules-orchestrator');
+  const chatTitleText = displayRepo === 'NOT SET' ? 'PLEASE CHOOSE REPO' : `${agentId === 'NEW TASK' ? 'NEW' : agentId} @ ${shortTitle}`;
   const chatHeader = `▌ CHAT: ${chatTitleText}  [*Chat* | Notes >]`;
-  const notesHeader = `▌ NOTES: ${shortRepo}  [< Chat | *Notes*]`;
+  const notesHeader = `▌ NOTES: ${shortTitle}  [< Chat | *Notes*]`;
 
   return React.createElement(Box, { flexDirection: "column", width: width, paddingLeft: 1, flexGrow: 1, minHeight: 0, overflow: "hidden" },
       React.createElement(Box, { flexShrink: 0, height: 1, overflow: "hidden" },
@@ -221,13 +221,18 @@ function ChatPanel({ messages, input, onChange, onSubmit, focused, scrollOffset,
             );
           })
       ),
+      chatMenuOpen && tab === 'chat' && React.createElement(Box, { flexDirection: "column", borderStyle: "round", borderColor: "cyan", paddingX: 1, flexShrink: 0, marginBottom: 0 },
+          ['Create a julesorchestrator', 'Talk to an agent', 'Switch back to julesorchestrator'].map((opt, i) =>
+              React.createElement(Text, { key: i, color: chatMenuSel === i ? 'magenta' : 'gray' }, chatMenuSel === i ? `> ${opt}` : `  ${opt}`)
+          )
+      ),
       React.createElement(Box, { overflow: "hidden", flexShrink: 0, height: 1 },
           React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, '─'.repeat(200))
       ),
       React.createElement(Box, { height: 1, flexShrink: 0, flexDirection: "row", overflow: "hidden" },
           React.createElement(Box, { flexShrink: 0 }, React.createElement(Text, { color: focused ? 'green' : 'gray', bold: focused }, focused ? '▶ ' : '▷ ')),
           React.createElement(Box, { flexGrow: 1, flexShrink: 1, overflow: "hidden" },
-              React.createElement(TextInput, { value: tab === 'chat' ? input : (notes || ''), onChange: tab === 'chat' ? onChange : (val) => setNotes(val), onSubmit: tab === 'chat' ? onSubmit : () => {}, placeholder: focused ? (tab === 'chat' ? 'type message…' : 'type notes...') : 'Alt+E to focus', focus: focused && !isRepoInputMode })
+              React.createElement(TextInput, { value: tab === 'chat' ? input : (notes || ''), onChange: tab === 'chat' ? onChange : (val) => setNotes(val), onSubmit: tab === 'chat' && !chatMenuOpen ? onSubmit : () => {}, placeholder: focused ? (tab === 'chat' ? 'press / to see menu' : 'type notes...') : 'Alt+E to focus', focus: focused && !isRepoInputMode })
           )
       )
   )
@@ -285,6 +290,10 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
   const [queuedMessages, setQueuedMessages] = useState({})
   const [sourcesList, setSourcesList] = useState([])
   const [sourceSel, setSourceSel] = useState(0)
+
+  const [chatMenuOpen, setChatMenuOpen] = useState(false)
+  const [chatMenuSel, setChatMenuSel]   = useState(0)
+  const [chatTargetMode, setChatTargetMode] = useState('CREATE_ORCHESTRATOR') // 'CREATE_ORCHESTRATOR', 'TALK_TO_SELECTED_AGENT', 'TALK_TO_LATEST_ORCHESTRATOR'
 
   // Breakpoints
   const MIN_COLS = 35;
@@ -435,6 +444,27 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
     }
 
     if (mode === 'chat') {
+      if (chatMenuOpen) {
+          if (key.escape) { setChatMenuOpen(false); setChatInput(''); return; }
+          if (key.upArrow) { setChatMenuSel(i => Math.max(0, i - 1)); return; }
+          if (key.downArrow) { setChatMenuSel(i => Math.min(2, i + 1)); return; }
+          if (key.return) {
+              const opts = ['CREATE_ORCHESTRATOR', 'TALK_TO_SELECTED_AGENT', 'TALK_TO_LATEST_ORCHESTRATOR'];
+              setChatTargetMode(opts[chatMenuSel]);
+              setChatMenuOpen(false);
+              setChatInput('');
+              if (chatMenuSel === 0) {
+                  setMessages(m => [...m, { role: 'system', text: 'creating a new agnet aut to warn the user ' }]);
+              }
+              return;
+          }
+          return;
+      }
+      if (input === '/' && chatInput === '') {
+          setChatMenuOpen(true);
+          setChatMenuSel(0);
+          return;
+      }
       if (key.shift && (key.leftArrow || key.rightArrow)) { setChatTab(t => t === 'chat' ? 'notes' : 'chat'); return }
       if (key.upArrow)   setScrollOffset(o => o + 1)
       if (key.downArrow) setScrollOffset(o => Math.max(0, o - 1))
@@ -448,7 +478,7 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
       if (key.downArrow) setSel(i => Math.min(Math.max(0, AGENTS.length - 1), i + 1))
 
       if (key.return) {
-        const agent = selectedSessionId ? AGENTS.find(a => a.id === selectedSessionId) : null
+        const agent = AGENTS[sel];
         if (agent) {
             setSelectedSessionId(agent.id);
             setMode('chat')
@@ -492,13 +522,11 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
         setChatInput(''); setScrollOffset(0); return;
     }
 
-    const agent = AGENTS[sel]
-
-    if (!agent) {
+    if (chatTargetMode === 'CREATE_ORCHESTRATOR' || !AGENTS || AGENTS.length === 0) {
         setChatInput(''); setScrollOffset(0);
         try {
             const { sessionId } = await dispatchLeadOrchestrator(val.trim(), 1, val.trim().substring(0, 30));
-            setMessages([{ role: 'user', text: val.trim() }, { role: 'system', text: `Dispatched Orchestrator Session: ${sessionId}`}]);
+            setMessages(m => [...m, { role: 'user', text: val.trim() }, { role: 'system', text: `Dispatched Orchestrator Session: ${sessionId}`}]);
             setSelectedSessionId(sessionId);
         } catch(e) {
             setMessages(m => [...m, { role: 'user', text: val.trim() }, { role: 'system', text: `Error: ${e.message}`}]);
@@ -506,16 +534,29 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
         return;
     }
 
-    if (agent.state === 'IN_PROGRESS') {
-        setQueuedMessages(prev => ({...prev, [agent.id]: val.trim()}));
-        setMessages(m => [...m, { role: 'user',  text: val.trim() }, { role: 'system', text: `[SYSTEM] Node ${agent.id} is IN_PROGRESS. Message queued.` }]);
+    let targetAgent = null;
+    if (chatTargetMode === 'TALK_TO_LATEST_ORCHESTRATOR') {
+        targetAgent = AGENTS.find(a => a.type === 'orchestrator' || (a.title && a.title.toLowerCase().includes('orchestrator')));
+        if (!targetAgent) targetAgent = AGENTS[0];
+    } else {
+        targetAgent = AGENTS[sel];
+    }
+
+    if (!targetAgent) {
+        setMessages(m => [...m, { role: 'system', text: 'Error: No agent found to talk to.' }]);
+        return;
+    }
+
+    if (targetAgent.state === 'IN_PROGRESS') {
+        setQueuedMessages(prev => ({...prev, [targetAgent.id]: val.trim()}));
+        setMessages(m => [...m, { role: 'user',  text: val.trim() }, { role: 'system', text: `[SYSTEM] Node ${targetAgent.id} is IN_PROGRESS. Message queued.` }]);
         setChatInput(''); setScrollOffset(0); return;
     }
 
-    setMessages(m => [...m, { role: 'user',  text: val.trim() }, { role: 'system', text: 'Sending to node ' + agent.id + '...' }])
+    setMessages(m => [...m, { role: 'user',  text: val.trim() }, { role: 'system', text: 'Sending to node ' + targetAgent.id + '...' }])
     setChatInput(''); setScrollOffset(0);
 
-    try { await sendMessage(agent.id, val.trim()); } 
+    try { await sendMessage(targetAgent.id, val.trim()); }
     catch(e) { setMessages(m => [...m, { role: 'system', text: `Error: ${e.message}`}]); }
   }
 
@@ -538,6 +579,8 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
   const currentSource = getConfig().source;
   const currentRepoDisplay = currentSource ? parseSourceDisplay(currentSource) : "NOT SET";
   const activeAgentId = selectedSessionId ? selectedSessionId : 'NEW TASK';
+  const activeAgent = selectedSessionId ? AGENTS.find(a => a.id === selectedSessionId) : null;
+  const activeAgentTitle = activeAgent ? activeAgent.title : 'jules-orchestrator';
 
   const filteredSources = repoInput.startsWith('/')
       ? sourcesList.filter(s => ('/' + (s.displayName || s.name)).toLowerCase().includes(repoInput.toLowerCase()))
@@ -618,7 +661,8 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
                   messages: messages, input: chatInput, onChange: setChatInput, onSubmit: handleSend, 
                   focused: mode === 'chat', scrollOffset: scrollOffset, width: "100%",
                   tab: chatTab, notes: notes, setNotes: setNotes, isRepoInputMode: repoInputMode,
-                  repoName: currentRepoDisplay, agentId: activeAgentId, visibleAgentsCount: VISIBLE_AGENTS
+                  repoName: currentRepoDisplay, agentTitle: activeAgentTitle, agentId: activeAgentId, visibleAgentsCount: VISIBLE_AGENTS,
+                  chatMenuOpen: chatMenuOpen, chatMenuSel: chatMenuSel
               })
           )
       )
