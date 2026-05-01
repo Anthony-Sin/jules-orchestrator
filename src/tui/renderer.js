@@ -15,29 +15,6 @@ const pkgPath = path.join(__dirname, '..', '..', 'package.json')
 const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
 export const version = pkg.version
 
-let cachedGitRepo = null;
-let cachedGitBranch = null;
-
-function getGitInfo() {
-  if (cachedGitRepo && cachedGitBranch) return { repo: cachedGitRepo, branch: cachedGitBranch }
-  try {
-    const originUrl = execSync('git config --get remote.origin.url', { stdio: 'pipe' }).toString().trim()
-    let repoName = originUrl.split(':').pop().replace('.git', '')
-    if (repoName.includes('/')) {
-      const parts = repoName.split('/')
-      repoName = `${parts[parts.length - 2]}/${parts[parts.length - 1]}`
-    }
-    cachedGitRepo = repoName
-
-    const branch = execSync('git rev-parse --abbrev-ref HEAD', { stdio: 'pipe' }).toString().trim()
-    cachedGitBranch = branch
-  } catch (err) {
-    cachedGitRepo = 'unknown/unknown'
-    cachedGitBranch = 'unknown'
-  }
-  return { repo: cachedGitRepo, branch: cachedGitBranch }
-}
-
 const STATUS_COLOR = {
   IN_PROGRESS: 'magenta', COMPLETED: 'green', AWAITING_PLAN_APPROVAL: 'yellow',
   AWAITING_USER_FEEDBACK: 'yellow', FAILED: 'red', QUEUED: 'cyan', PLANNING: 'cyan',
@@ -213,9 +190,15 @@ function ChatPanel({ messages, input, onChange, onSubmit, focused, scrollOffset,
   const visible = allLines.slice(start, start + VISIBLE)
 
   // Dynamic Header Titles
-  const chatTitleText = repoName === 'NOT SET' ? 'PLEASE CHOOSE REPO' : `${agentId === 'NEW TASK' ? 'NEW' : agentId} @ ${repoName}`;
+  let displayRepo = repoName;
+  if (displayRepo !== 'NOT SET' && displayRepo && displayRepo.includes('/')) {
+      displayRepo = displayRepo.split('/')[1];
+  }
+  const maxRepoLen = 15;
+  const shortRepo = displayRepo && displayRepo.length > maxRepoLen ? displayRepo.substring(0, maxRepoLen) + '…' : displayRepo;
+  const chatTitleText = displayRepo === 'NOT SET' ? 'PLEASE CHOOSE REPO' : `${agentId === 'NEW TASK' ? 'NEW' : agentId} @ ${shortRepo}`;
   const chatHeader = `▌ CHAT: ${chatTitleText}  [*Chat* | Notes >]`;
-  const notesHeader = `▌ NOTES: ${repoName}  [< Chat | *Notes*]`;
+  const notesHeader = `▌ NOTES: ${shortRepo}  [< Chat | *Notes*]`;
 
   return React.createElement(Box, { flexDirection: "column", borderStyle: "single", borderColor: focused ? 'cyan' : 'gray', width: width, height: "100%", paddingX: 1 },
       React.createElement(Box, { flexShrink: 0, height: 1 },
@@ -562,7 +545,7 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
   const showLeftPanel = isWide || mode !== 'chat'
   const showRightPanel = isWide || mode === 'chat'
   const chatWidth = isWide ? 38 : columns - 2
-  const showGraph = columns >= GRAPH_MIN_WIDTH
+  const showGraph = columns >= GRAPH_MIN_WIDTH && rows >= 30
 
   if (columns < MIN_COLS || rows < MIN_ROWS) {
     return React.createElement(Box, { padding: 1, flexDirection: "column", borderStyle: "round", borderColor: "red" },
