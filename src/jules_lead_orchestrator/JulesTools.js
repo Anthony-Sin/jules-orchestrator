@@ -55,7 +55,6 @@ export async function handleOrchestratorToolCall(toolCall) {
       }
       return { status: 'success', message: `Broadcast sent to ${activeSessions.length} active sessions.` };
     }
-
     case 'set_agent_dependency': {
       upsertSession({
         id: args.dependent_agent_id,
@@ -72,8 +71,18 @@ export async function handleOrchestratorToolCall(toolCall) {
     }
 
     case 'generate_ink_terminal_diagram': {
-      store.set('architectureDiagram', args.architecture_description);
-      return { status: 'success', message: `Diagram generated and saved: ${args.architecture_description}` };
+      // Fetch existing or start a new array
+      const existing = store.get('architectureDiagrams') || [];
+      existing.push(args);
+      
+      // Store the updated array and timestamp
+      store.set('architectureDiagrams', existing);
+      store.set('diagramLastUpdated', Date.now()); 
+      
+      return { 
+        status: 'success', 
+        message: `Diagram generated and saved. Total diagrams: ${existing.length}` 
+      };
     }
 
     case 'dispatch_sub_agent': {
