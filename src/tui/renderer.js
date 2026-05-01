@@ -150,6 +150,16 @@ export function Dashboard({
 
   useEffect(() => { store.set('tuiNotes', notes) }, [notes])
 
+  useEffect(() => {
+    if (chatMenuOpen && !chatInput.startsWith('/')) {
+      setChatMenuOpen(false)
+    } else if (mode === 'chat' && chatTab === 'chat' && chatInput === '/') {
+      setChatMenuOpen(true)
+      setChatMenuSel(0)
+    }
+  }, [chatInput, chatMenuOpen, mode, chatTab])
+
+
   // Table scroll: keep selected row in view
   useEffect(() => {
     // Prevent infinite loop if the table UI is hidden
@@ -297,8 +307,8 @@ export function Dashboard({
     }
 
     if (key.ctrl && input === 'c') { exit(); return }
-    if (input === '?') { setShowHelp(v => !v); return }
-    if (showHelp && (key.escape || input === '?')) { setShowHelp(false); return }
+    if (key.meta && input === '?') { setShowHelp(v => !v); return }
+    if (showHelp && (key.escape || (key.meta && input === '?'))) { setShowHelp(false); return }
     if (showHelp) return
 
     if (key.meta && input === 't') { setMode('table'); return }
@@ -360,7 +370,7 @@ export function Dashboard({
         return
       }
 
-      if (input === '/' && chatInput === '') { setChatMenuOpen(true); setChatMenuSel(0); return }
+      // removed slash trigger
       if (key.shift && (key.leftArrow || key.rightArrow)) {
         setChatTab(t => t === 'chat' ? 'notes' : 'chat')
         return
@@ -600,13 +610,13 @@ export function Dashboard({
     overflow: 'hidden'
   },
 
-    React.createElement(Box, { flexDirection: 'row', width: '100%', height: 1, overflow: 'hidden', flexShrink: 0 },
-      React.createElement(Box, { flexShrink: 1, overflow: 'hidden', minWidth: 0 },
-        React.createElement(Text, { color: 'yellow', bold: true, wrap: 'truncate' }, 'JULES COLONY '),
+    React.createElement(Box, { flexDirection: 'row', width: '100%', height: 1, overflow: 'hidden', flexShrink: 0, justifyContent: 'space-between' },
+      React.createElement(Box, { flexShrink: 1, overflow: 'hidden', minWidth: 0, flexDirection: 'row' },
+        React.createElement(Text, { color: 'yellowBright', bold: true, wrap: 'truncate' }, 'JULES COLONY '),
         React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '│ '),
         React.createElement(Text, {
           color: currentRepoDisplay === 'NOT SET' ? 'red' : 'cyan',
-          dimColor: true, wrap: 'truncate'
+          dimColor: false, wrap: 'truncate'
         }, `~ ${currentRepoDisplay} `),
         React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '│ '),
         React.createElement(Text, { color: 'magenta', dimColor: true, wrap: 'truncate' }, 'powered by jules '),
@@ -614,8 +624,9 @@ export function Dashboard({
           ? React.createElement(Text, { color: 'green', wrap: 'truncate' }, `│ ${statusFlash}`)
           : null
       ),
-      React.createElement(Box, { flexGrow: 1, flexShrink: 1, overflow: 'hidden', minWidth: 0 },
-        React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '━'.repeat(200))
+      React.createElement(Box, { flexShrink: 0, flexDirection: 'row', minWidth: 0 },
+        React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '│ '),
+        React.createElement(Text, { color: 'greenBright', wrap: 'truncate' }, `✓ ${AGENTS.filter(a => ['IN_PROGRESS', 'PLANNING', 'AWAITING_USER_FEEDBACK', 'AWAITING_PLAN_APPROVAL'].includes(a.state)).length} active agents `)
       )
     ),
 
@@ -726,44 +737,26 @@ export function Dashboard({
     },
       !showHelp
         ? React.createElement(React.Fragment, null,
-            React.createElement(Box, { flexShrink: 1, overflow: 'hidden', flexDirection: 'row', minWidth: 0 },
-              React.createElement(Text, { color: 'cyan', bold: true, wrap: 'truncate' },   ' alt+g'),
-              React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ':toggle-view '),
-              React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ':graph '),
-              React.createElement(Text, { color: 'cyan', bold: true, wrap: 'truncate' },   ' alt+e'),
-              React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ':chat '),
-              React.createElement(Text, { color: 'cyan', bold: true, wrap: 'truncate' },   ' alt+h'),
-              React.createElement(Text, {
-                color:    graphVisible ? 'green' : 'gray',
-                dimColor: !graphVisible,
-                wrap:     'truncate'
-              }, graphVisible ? ':grph✓ ' : ':grph✗ '),
-              React.createElement(Text, { color: 'cyan', bold: true, wrap: 'truncate' },   ' alt+m'),
-              React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ':repo │')
-            ),
-            React.createElement(Box, { flexShrink: 0, flexDirection: 'row', minWidth: 0 },
-              React.createElement(Text, {
-                color:    mode === 'graph' ? 'magenta' : 'gray',
-                bold:     mode === 'graph',
-                dimColor: mode !== 'graph',
-                wrap:     'truncate'
-              }, ' [GRP]'),
-              React.createElement(Text, {
-                color:    mode === 'chat' ? 'magenta' : 'gray',
-                bold:     mode === 'chat',
-                dimColor: mode !== 'chat',
-                wrap:     'truncate'
-              }, ' [CHT]')
-            ),
-            React.createElement(Box, { flexGrow: 1, flexShrink: 1, overflow: 'hidden', minWidth: 0 },
-              React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' },
-                `  │ ↑↓←→:nav ↵:open-chat │ ?:help │ agents:${AGENTS.length}`
+            React.createElement(Box, { flexGrow: 1, flexShrink: 1, overflow: 'hidden', flexDirection: 'row', minWidth: 0, justifyContent: 'space-between' },
+              React.createElement(Box, { flexDirection: 'row', flexShrink: 1, minWidth: 0, overflow: 'hidden' },
+                React.createElement(Text, { color: 'cyanBright', bold: true, wrap: 'truncate' }, ' alt+g'),
+                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ' :toggle-view '),
+                React.createElement(Text, { color: 'cyanBright', bold: true, wrap: 'truncate' }, ' alt+e'),
+                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ' :chat '),
+                React.createElement(Text, { color: 'cyanBright', bold: true, wrap: 'truncate' }, ' alt+m'),
+                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ' :repo │ '),
+                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '↑↓←→:nav ↵:open-chat │ '),
+                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, 'alt+?:help │ '),
+                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, `agents:${AGENTS.length}`)
+              ),
+              React.createElement(Box, { flexShrink: 0, flexDirection: 'row' },
+                React.createElement(Text, { color: 'yellowBright', bold: true }, mode === 'graph' ? ' [GRP]' : ' [CHT]')
               )
             )
           )
         : React.createElement(Box, { flexGrow: 1, flexShrink: 1, overflow: 'hidden', minWidth: 0 },
             React.createElement(Text, { color: 'yellow', bold: true, wrap: 'truncate' }, '  [HELP MODE] '),
-            React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, 'Press [ESC] or [?] to return')
+            React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, 'Press [ESC] or [Alt+?] to return')
           )
     )
   )
