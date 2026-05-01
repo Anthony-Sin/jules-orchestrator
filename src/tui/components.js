@@ -3,7 +3,7 @@
 //   FillBar, AgentRow, MiniGraph, ChatPanel, HelpScreen, PlannedGraphViewer
 // Also exports: STATUS_COLOR, STATUS_SHORT, ago, useTerminalSize
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { Box, Text } from 'ink'
 import TextInput from 'ink-text-input'
 import { parseSourceDisplay } from '../state/jules-api.js'
@@ -342,37 +342,41 @@ export function ChatPanel({
   const numWidth  = typeof width === 'number' && !isNaN(width) ? width : 40
   const wrapLimit = Math.max(10, numWidth - 4)
 
-  const allLines = []
+  const allLines = useMemo(() => {
+    const lines = []
 
-  if (tab === 'chat') {
-    if (repoName === 'NOT SET') {
-      allLines.push({ type: 'label', text: '  [SYSTEM]', color: 'gray' })
-      for (const l of wrapText('Select a repository (Alt+M) to start.', wrapLimit))
-        allLines.push({ type: 'text', text: l, color: 'yellow' })
-      allLines.push({ type: 'gap' })
-    } else {
-      for (const m of messages) {
-        if (m.role === 'agent') {
-          allLines.push({ type: 'label', text: '▸ AGENT', color: focused ? 'magenta' : 'gray' })
-          for (const ml of buildMarkdownLines(m.text, wrapLimit, focused)) allLines.push(ml)
-          allLines.push({ type: 'gap' })
-        } else if (m.role === 'system') {
-          allLines.push({ type: 'label', text: '  [SYS]', color: 'gray' })
-          for (const l of wrapText(m.text, wrapLimit))
-            allLines.push({ type: 'text', text: l, color: 'gray' })
-          allLines.push({ type: 'gap' })
-        } else {
-          allLines.push({ type: 'label', text: '  you', color: 'cyan' })
-          for (const l of wrapText(m.text, wrapLimit))
-            allLines.push({ type: 'text', text: l, color: focused ? 'cyan' : 'gray' })
-          allLines.push({ type: 'gap' })
+    if (tab === 'chat') {
+      if (repoName === 'NOT SET') {
+        lines.push({ type: 'label', text: '  [SYSTEM]', color: 'gray' })
+        for (const l of wrapText('Select a repository (Alt+M) to start.', wrapLimit))
+          lines.push({ type: 'text', text: l, color: 'yellow' })
+        lines.push({ type: 'gap' })
+      } else {
+        for (const m of messages) {
+          if (m.role === 'agent') {
+            lines.push({ type: 'label', text: '▸ AGENT', color: focused ? 'magenta' : 'gray' })
+            for (const ml of buildMarkdownLines(m.text, wrapLimit, focused)) lines.push(ml)
+            lines.push({ type: 'gap' })
+          } else if (m.role === 'system') {
+            lines.push({ type: 'label', text: '  [SYS]', color: 'gray' })
+            for (const l of wrapText(m.text, wrapLimit))
+              lines.push({ type: 'text', text: l, color: 'gray' })
+            lines.push({ type: 'gap' })
+          } else {
+            lines.push({ type: 'label', text: '  you', color: 'cyan' })
+            for (const l of wrapText(m.text, wrapLimit))
+              lines.push({ type: 'text', text: l, color: focused ? 'cyan' : 'gray' })
+            lines.push({ type: 'gap' })
+          }
         }
       }
+    } else {
+      for (const l of wrapText(notes || 'Type your notes here...', wrapLimit))
+        lines.push({ type: 'text', text: l, color: focused ? 'white' : 'gray' })
     }
-  } else {
-    for (const l of wrapText(notes || 'Type your notes here...', wrapLimit))
-      allLines.push({ type: 'text', text: l, color: focused ? 'white' : 'gray' })
-  }
+
+    return lines
+  }, [messages, wrapLimit, tab, repoName, focused, notes])
 
   const MESSAGE_ROWS = Math.max(2, chatVisibleRows)
   const total   = allLines.length
@@ -390,7 +394,7 @@ export function ChatPanel({
   },
     React.createElement(Box, { flexShrink: 0, height: 1, minWidth: 0, overflow: 'hidden' },
       React.createElement(Text, { color: focused ? 'magenta' : 'gray', bold: true, wrap: 'truncate' },
-        tab === 'chat' ? `▌ CHAT: ${shortTitle}` : `▌ NOTES: ${shortTitle}`
+        tab === 'chat' ? `▌ CHAT: ${shortTitle} | NOTES` : `▌ NOTES: ${shortTitle} | CHAT`
       ),
       scrollOffset > 0 && React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ` ↑${scrollOffset}`)
     ),
@@ -436,18 +440,20 @@ export function ChatPanel({
       React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '─'.repeat(100))
     ),
 
-    React.createElement(Box, { height: 1, flexShrink: 0, flexDirection: 'row', overflow: 'hidden', minWidth: 0 },
+    React.createElement(Box, { minHeight: 1, flexShrink: 0, flexDirection: 'row', minWidth: 0 },
       React.createElement(Box, { flexShrink: 0, minWidth: 0 },
         React.createElement(Text, { color: focused ? 'green' : 'gray', bold: focused, wrap: 'truncate' }, focused ? '▶ ' : '▷ ')
       ),
-      React.createElement(Box, { flexGrow: 1, flexShrink: 1, overflow: 'hidden', minWidth: 0 },
-        React.createElement(TextInput, {
-          value:       tab === 'chat' ? input : (notes || ''),
-          onChange:    tab === 'chat' ? onChange : (val) => setNotes(val),
-          onSubmit:    tab === 'chat' && !chatMenuOpen ? onSubmit : () => {},
-          placeholder: focused ? (tab === 'chat' ? '/ for menu' : 'notes...') : 'Alt+E',
-          focus:       focused && !isRepoInputMode
-        })
+      React.createElement(Box, { flexGrow: 1, flexShrink: 1, minWidth: 0 },
+        React.createElement(Box, { width: Math.max(10, numWidth - 4) },
+          React.createElement(TextInput, {
+            value:       tab === 'chat' ? input : (notes || ''),
+            onChange:    tab === 'chat' ? onChange : (val) => setNotes(val),
+            onSubmit:    tab === 'chat' && !chatMenuOpen ? onSubmit : () => {},
+            placeholder: focused ? (tab === 'chat' ? '/ for menu' : 'notes...') : 'Alt+E',
+            focus:       focused && !isRepoInputMode
+          })
+        )
       )
     )
   )
