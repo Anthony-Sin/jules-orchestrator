@@ -263,13 +263,15 @@ export function buildMarkdownLines(text, wrapLimit, focused) {
     // ── tool call ─────────────────────────────────────────────────
     if (seg.type === 'toolcall') {
       const { toolName, args } = seg
+      
       // ── generate_ink_terminal_diagram: silent in chat, lives in graph panel
       if (toolName === 'generate_ink_terminal_diagram') {
         // Agent may print the tool call as text instead of executing it — push
-        // architecture_description into the store so MiniGraph updates immediately.
-        if (args.architecture_description) {
-          try { store.set('architectureDiagram', args.architecture_description) } catch (_) {}
-        }
+        // the new diagram format directly into the store so PlannedGraphViewer updates immediately!
+        try { 
+          store.set('architectureDiagrams', [args]); // OVERWRITE
+          store.set('diagramLastUpdated', Date.now()); 
+        } catch (_) {}
         lines.push({ type: 'gap' })
         lines.push({ type: 'jsx', element: React.createElement(Box, { key: `tc_diag_hint_${i}`, minWidth: 0, overflow: 'hidden', flexDirection: 'row' },
           React.createElement(Text, { color: focused ? 'magentaBright' : 'gray', bold: focused, dimColor: !focused, wrap: 'truncate' },
@@ -279,33 +281,8 @@ export function buildMarkdownLines(text, wrapLimit, focused) {
         )})
         lines.push({ type: 'gap' })
         continue
-      }
-
-      // ── Generic tool call: header + border + fn + args + border
-      lines.push({ type: 'gap' })
-      lines.push({ type: 'jsx', element: React.createElement(Box, { key: `tc_hdr_${i}`, minWidth: 0, overflow: 'hidden', flexDirection: 'row' },
-        React.createElement(Text, { color: focused ? 'yellowBright' : 'yellow', bold: true, dimColor: !focused, wrap: 'truncate' }, `⚙  TOOL CALL: ${toolName}`)
-      )})
-      lines.push({ type: 'jsx', element: React.createElement(Box, { key: `tc_top_${i}`, minWidth: 0, overflow: 'hidden' },
-        React.createElement(Text, { color: focused ? 'cyan' : 'gray', dimColor: !focused, wrap: 'truncate' },
-          '┌' + '─'.repeat(Math.min(wrapLimit - 1, 60))
-        )
-      )})
-      lines.push({ type: 'jsx', element: React.createElement(Box, { key: `tc_fn_${i}`, paddingLeft: 2, minWidth: 0, overflow: 'hidden', flexDirection: 'row' },
-        React.createElement(Text, { color: focused ? 'yellow' : 'gray', dimColor: !focused, wrap: 'truncate' }, 'fn: '),
-        React.createElement(Text, { color: focused ? 'white' : 'gray', bold: true, dimColor: !focused, wrap: 'truncate' }, toolName)
-      )})
-      const argRows = renderGenericToolArgs(args, i, focused)
-      for (const r of argRows) lines.push(r)
-      lines.push({ type: 'jsx', element: React.createElement(Box, { key: `tc_bot_${i}`, minWidth: 0, overflow: 'hidden' },
-        React.createElement(Text, { color: focused ? 'cyan' : 'gray', dimColor: !focused, wrap: 'truncate' },
-          '└' + '─'.repeat(Math.min(wrapLimit - 1, 60))
-        )
-      )})
-      lines.push({ type: 'gap' })
-      continue
+        }
     }
-
     // ── execution plan json block ─────────────────────────────────
     if (seg.type === 'plan') {
       lines.push({ type: 'gap' })

@@ -71,20 +71,16 @@ export async function handleOrchestratorToolCall(toolCall) {
     }
 
     case 'generate_ink_terminal_diagram': {
-      // Fetch existing or start a new array
-      const existing = store.get('architectureDiagrams') || [];
-      existing.push(args);
-      
-      // Store the updated array and timestamp
-      store.set('architectureDiagrams', existing);
+      // Overwrite with a single-item array instead of pushing to history
+      store.set('architectureDiagrams', [args]);
       store.set('diagramLastUpdated', Date.now()); 
       
       return { 
         status: 'success', 
-        message: `Diagram generated and saved. Total diagrams: ${existing.length}` 
+        message: 'Diagram generated and successfully replaced the current architecture.' 
       };
     }
-
+    
     case 'dispatch_sub_agent': {
       return { status: 'success', message: `Sub-agent for ${args.module_name} queued for dispatch.` };
     }

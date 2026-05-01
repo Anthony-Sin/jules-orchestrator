@@ -122,7 +122,7 @@ export function AgentRow({ agent, selected, tick, isDimmed }) {
 }
 
 // ── GraphNode ─────────────────────────────────────────────────────
-const GRAPH_NODE_W = 24
+export const GRAPH_NODE_W = 24
 const GRAPH_NODE_H = 5
 
 function GraphNode({ agent, isSelected, tick, isDimmed }) {
@@ -342,6 +342,9 @@ export function ChatPanel({
   const numWidth  = typeof width === 'number' && !isNaN(width) ? width : 40
   const wrapLimit = Math.max(10, numWidth - 4)
 
+  // Check if the user has typed past the 4-line limit
+  const isOverflowing = tab === 'chat' && (input || '').length > wrapLimit * 4;
+
   const allLines = useMemo(() => {
     const lines = []
 
@@ -436,29 +439,48 @@ export function ChatPanel({
       )
     ),
 
+    // ── DYNAMIC SEPARATOR WITH OVERFLOW HINT ──
     React.createElement(Box, { overflow: 'hidden', flexShrink: 0, height: 1, minWidth: 0 },
-      React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '─'.repeat(100))
+      isOverflowing 
+        ? React.createElement(Text, { color: 'red', bold: true, wrap: 'truncate' }, '─[ ◀ ▶ TEXT HIDDEN: Use Left/Right arrows to move cursor ]' + '─'.repeat(60))
+        : React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '─'.repeat(100))
     ),
 
-    React.createElement(Box, { minHeight: 1, flexShrink: 0, flexDirection: 'row', minWidth: 0 },
-      React.createElement(Box, { flexShrink: 0, minWidth: 0 },
-        React.createElement(Text, { color: focused ? 'green' : 'gray', bold: focused, wrap: 'truncate' }, focused ? '▶ ' : '▷ ')
-      ),
-      React.createElement(Box, { flexGrow: 1, flexShrink: 1, minWidth: 0 },
-        React.createElement(Box, { width: Math.max(10, numWidth - 4) },
-          React.createElement(TextInput, {
-            value:       tab === 'chat' ? input : (notes || ''),
-            onChange:    tab === 'chat' ? onChange : (val) => setNotes(val),
-            onSubmit:    tab === 'chat' && !chatMenuOpen ? onSubmit : () => {},
-            placeholder: focused ? (tab === 'chat' ? '/ for menu' : 'notes...') : 'Alt+E',
-            focus:       focused && !isRepoInputMode
-          })
+    // ── NATIVE INPUT BOX (NEGATIVE MARGIN CAMERA TRICK) ──
+    React.createElement(Box, { 
+      // The "Window" - Caps at 4 lines
+      height: Math.min(4, Math.max(1, Math.ceil((input || '').length / wrapLimit))), 
+      flexShrink: 0, 
+      flexDirection: 'column',
+      minWidth: 0,
+      overflow: 'hidden'
+    },
+      React.createElement(Box, { 
+        // The "Film Strip" - Pulls the text UP when it exceeds 4 lines!
+        marginTop: Math.ceil((input || '').length / wrapLimit) > 4 
+                     ? -(Math.ceil((input || '').length / wrapLimit) - 4) 
+                     : 0,
+        flexDirection: 'row', 
+        minWidth: 0 
+      },
+        React.createElement(Box, { flexShrink: 0, minWidth: 0 },
+          React.createElement(Text, { color: focused ? 'green' : 'gray', bold: focused, wrap: 'truncate' }, focused ? '▶ ' : '▷ ')
+        ),
+        React.createElement(Box, { flexGrow: 1, flexShrink: 1, minWidth: 0 },
+          React.createElement(Box, { width: Math.max(10, numWidth - 4) },
+            React.createElement(TextInput, {
+              value:       tab === 'chat' ? input : (notes || ''),
+              onChange:    tab === 'chat' ? onChange : (val) => setNotes(val),
+              onSubmit:    tab === 'chat' && !chatMenuOpen ? onSubmit : () => {},
+              placeholder: focused ? (tab === 'chat' ? '/ for menu' : 'notes...') : 'Alt+E',
+              focus:       focused && !isRepoInputMode
+            })
+          )
         )
       )
     )
   )
 }
-
 // ── HelpScreen ────────────────────────────────────────────────────
 export function HelpScreen() {
   const row = (keys, desc, kc = 'cyan') =>
@@ -494,33 +516,196 @@ export function HelpScreen() {
 }
 
 // ── PlannedGraphViewer ────────────────────────────────────────────
-export function PlannedGraphViewer({ diagram, index, total, height, isDimmed }) {
+
+// 1. Beautiful uniform boxes
+function PlannedNode({ label, isDimmed, isSelected }) {
+  const bStyle = isSelected && !isDimmed ? 'double' : 'round';
+  const bColor = isSelected && !isDimmed ? 'white' : (isDimmed ? 'gray' : 'magenta');
+  const tColor = isSelected && !isDimmed ? 'cyanBright' : (isDimmed ? 'gray' : 'white');
+  const fill   = isSelected && !isDimmed ? '▓▓▓▓▓▓▓▓▓▓' : '░░░░░░░░░░';
+  
+  // Cleanly truncate long names so the box doesn't warp
+  const displayLabel = label && label.length > 16 ? label.substring(0, 14) + '..' : (label || 'Unknown');
+
+  return React.createElement(Box, {
+    borderStyle: bStyle,
+    borderColor: bColor,
+    width: 18, 
+    height: 4, 
+    flexShrink: 0, 
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginX: 1,      
+    marginBottom: 1  
+  },
+    React.createElement(Text, { color: tColor, bold: true }, displayLabel),
+    React.createElement(Text, { color: isSelected && !isDimmed ? 'cyan' : 'gray', dimColor: !isSelected }, fill)
+  );
+}
+
+// 2. Updated Graph Viewer (With Camera Tracking, Indicators, and Inspector Footer)
+export function PlannedGraphViewer({ diagram, selectedNodeIdx, height, isDimmed }) {
   if (!diagram) {
     return React.createElement(Box, {
       flexDirection: 'column', width: '100%', height, borderStyle: 'round', borderColor: isDimmed ? 'gray' : 'cyan', paddingX: 1, alignItems: 'center', justifyContent: 'center'
     }, React.createElement(Text, { color: 'gray', dimColor: true }, 'No architecture diagrams generated yet.'));
   }
 
+  // --- Auto-Layout Algorithm ---
+  const nodes = diagram.nodes || [];
+  const conns = diagram.connections || [];
+  const adj = {};
+  const inDegree = {};
+  
+  nodes.forEach(n => { adj[n] = []; inDegree[n] = 0; });
+  
+  conns.forEach(c => {
+    const parts = c.split('->').map(s => s.trim());
+    if (parts.length === 2) {
+      const [u, v] = parts;
+      if (inDegree[v] !== undefined && adj[u] !== undefined) {
+        adj[u].push(v);
+        inDegree[v]++;
+      }
+    }
+  });
+
+  const tiers = [];
+  let currentTier = nodes.filter(n => inDegree[n] === 0);
+  if (currentTier.length === 0 && nodes.length > 0) currentTier = [nodes[0]];
+
+  const visited = new Set(currentTier);
+
+  while (currentTier.length > 0) {
+    tiers.push(currentTier);
+    const nextTier = [];
+    currentTier.forEach(u => {
+      adj[u].forEach(v => {
+        if (!visited.has(v)) {
+          visited.add(v);
+          nextTier.push(v);
+        }
+      });
+    });
+    currentTier = nextTier;
+  }
+
+  const unconnected = nodes.filter(n => !visited.has(n));
+  if (unconnected.length > 0) tiers.push(unconnected);
+
+  // --- CAMERA TRACKING MATH ---
+  const selNodeLabel = nodes[selectedNodeIdx] || 'Unknown';
+  let selTierIdx = 0;
+  for (let t = 0; t < tiers.length; t++) {
+    if (tiers[t].includes(selNodeLabel)) {
+      selTierIdx = t;
+      break;
+    }
+  }
+
+  // Calculate how many tiers fit on screen (Approx 9 lines per tier block)
+  const usableHeight = Math.max(8, height - 8); // Reserve space for headers/footers
+  const visibleCount = Math.max(1, Math.floor(usableHeight / 9));
+
+  let startTier = Math.max(0, selTierIdx - Math.floor(visibleCount / 2));
+  if (startTier + visibleCount > tiers.length) {
+    startTier = Math.max(0, tiers.length - visibleCount);
+  }
+  
+  const visibleTiers = tiers.slice(startTier, startTier + visibleCount);
+  const canScrollUp = startTier > 0;
+  const canScrollDown = startTier + visibleCount < tiers.length;
+
+  // --- INSPECTOR FOOTER MATH ---
+  const incoming = [];
+  const outgoing = [];
+  conns.forEach(c => {
+    const [u, v] = c.split('->').map(s => s.trim());
+    if (v === selNodeLabel) incoming.push(u);
+    if (u === selNodeLabel) outgoing.push(v);
+  });
+
   return React.createElement(Box, {
     flexDirection: 'column', width: '100%', height, borderStyle: 'round', borderColor: isDimmed ? 'gray' : 'cyan', paddingX: 1, overflow: 'hidden'
   },
-    React.createElement(Box, { height: 1, justifyContent: 'center' },
-      React.createElement(Text, { color: isDimmed ? 'gray' : 'cyan', bold: !isDimmed },
-        total > 1 ? `│ ◀ PLANNED ARCHITECTURE [${index + 1}/${total}] ▶ │` : `│   PLANNED ARCHITECTURE   │`
-      )
+    // --- Header ---
+    React.createElement(Box, { height: 1, justifyContent: 'center', flexShrink: 0 },
+      React.createElement(Text, { color: isDimmed ? 'gray' : 'cyan', bold: !isDimmed }, '│   PLANNED ARCHITECTURE   │')
     ),
-    React.createElement(Box, { height: 1, overflow: 'hidden' },
+    React.createElement(Box, { height: 1, overflow: 'hidden', flexShrink: 0 },
       React.createElement(Text, { color: isDimmed ? 'gray' : 'cyan', dimColor: true }, '─'.repeat(100))
     ),
-    React.createElement(Box, { flexGrow: 1, flexDirection: 'column', paddingTop: 1, paddingX: 2 },
-      React.createElement(Text, { color: 'yellowBright', bold: true }, diagram.title || 'System Architecture'),
-      React.createElement(Box, { marginY: 1, flexDirection: 'column' },
-        React.createElement(Text, { color: 'cyan', bold: true }, 'Nodes (Agents/Modules):'),
-        (diagram.nodes || []).map((n, i) => React.createElement(Text, { key: i, color: 'white' }, ` • ${n}`))
+    
+    // --- Title ---
+    React.createElement(Box, { marginY: 1, flexShrink: 0, justifyContent: 'center' }, 
+      React.createElement(Text, { color: 'yellowBright', bold: true }, diagram.title || 'System Architecture')
+    ),
+
+    // --- Up Indicator ---
+    canScrollUp && React.createElement(Box, { height: 1, justifyContent: 'center', flexShrink: 0 },
+      React.createElement(Text, { color: 'cyan', bold: true }, '▲ MORE ABOVE ▲')
+    ),
+
+    // --- Graph Body (Clipped properly at flex-start) ---
+    React.createElement(Box, { flexGrow: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start' },
+      visibleTiers.map((tier, localIdx) => {
+        const isLastVisible = localIdx === visibleTiers.length - 1;
+        
+        return React.createElement(Box, { 
+          key: `tier_${localIdx}`, 
+          flexDirection: 'column', 
+          alignItems: 'center',
+          flexShrink: 0, 
+          width: '100%'
+        },
+          React.createElement(Box, { 
+            flexDirection: 'row', 
+            justifyContent: 'center', 
+            flexWrap: 'wrap', 
+            width: '100%',
+            flexShrink: 0 
+          },
+            tier.map(nodeLabel => {
+              const globalIdx = nodes.indexOf(nodeLabel);
+              return React.createElement(PlannedNode, { 
+                key: nodeLabel, 
+                label: nodeLabel, 
+                isDimmed,
+                isSelected: globalIdx === selectedNodeIdx
+              });
+            })
+          ),
+          // Only draw connector arrows if there is another tier below it visible
+          (!isLastVisible) && React.createElement(Box, { 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            flexShrink: 0, 
+            marginY: 1 
+          },
+            React.createElement(Text, { color: isDimmed ? 'gray' : 'cyan', dimColor: true }, '│'),
+            React.createElement(Text, { color: isDimmed ? 'gray' : 'cyan', dimColor: true }, '▼')
+          )
+        );
+      })
+    ),
+
+    // --- Down Indicator ---
+    canScrollDown && React.createElement(Box, { height: 1, justifyContent: 'center', flexShrink: 0 },
+      React.createElement(Text, { color: 'cyan', bold: true }, '▼ MORE BELOW ▼')
+    ),
+
+    // --- Inspector Footer (Breadcrumb) ---
+    React.createElement(Box, { height: 1, overflow: 'hidden', flexShrink: 0, marginTop: 1 },
+      React.createElement(Text, { color: isDimmed ? 'gray' : 'cyan', dimColor: true }, '─'.repeat(100))
+    ),
+    React.createElement(Box, { height: 1, justifyContent: 'center', flexShrink: 0 },
+      React.createElement(Text, { color: isDimmed ? 'gray' : 'cyan', dimColor: true }, 
+        incoming.length ? incoming.join(', ') + ' → ' : '(Root) → '
       ),
-      React.createElement(Box, { flexDirection: 'column' },
-        React.createElement(Text, { color: 'magenta', bold: true }, 'Connections (Flow):'),
-        (diagram.connections || []).map((c, i) => React.createElement(Text, { key: i, color: 'gray' }, `   ↳ ${c}`))
+      React.createElement(Text, { color: isDimmed ? 'gray' : 'white', bold: !isDimmed }, selNodeLabel),
+      React.createElement(Text, { color: isDimmed ? 'gray' : 'cyan', dimColor: true }, 
+        outgoing.length ? ' → ' + outgoing.join(', ') : ' → (Leaf)'
       )
     )
   );

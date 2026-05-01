@@ -13,7 +13,7 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { dispatchLeadOrchestrator } from '../jules_lead_orchestrator/julesorchestrator.js'
-import { useTerminalSize, MiniGraph, ChatPanel, HelpScreen, PlannedGraphViewer } from './components.js'
+import { useTerminalSize, MiniGraph, ChatPanel, HelpScreen, PlannedGraphViewer, GRAPH_NODE_W } from './components.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const pkgPath = path.join(__dirname, '..', '..', 'package.json')
@@ -52,7 +52,7 @@ export function Dashboard({
   const [graphSel, setGraphSel]         = useState(0)
   const [showGraph, setShowGraph]       = useState(true)
   const [graphViewMode, setGraphViewMode] = useState('live') // 'live' | 'plan'
-  const [diagramSel, setDiagramSel]       = useState(0)
+  const [planNodeSel, setPlanNodeSel]     = useState(0) // <-- CHANGED THIS
   const savedDiagrams = store.get('architectureDiagrams') || []
 
   // ── Layout mode: 'table' | 'graph' | 'chat' ─────────────────────
@@ -85,7 +85,6 @@ export function Dashboard({
 
   const [showHelp, setShowHelp]           = useState(false)
 
-  // ── Layout math ──────────────────────────────────────────────────
   const TERMINAL_ROWS = Math.max(10, rows - 1)
   const isWide        = columns >= 80
 
@@ -104,10 +103,21 @@ export function Dashboard({
 
   const VISIBLE_AGENTS = 0
 
+  // --- CLEAN NATIVE WRAPPING MATH (CAPPED) ---
+  const chatWrapLimit = Math.max(10, rightPanelWidth - 6) 
+  
+  const inputLines = (mode === 'chat' && chatTab === 'chat') 
+    ? Math.max(1, Math.ceil(chatInput.length / chatWrapLimit)) 
+    : 1
+    
+  // Cap the extra height at 3 (which means 4 lines total)
+  const inputExtraHeight = Math.min(3, inputLines - 1) 
+  // -------------------------------------------
+
   const chatFixedHeights  = 4
   const chatMenuHeight    = chatMenuOpen && chatTab === 'chat' ? 3 : 0
-  const CHAT_VISIBLE_ROWS = Math.max(1, availableBodyHeight - (chatFixedHeights + chatMenuHeight))
-
+  
+  const CHAT_VISIBLE_ROWS = Math.max(1, availableBodyHeight - (chatFixedHeights + chatMenuHeight + inputExtraHeight))
   // ── Data ─────────────────────────────────────────────────────────
   const sessions = getSessions() || []
   const AGENTS   = sessions.slice().reverse()
@@ -198,16 +208,16 @@ export function Dashboard({
     return () => { active = false; clearInterval(p) }
   }, [mode, selectedSessionId, lastActivityIds])
   
-  const lastGraphUpdateRef = useRef(0)
+  // Initialize to the CURRENT timestamp so it doesn't trigger on old diagrams!
+  const lastGraphUpdateRef = useRef(store.get('diagramLastUpdated') || 0);
 
   // Poll for architecture graph updates to notify the user in chat
   useEffect(() => {
     const interval = setInterval(() => {
-      const storeUpdate = store.get('diagramLastUpdated', 0);
+      const storeUpdate = store.get('diagramLastUpdated') || 0;
       
       if (storeUpdate > lastGraphUpdateRef.current) {
         lastGraphUpdateRef.current = storeUpdate;
-        const currentDiagrams = store.get('architectureDiagrams') || [];
         
         setMessages(m => [
           ...m, 
@@ -217,7 +227,7 @@ export function Dashboard({
         // Auto-switch to the new plan diagram
         setMode('graph');
         setGraphViewMode('plan');
-        setDiagramSel(Math.max(0, currentDiagrams.length - 1));
+        setPlanNodeSel(0); 
       }
     }, 1000);
     return () => clearInterval(interval);
@@ -237,6 +247,7 @@ export function Dashboard({
   const openAgentChat = useCallback((agent) => {
     if (!agent) return
     setSelectedSessionId(agent.id)
+    setChatTargetMode('TALK_TO_SELECTED_AGENT') // <--- ADD THIS LINE
     setMode('chat')
     setScrollOffset(0)
 
@@ -362,25 +373,115 @@ export function Dashboard({
     }
 
     if (mode === 'graph') {
-      // IF IN PLAN VIEW: Use arrows to switch between diagrams
+      // ── PLAN VIEW nav ────────────────────────────────────────────
       if (graphViewMode === 'plan') {
-        if (key.leftArrow || key.upArrow)   { setDiagramSel(i => Math.max(0, i - 1)); return }
-        if (key.rightArrow || key.downArrow) { setDiagramSel(i => Math.min(savedDiagrams.length - 1, i + 1)); return }
-        return;
+        const currentDiagram = savedDiagrams[0]
+        const nodes = currentDiagram?.nodes || []
+        const nodeCount = nodes.length
+        if (nodeCount === 0) return
+
+        // Rebuild the same tier layout the viewer uses so CPR matches exactly
+        const conns = currentDiagram?.connections || []
+        const adj = {}; const inDeg = {}
+        nodes.forEach(n => { adj[n] = []; inDeg[n] = 0 })
+        conns.forEach(c => {
+          const [u, v] = c.split('->').map(s => s.trim())
+          if (adj[u] && inDeg[v] !== undefined) { adj[u].push(v); inDeg[v]++ }
+        })
+        const tiers = []
+        let cur = nodes.filter(n => inDeg[n] === 0)
+        if (cur.length === 0) cur = [nodes[0]]
+        const vis = new Set(cur)
+        while (cur.length > 0) {
+          tiers.push(cur)
+          const nxt = []
+          cur.forEach(u => adj[u].forEach(v => { if (!vis.has(v)) { vis.add(v); nxt.push(v) } }))
+          cur = nxt
+        }
+        const uncon = nodes.filter(n => !vis.has(n))
+        if (uncon.length > 0) tiers.push(uncon)
+
+        // Find which tier+col the currently selected node is in
+        let selTier = 0; let selCol = 0
+        outer: for (let t = 0; t < tiers.length; t++) {
+          for (let c = 0; c < tiers[t].length; c++) {
+            if (nodes.indexOf(tiers[t][c]) === planNodeSel) {
+              selTier = t; selCol = c; break outer
+            }
+          }
+        }
+
+        if (key.leftArrow) {
+          // Move left within the same tier (clamp — no row wrapping)
+          if (selCol > 0) {
+            const newNode = tiers[selTier][selCol - 1]
+            setPlanNodeSel(nodes.indexOf(newNode))
+          }
+          return
+        }
+        if (key.rightArrow) {
+          if (selCol < tiers[selTier].length - 1) {
+            const newNode = tiers[selTier][selCol + 1]
+            setPlanNodeSel(nodes.indexOf(newNode))
+          }
+          return
+        }
+        if (key.upArrow) {
+          // Move up a tier, keep same column if possible
+          if (selTier > 0) {
+            const targetCol = Math.min(selCol, tiers[selTier - 1].length - 1)
+            setPlanNodeSel(nodes.indexOf(tiers[selTier - 1][targetCol]))
+          }
+          return
+        }
+        if (key.downArrow) {
+          // Move down a tier, keep same column if possible
+          if (selTier < tiers.length - 1) {
+            const targetCol = Math.min(selCol, tiers[selTier + 1].length - 1)
+            setPlanNodeSel(nodes.indexOf(tiers[selTier + 1][targetCol]))
+          }
+          return
+        }
+        return
       }
 
-      // IF IN LIVE VIEW: Use arrows to navigate nodes
+      // ── LIVE VIEW nav ─────────────────────────────────────────────
       const total = graphNodes.length
       if (total === 0) return
 
-      const safeWidth = leftPanelWidth || 80;
-      const usableWidth = Math.max(20, safeWidth - 4);
-      const CPR = Math.max(1, Math.floor(usableWidth / 25)); 
-      
-      if (key.leftArrow)  { setGraphSel(i => Math.max(0, i - 1));       return }
-      if (key.rightArrow) { setGraphSel(i => Math.min(total - 1, i + 1)); return }
-      if (key.upArrow)    { setGraphSel(i => Math.max(0, i - CPR));       return }
-      if (key.downArrow)  { setGraphSel(i => Math.min(total - 1, i + CPR)); return }
+      const safeWidth   = leftPanelWidth || 80
+      const usableWidth = Math.max(20, safeWidth - 4)
+      const CPR         = Math.max(1, Math.floor(usableWidth / (GRAPH_NODE_W + 1)))
+      const totalRows   = Math.ceil(total / CPR)
+      const currentRow  = Math.floor(graphSel / CPR)
+      const currentCol  = graphSel % CPR
+
+      if (key.leftArrow) {
+        // Stay on same row — clamp at column 0
+        if (currentCol > 0) setGraphSel(currentRow * CPR + currentCol - 1)
+        return
+      }
+      if (key.rightArrow) {
+        // Stay on same row — clamp at last node in this row
+        const rowEnd = Math.min(CPR - 1, total - 1 - currentRow * CPR)
+        if (currentCol < rowEnd) setGraphSel(currentRow * CPR + currentCol + 1)
+        return
+      }
+      if (key.upArrow) {
+        if (currentRow > 0) {
+          // Keep same column, but clamp to last node if new row is shorter
+          const newIdx = (currentRow - 1) * CPR + currentCol
+          setGraphSel(Math.min(newIdx, total - 1))
+        }
+        return
+      }
+      if (key.downArrow) {
+        if (currentRow < totalRows - 1) {
+          const newIdx = (currentRow + 1) * CPR + currentCol
+          setGraphSel(Math.min(newIdx, total - 1))
+        }
+        return
+      }
       if (key.return) {
         const agent = graphNodes[graphSel]
         if (agent) openAgentChat(agent)
@@ -435,7 +536,7 @@ export function Dashboard({
 
     const targetAgent = chatTargetMode === 'TALK_TO_LATEST_ORCHESTRATOR'
       ? (AGENTS.find(a => a.type === 'orchestrator') || AGENTS[0])
-      : AGENTS[sel]
+      : AGENTS.find(a => a.id === selectedSessionId) // <--- REPLACE 'AGENTS[sel]' WITH THIS
 
     if (!targetAgent) {
       setMessages(m => [...m, { role: 'system', text: 'Error: No agent found.' }])
@@ -574,7 +675,10 @@ export function Dashboard({
                       }
                     })
                   : React.createElement(PlannedGraphViewer, {
-                      diagram: savedDiagrams[diagramSel], index: diagramSel, total: savedDiagrams.length, height: graphHeight, isDimmed: mode !== 'graph'
+                      diagram: savedDiagrams[0], 
+                      selectedNodeIdx: planNodeSel, // <-- CHANGED THIS
+                      height: graphHeight, 
+                      isDimmed: mode !== 'graph'
                     })
                 )
               : React.createElement(Box, { flexGrow: 1, alignItems: 'center', justifyContent: 'center' },
