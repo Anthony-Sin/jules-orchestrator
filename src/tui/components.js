@@ -123,7 +123,7 @@ export function AgentRow({ agent, selected, tick, isDimmed }) {
 
 // ── GraphNode ─────────────────────────────────────────────────────
 export const GRAPH_NODE_W = 24
-const GRAPH_NODE_H = 5
+const GRAPH_NODE_H = 6
 
 function GraphNode({ agent, isSelected, tick, isDimmed }) {
   const isOrch  = agent.type === 'orchestrator' || (agent.title || '').toLowerCase().includes('orchestrator')
@@ -131,26 +131,16 @@ function GraphNode({ agent, isSelected, tick, isDimmed }) {
   const ss      = STATUS_SHORT[agent.state || 'UNKNOWN'] || '???'
   const hi      = isSelected && !isDimmed
 
-  const borderColor = isDimmed ? 'gray' : hi ? 'white' : isOrch ? 'yellow' : 'cyan'
-  const titleColor  = isDimmed ? 'gray' : hi ? 'white' : isOrch ? 'yellowBright' : 'cyanBright'
-  const statusColor = isDimmed ? 'gray' : sc
+  const borderColor = isDimmed ? 'gray' : hi ? 'white' : '#444444' // Mockup shows a darker unselected border
 
   const IW = GRAPH_NODE_W - 4
 
   const parsed    = parseSourceDisplay(agent.repoDisplay || agent.repo || '')
   const repoShort = (parsed.includes('/') ? parsed.split('/')[1] : parsed).substring(0, IW)
   const titleStr  = (agent.title || 'agent').toUpperCase().substring(0, IW)
-  const shortId   = (agent.id || '').substring(0, 6)
   const agoStr    = ago(agent.lastUpdated || agent.createdAt)
   
-  // Apply distinct coloring for time depending on failure or pause
-  const isWaitState = ['PAUSED', 'AWAITING_PLAN_APPROVAL', 'AWAITING_USER_FEEDBACK'].includes(agent.state)
-  const isFailState = ['FAILED', 'KILLED'].includes(agent.state)
-  const timeColor   = isDimmed ? 'gray' : (isFailState ? 'red' : (isWaitState ? 'yellow' : 'green'))
-
-  // Layout the bottom string keeping spacing intact
-  const idStatusSpace = IW - agoStr.length - ss.length - shortId.length - 1
-  const paddingStr = ' '.repeat(Math.max(0, idStatusSpace))
+  const timeColor   = isDimmed ? 'gray' : 'gray' // Mockup shows grey text for time
 
   let barFilled
   if      (agent.state === 'IN_PROGRESS' || agent.state === 'PLANNING') barFilled = Math.floor(IW * (0.5 + 0.5 * Math.sin(tick / 5)))
@@ -158,39 +148,48 @@ function GraphNode({ agent, isSelected, tick, isDimmed }) {
   else                                   barFilled = 0
   barFilled = Math.max(0, Math.min(IW, barFilled))
 
+  // Match mockup colors: green for active/orch, blue for done, red for fail, yellow for wait
   const barColor = isDimmed ? 'gray'
-    : agent.state === 'COMPLETED'   ? 'green'
-    : agent.state === 'IN_PROGRESS' ? 'magenta'
-    : agent.state === 'PLANNING'    ? 'cyan'
+    : agent.state === 'COMPLETED'   ? '#2255ff' // blue for done
+    : agent.state === 'IN_PROGRESS' || agent.state === 'PLANNING' || isOrch ? '#44aa44' // green for active
+    : agent.state === 'FAILED'      ? '#ff4444' // red for fail
+    : '#aaaa22' // yellow for wait
+
+  // Tag styling
+  const tagBgColor = isDimmed ? undefined
+    : agent.state === 'COMPLETED'   ? 'blue'
+    : isOrch                        ? 'magenta'
+    : agent.state === 'IN_PROGRESS' || agent.state === 'PLANNING' ? 'green'
     : agent.state === 'FAILED'      ? 'red'
     : 'yellow'
 
+  const tagTextColor = isDimmed ? 'gray' : 'white'
+
   return React.createElement(Box, {
-    borderStyle: hi ? 'double' : 'round',
+    borderStyle: 'round',
     borderColor,
     width:  GRAPH_NODE_W,
-    height: GRAPH_NODE_H,
+    height: GRAPH_NODE_H + 1, // Increased height slightly to match spacing
     flexShrink: 0,
     flexDirection: 'column',
     paddingX: 1,
     overflow: 'hidden'
   },
     React.createElement(Box, { height: 1, width: IW, overflow: 'hidden' },
-      React.createElement(Text, { color: isDimmed ? 'gray' : 'cyanBright', bold: !isDimmed, wrap: 'truncate' }, repoShort)
+      React.createElement(Text, { color: 'gray', wrap: 'truncate' }, repoShort)
     ),
-    React.createElement(Box, { height: 1, width: IW, overflow: 'hidden' },
-      React.createElement(Text, { color: titleColor, bold: !isDimmed, wrap: 'truncate', dimColor: isDimmed }, titleStr)
+    React.createElement(Box, { height: 1, width: IW, overflow: 'hidden', marginBottom: 1 },
+      React.createElement(Text, { color: hi ? 'white' : 'white', bold: true, wrap: 'truncate' }, titleStr)
     ),
-    React.createElement(Box, { height: 1, width: IW, overflow: 'hidden' },
+    React.createElement(Box, { height: 1, width: IW, overflow: 'hidden', marginBottom: 1 },
       React.createElement(Text, { wrap: 'truncate' },
         React.createElement(Text, { color: barColor, dimColor: isDimmed }, '█'.repeat(barFilled)),
-        React.createElement(Text, { color: 'gray',   dimColor: true     }, '░'.repeat(IW - barFilled))
+        React.createElement(Text, { color: '#333333', dimColor: true }, '█'.repeat(IW - barFilled))
       )
     ),
-    React.createElement(Box, { height: 1, width: IW, overflow: 'hidden', flexDirection: 'row' },
-      React.createElement(Text, { color: statusColor, bold: !isDimmed, dimColor: isDimmed }, `${ss} `),
-      React.createElement(Text, { color: 'white', dimColor: isDimmed }, `${shortId}${paddingStr}`),
-      React.createElement(Text, { color: timeColor, bold: !isDimmed, dimColor: isDimmed }, agoStr)
+    React.createElement(Box, { height: 1, width: IW, overflow: 'hidden', flexDirection: 'row', justifyContent: 'space-between' },
+      React.createElement(Text, { color: tagTextColor, backgroundColor: tagBgColor, bold: true }, ` ${isOrch && agent.state !== 'COMPLETED' && agent.state !== 'FAILED' ? 'ORCH' : ss} `),
+      React.createElement(Text, { color: timeColor }, agoStr)
     )
   )
 }
@@ -251,19 +250,40 @@ export function MiniGraph({ tick, isDimmed, height, width, sessions, graphSel, o
     overflow: 'hidden'
   },
     // ── Header ──
+
+    // ── Header ──
     React.createElement(Box, { flexDirection: 'column', flexShrink: 0, minWidth: 0, marginBottom: 1 },
-      React.createElement(Box, { height: 1, justifyContent: 'center' },
-        React.createElement(Text, { color: isDimmed ? 'gray' : 'yellow', bold: true, wrap: 'truncate' },
+      React.createElement(Box, { flexDirection: 'row', justifyContent: 'space-between', width: '100%' },
+        React.createElement(Text, { color: isDimmed ? 'gray' : 'cyanBright', bold: !isDimmed, wrap: 'truncate' },
           total > 0
-            ? `★  L I V E   A G E N T S   [ ${safeIdx + 1} / ${total} ]  ★`
-            : `★  L I V E   A G E N T S  ★`
+            ? `LIVE AGENTS GRID [${safeIdx + 1}/${total}]`
+            : `LIVE AGENTS GRID`
+        ),
+        React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' },
+          `alt+g: planned arch`
         )
       ),
-      React.createElement(Box, { height: 1, overflow: 'hidden' },
-        React.createElement(Text, { color: isDimmed ? 'gray' : 'yellow', dimColor: true }, '━'.repeat(100))
+      React.createElement(Box, { height: 1, overflow: 'hidden', marginY: 0 },
+        React.createElement(Text, { color: isDimmed ? 'gray' : '#333333', dimColor: true }, '━'.repeat(200))
+      ),
+      React.createElement(Box, { flexDirection: 'row', width: '100%' },
+        React.createElement(Text, { color: 'gray', dimColor: true }, ' '),
+        React.createElement(Text, { color: '#225522' }, '█ '),
+        React.createElement(Text, { color: 'gray', dimColor: true }, 'idle  '),
+        React.createElement(Text, { color: '#44aa44' }, '█ '),
+        React.createElement(Text, { color: 'gray', dimColor: true }, 'low  '),
+        React.createElement(Text, { color: 'greenBright' }, '█ '),
+        React.createElement(Text, { color: 'gray', dimColor: true }, 'active  '),
+        React.createElement(Text, { color: 'greenBright' }, '█ '),
+        React.createElement(Text, { color: 'gray', dimColor: true }, 'hot  '),
+        React.createElement(Text, { color: 'yellowBright' }, '█ '),
+        React.createElement(Text, { color: 'gray', dimColor: true }, 'stalled  '),
+        React.createElement(Text, { color: 'redBright' }, '█ '),
+        React.createElement(Text, { color: 'gray', dimColor: true }, 'failed  ')
       )
     ),
     // ── Top scroll indicator ──
+
     canScrollUp && React.createElement(Box, { height: 1, justifyContent: 'center', flexShrink: 0 },
       React.createElement(Text, { color: 'cyan', bold: true }, '▲ MORE ABOVE ▲')
     ),
@@ -354,18 +374,17 @@ export function ChatPanel({
       } else {
         for (const m of messages) {
           if (m.role === 'agent') {
-            lines.push({ type: 'label', text: '▸ AGENT', color: focused ? 'magenta' : 'gray' })
+            lines.push({ type: 'label', text: '▸ AGENT', color: focused ? 'magentaBright' : 'magenta' })
             for (const ml of buildMarkdownLines(m.text, wrapLimit, focused)) lines.push(ml)
             lines.push({ type: 'gap' })
           } else if (m.role === 'system') {
-            lines.push({ type: 'label', text: '  [SYS]', color: 'gray' })
-            for (const l of wrapText(m.text, wrapLimit))
+            for (const l of wrapText('  ' + m.text, wrapLimit))
               lines.push({ type: 'text', text: l, color: 'gray' })
             lines.push({ type: 'gap' })
           } else {
-            lines.push({ type: 'label', text: '  you', color: 'cyan' })
+            lines.push({ type: 'label', text: 'YOU', color: 'cyanBright' })
             for (const l of wrapText(m.text, wrapLimit))
-              lines.push({ type: 'text', text: l, color: focused ? 'cyan' : 'gray' })
+              lines.push({ type: 'text', text: l, color: focused ? 'white' : 'gray' })
             lines.push({ type: 'gap' })
           }
         }
@@ -394,7 +413,7 @@ export function ChatPanel({
   },
     React.createElement(Box, { flexShrink: 0, height: 1, minWidth: 0, overflow: 'hidden' },
       React.createElement(Text, { color: focused ? 'magenta' : 'gray', bold: true, wrap: 'truncate' },
-        tab === 'chat' ? `▌ CHAT: ${shortTitle} | NOTES` : `▌ NOTES: ${shortTitle} | CHAT`
+        tab === 'chat' ? `▌ CHAT: ${shortTitle.padEnd(20, ' ')} | NOTES ` : `▌ NOTES: ${shortTitle.padEnd(20, ' ')} | CHAT `
       ),
       scrollOffset > 0 && React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ` ↑${scrollOffset}`)
     ),

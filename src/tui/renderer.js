@@ -610,13 +610,13 @@ export function Dashboard({
     overflow: 'hidden'
   },
 
-    React.createElement(Box, { flexDirection: 'row', width: '100%', height: 1, overflow: 'hidden', flexShrink: 0 },
-      React.createElement(Box, { flexShrink: 1, overflow: 'hidden', minWidth: 0 },
-        React.createElement(Text, { color: 'yellow', bold: true, wrap: 'truncate' }, 'JULES COLONY '),
+    React.createElement(Box, { flexDirection: 'row', width: '100%', height: 1, overflow: 'hidden', flexShrink: 0, justifyContent: 'space-between' },
+      React.createElement(Box, { flexShrink: 1, overflow: 'hidden', minWidth: 0, flexDirection: 'row' },
+        React.createElement(Text, { color: 'yellowBright', bold: true, wrap: 'truncate' }, 'JULES COLONY '),
         React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '│ '),
         React.createElement(Text, {
           color: currentRepoDisplay === 'NOT SET' ? 'red' : 'cyan',
-          dimColor: true, wrap: 'truncate'
+          dimColor: false, wrap: 'truncate'
         }, `~ ${currentRepoDisplay} `),
         React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '│ '),
         React.createElement(Text, { color: 'magenta', dimColor: true, wrap: 'truncate' }, 'powered by jules '),
@@ -624,8 +624,9 @@ export function Dashboard({
           ? React.createElement(Text, { color: 'green', wrap: 'truncate' }, `│ ${statusFlash}`)
           : null
       ),
-      React.createElement(Box, { flexGrow: 1, flexShrink: 1, overflow: 'hidden', minWidth: 0 },
-        React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '━'.repeat(200))
+      React.createElement(Box, { flexShrink: 0, flexDirection: 'row', minWidth: 0 },
+        React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '│ '),
+        React.createElement(Text, { color: 'greenBright', wrap: 'truncate' }, `✓ ${AGENTS.filter(a => ['IN_PROGRESS', 'PLANNING', 'AWAITING_USER_FEEDBACK', 'AWAITING_PLAN_APPROVAL'].includes(a.state)).length} active agents `)
       )
     ),
 
@@ -736,39 +737,20 @@ export function Dashboard({
     },
       !showHelp
         ? React.createElement(React.Fragment, null,
-            React.createElement(Box, { flexShrink: 1, overflow: 'hidden', flexDirection: 'row', minWidth: 0 },
-              React.createElement(Text, { color: 'yellowBright', bold: true, wrap: 'truncate' }, ' Alt+G'),
-              React.createElement(Text, { color: 'gray', wrap: 'truncate' }, ' view:graph '),
-              React.createElement(Text, { color: 'yellowBright', bold: true, wrap: 'truncate' }, ' Alt+E'),
-              React.createElement(Text, { color: 'gray', wrap: 'truncate' }, ' view:chat '),
-              React.createElement(Text, { color: 'yellowBright', bold: true, wrap: 'truncate' }, ' Alt+H'),
-              React.createElement(Text, {
-                color:    graphVisible ? 'greenBright' : 'red',
-                bold:     true,
-                wrap:     'truncate'
-              }, graphVisible ? ' grph✓ ' : ' grph✗ '),
-              React.createElement(Text, { color: 'yellowBright', bold: true, wrap: 'truncate' }, ' Alt+M'),
-              React.createElement(Text, { color: 'gray', wrap: 'truncate' }, ' repo │ ')
-            ),
-            React.createElement(Box, { flexShrink: 0, flexDirection: 'row', minWidth: 0 },
-              React.createElement(Text, {
-                color:    mode === 'graph' ? 'black' : 'gray',
-                backgroundColor: mode === 'graph' ? 'cyanBright' : undefined,
-                bold:     mode === 'graph',
-                dimColor: mode !== 'graph',
-                wrap:     'truncate'
-              }, mode === 'graph' ? ' [ GRAPH ] ' : ' [ GRAPH ] '),
-              React.createElement(Text, {
-                color:    mode === 'chat' ? 'black' : 'gray',
-                backgroundColor: mode === 'chat' ? 'cyanBright' : undefined,
-                bold:     mode === 'chat',
-                dimColor: mode !== 'chat',
-                wrap:     'truncate'
-              }, mode === 'chat' ? ' [ CHAT ] ' : ' [ CHAT ] ')
-            ),
-            React.createElement(Box, { flexGrow: 1, flexShrink: 1, overflow: 'hidden', minWidth: 0 },
-              React.createElement(Text, { color: 'gray', wrap: 'truncate' },
-                `  │ ↑↓←→:nav ↵:open │ Alt+?:help │ agents:${AGENTS.length}`
+            React.createElement(Box, { flexGrow: 1, flexShrink: 1, overflow: 'hidden', flexDirection: 'row', minWidth: 0, justifyContent: 'space-between' },
+              React.createElement(Box, { flexDirection: 'row', flexShrink: 1, minWidth: 0, overflow: 'hidden' },
+                React.createElement(Text, { color: 'cyanBright', bold: true, wrap: 'truncate' }, ' alt+g'),
+                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ' :toggle-view '),
+                React.createElement(Text, { color: 'cyanBright', bold: true, wrap: 'truncate' }, ' alt+e'),
+                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ' :chat '),
+                React.createElement(Text, { color: 'cyanBright', bold: true, wrap: 'truncate' }, ' alt+m'),
+                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ' :repo │ '),
+                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '↑↓←→:nav ↵:open-chat │ '),
+                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, 'alt+?:help │ '),
+                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, `agents:${AGENTS.length}`)
+              ),
+              React.createElement(Box, { flexShrink: 0, flexDirection: 'row' },
+                React.createElement(Text, { color: 'yellowBright', bold: true }, mode === 'graph' ? ' [GRP]' : ' [CHT]')
               )
             )
           )
