@@ -122,7 +122,7 @@ export function AgentRow({ agent, selected, tick, isDimmed }) {
 }
 
 // ── GraphNode ─────────────────────────────────────────────────────
-export const GRAPH_NODE_W = 24
+export const GRAPH_NODE_W = 28
 const GRAPH_NODE_H = 6
 
 function GraphNode({ agent, isSelected, tick, isDimmed }) {
@@ -131,13 +131,18 @@ function GraphNode({ agent, isSelected, tick, isDimmed }) {
   const ss      = STATUS_SHORT[agent.state || 'UNKNOWN'] || '???'
   const hi      = isSelected && !isDimmed
 
-  const borderColor = isDimmed ? 'gray' : hi ? 'white' : '#444444' // Mockup shows a darker unselected border
+  const borderColor = isDimmed ? 'gray' : hi ? 'magentaBright' : '#444444' // Mockup shows a darker unselected border
 
   const IW = GRAPH_NODE_W - 4
 
   const parsed    = parseSourceDisplay(agent.repoDisplay || agent.repo || '')
   const repoShort = (parsed.includes('/') ? parsed.split('/')[1] : parsed).substring(0, IW)
-  const titleStr  = (agent.title || 'agent').toUpperCase().substring(0, IW)
+
+  const spin = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+  const isActive = agent.state === 'IN_PROGRESS' || agent.state === 'PLANNING'
+  const spinChar = isActive && !isDimmed ? ' ' + spin[tick % spin.length] : ''
+  const baseTitle = (agent.title || 'agent').toUpperCase()
+  const titleStr = (baseTitle.length + spinChar.length > IW ? baseTitle.substring(0, IW - spinChar.length) : baseTitle) + spinChar
   const agoStr    = ago(agent.lastUpdated || agent.createdAt)
   
   const timeColor   = isDimmed ? 'gray' : 'gray' // Mockup shows grey text for time
@@ -169,10 +174,12 @@ function GraphNode({ agent, isSelected, tick, isDimmed }) {
     borderStyle: 'round',
     borderColor,
     width:  GRAPH_NODE_W,
-    height: GRAPH_NODE_H + 1, // Increased height slightly to match spacing
+    height: GRAPH_NODE_H + 1,
     flexShrink: 0,
     flexDirection: 'column',
     paddingX: 1,
+    marginX: 1,
+    marginY: 1,
     overflow: 'hidden'
   },
     React.createElement(Box, { height: 1, width: IW, overflow: 'hidden' },
@@ -214,10 +221,10 @@ export function MiniGraph({ tick, isDimmed, height, width, sessions, graphSel, o
   // Dynamic layout processing based on available width
   const safeWidth = width || 80
   const usableWidth = Math.max(20, safeWidth - 4)
-  const CPR = Math.max(1, Math.floor(usableWidth / (GRAPH_NODE_W + 1)))
+  const CPR = Math.max(1, Math.floor(usableWidth / (GRAPH_NODE_W + 2)))
 
   // Overhead allocation: borders(2) + header(1) + footer(1) + scroll arrows max(2) = 6
-  const cardRows     = Math.max(1, Math.floor((height - 6) / GRAPH_NODE_H))
+  const cardRows     = Math.max(1, Math.floor((height - 8) / (GRAPH_NODE_H + 3)))
   const visibleTotal = CPR * cardRows
 
   const selRow   = Math.floor(safeIdx / CPR)
@@ -268,24 +275,20 @@ export function MiniGraph({ tick, isDimmed, height, width, sessions, graphSel, o
       ),
       React.createElement(Box, { flexDirection: 'row', width: '100%' },
         React.createElement(Text, { color: 'gray', dimColor: true }, ' '),
-        React.createElement(Text, { color: '#225522' }, '█ '),
-        React.createElement(Text, { color: 'gray', dimColor: true }, 'idle  '),
         React.createElement(Text, { color: '#44aa44' }, '█ '),
-        React.createElement(Text, { color: 'gray', dimColor: true }, 'low  '),
-        React.createElement(Text, { color: 'greenBright' }, '█ '),
         React.createElement(Text, { color: 'gray', dimColor: true }, 'active  '),
-        React.createElement(Text, { color: 'greenBright' }, '█ '),
-        React.createElement(Text, { color: 'gray', dimColor: true }, 'hot  '),
-        React.createElement(Text, { color: 'yellowBright' }, '█ '),
-        React.createElement(Text, { color: 'gray', dimColor: true }, 'stalled  '),
-        React.createElement(Text, { color: 'redBright' }, '█ '),
-        React.createElement(Text, { color: 'gray', dimColor: true }, 'failed  ')
+        React.createElement(Text, { color: '#2255ff' }, '█ '),
+        React.createElement(Text, { color: 'gray', dimColor: true }, 'done  '),
+        React.createElement(Text, { color: '#aaaa22' }, '█ '),
+        React.createElement(Text, { color: 'gray', dimColor: true }, 'wait  '),
+        React.createElement(Text, { color: '#ff4444' }, '█ '),
+        React.createElement(Text, { color: 'gray', dimColor: true }, 'fail  ')
       )
     ),
     // ── Top scroll indicator ──
 
-    canScrollUp && React.createElement(Box, { height: 1, justifyContent: 'center', flexShrink: 0 },
-      React.createElement(Text, { color: 'cyan', bold: true }, '▲ MORE ABOVE ▲')
+    canScrollUp && React.createElement(Box, { height: 1, marginY: 1, justifyContent: 'center', flexShrink: 0 },
+      React.createElement(Text, { color: 'cyanBright', bold: true }, '▲ MORE ABOVE ▲')
     ),
 
     // ── Cards area ──
@@ -333,8 +336,8 @@ export function MiniGraph({ tick, isDimmed, height, width, sessions, graphSel, o
         ),
 
     // ── Bottom scroll indicator ──
-    canScrollDown && React.createElement(Box, { height: 1, justifyContent: 'center', flexShrink: 0 },
-      React.createElement(Text, { color: 'cyan', bold: true }, '▼ MORE BELOW ▼')
+    canScrollDown && React.createElement(Box, { height: 1, marginY: 1, justifyContent: 'center', flexShrink: 0 },
+      React.createElement(Text, { color: 'cyanBright', bold: true }, '▼ MORE BELOW ▼')
     ),
 
     // ── Footer ──
