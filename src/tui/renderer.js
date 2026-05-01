@@ -141,19 +141,41 @@ function MiniGraph({ tick, isDimmed, height }) {
 
 // ── Chat Panel ────────────────────────────────────────────────────
 function wrapText(text, width) {
-  const words = text.split(' ')
+  const wordsOrNewlines = text.split(/(\n|[ \t]+)/).filter(w => w !== '' && !/^[ \t]+$/.test(w));
   const lines = []
   let line = ''
-  for (const word of words) {
-    const candidate = line ? line + ' ' + word : word
-    if (candidate.length > width) { if (line) lines.push(line); line = word }
-    else line = candidate
+  for (const word of wordsOrNewlines) {
+    if (word === '\n') {
+      if (line) lines.push(line);
+      else lines.push('');
+      line = '';
+      continue;
+    }
+
+    // Check if word itself is longer than width
+    if (word.length > width) {
+       if (line) lines.push(line);
+       // Split the long word into chunks of size `width`
+       for (let i = 0; i < word.length; i += width) {
+           lines.push(word.substring(i, i + width));
+       }
+       line = '';
+       continue;
+    }
+
+    const candidate = line ? line + ' ' + word : word;
+    if (candidate.length > width) {
+       if (line) lines.push(line);
+       line = word;
+    } else {
+       line = candidate;
+    }
   }
   if (line) lines.push(line)
   return lines
 }
 
-function ChatPanel({ messages, input, onChange, onSubmit, focused, scrollOffset, width, tab, notes, setNotes, isRepoInputMode, repoName, agentTitle, agentId, visibleAgentsCount, chatMenuOpen, chatMenuSel }) {
+function ChatPanel({ messages, input, onChange, onSubmit, focused, scrollOffset, width, tab, notes, setNotes, isRepoInputMode, repoName, agentTitle, agentId, visibleAgentsCount, chatMenuOpen, chatMenuSel, chatVisibleRows }) {
   const inner = Math.max(10, width - 2);
 
   const allLines = []
@@ -187,7 +209,7 @@ function ChatPanel({ messages, input, onChange, onSubmit, focused, scrollOffset,
       for (const l of wrapped) allLines.push({ type: 'text', text: l, color: focused ? 'white' : 'gray' })
   }
 
-  const MESSAGE_ROWS = Math.max(2, visibleAgentsCount);
+  const MESSAGE_ROWS = Math.max(2, chatVisibleRows || visibleAgentsCount);
   const total   = allLines.length;
   const start   = Math.max(0, total - MESSAGE_ROWS - scrollOffset);
   const visible = allLines.slice(start, start + MESSAGE_ROWS);
@@ -320,6 +342,7 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
   if (repoInputMode) baseDeductions += 8;
 
   const VISIBLE_AGENTS = Math.max(2, rows - baseDeductions)
+  const CHAT_VISIBLE_ROWS = VISIBLE_AGENTS + (showGraph ? graphHeight + 1 : 0) - (chatMenuOpen && chatTab === 'chat' ? 3 : 0);
 
   const sessions = getSessions() || []
   const reversedFiltered = sessions.slice().reverse()
@@ -351,9 +374,13 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
                       if (!lastId || foundNew || (!foundNew && act.name > lastId)) {
                           foundNew = true;
                           if (act.userMessaged) {
-                              newMessages.push({ role: 'user', text: act.userMessaged.userMessage || '' });
+                              if (act.userMessaged.userMessage && act.userMessaged.userMessage.trim() !== '') {
+                                  newMessages.push({ role: 'user', text: act.userMessaged.userMessage });
+                              }
                           } else if (act.agentMessaged) {
-                              newMessages.push({ role: 'agent', text: act.agentMessaged.agentMessage || '' });
+                              if (act.agentMessaged.agentMessage && act.agentMessaged.agentMessage.trim() !== '') {
+                                  newMessages.push({ role: 'agent', text: act.agentMessaged.agentMessage });
+                              }
                           } else if (act.originator === 'agent' || act.originator === 'system') {
                               let text = act.description || '';
                               if (act.planGenerated) text += '\nPlan Generated:\n' + JSON.stringify(act.planGenerated);
@@ -490,8 +517,16 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
                 if (Array.isArray(acts)) {
                     const sorted = acts.sort((a,b) => new Date(a.createTime || 0) - new Date(b.createTime || 0));
                     for (const act of sorted) {
-                        if (act.userMessaged) history.push({ role: 'user', text: act.userMessaged.userMessage || '' });
-                        else if (act.agentMessaged) history.push({ role: 'agent', text: act.agentMessaged.agentMessage || '' });
+                        if (act.userMessaged) {
+                            if (act.userMessaged.userMessage && act.userMessaged.userMessage.trim() !== '') {
+                                history.push({ role: 'user', text: act.userMessaged.userMessage });
+                            }
+                        }
+                        else if (act.agentMessaged) {
+                            if (act.agentMessaged.agentMessage && act.agentMessaged.agentMessage.trim() !== '') {
+                                history.push({ role: 'agent', text: act.agentMessaged.agentMessage });
+                            }
+                        }
                         else if (act.originator === 'agent' || act.originator === 'system') {
                             let text = act.description || '';
                             if (act.planGenerated) text += '\nPlan Generated:\n' + JSON.stringify(act.planGenerated);
@@ -622,10 +657,9 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
           )
       ),
 
-      showHelp ? React.createElement(HelpScreen) : React.createElement(Box, { flexDirection: "column", flexGrow: 1, marginTop: 1, overflow: "hidden", minHeight: 0 },
-        showGraph && React.createElement(MiniGraph, { tick: tick, isDimmed: mode !== 'graph', height: graphHeight }),
-        React.createElement(Box, { flexDirection: "row", flexGrow: 1, overflow: "hidden", minHeight: 0 },
+      showHelp ? React.createElement(HelpScreen) : React.createElement(Box, { flexDirection: "row", flexGrow: 1, marginTop: 1, overflow: "hidden", minHeight: 0 },
           showLeftPanel && React.createElement(Box, { flexDirection: "column", flexGrow: 1, flexShrink: 1, marginRight: isWide ? 1 : 0, overflow: "hidden", minWidth: 0, minHeight: 0 },
+              showGraph && React.createElement(MiniGraph, { tick: tick, isDimmed: mode !== 'graph', height: graphHeight }),
               React.createElement(Box, { paddingX: 1, flexDirection: "row", height: 1, flexShrink: 0, overflow: "hidden" },
                   React.createElement(Box, { width: 2, flexShrink: 0 }, React.createElement(Text, null, ' ')),
                   React.createElement(Box, { width: 8, flexShrink: 1, overflow: "hidden" }, React.createElement(Text, { color: tColor('gray'), bold: true, dimColor: leftDimmed, wrap: "truncate" }, 'ID')),
@@ -662,10 +696,9 @@ export function Dashboard({ inputBuffer = '', searchTerm = '', onSelect = () => 
                   focused: mode === 'chat', scrollOffset: scrollOffset, width: "100%",
                   tab: chatTab, notes: notes, setNotes: setNotes, isRepoInputMode: repoInputMode,
                   repoName: currentRepoDisplay, agentTitle: activeAgentTitle, agentId: activeAgentId, visibleAgentsCount: VISIBLE_AGENTS,
-                  chatMenuOpen: chatMenuOpen, chatMenuSel: chatMenuSel
+                  chatMenuOpen: chatMenuOpen, chatMenuSel: chatMenuSel, chatVisibleRows: CHAT_VISIBLE_ROWS
               })
           )
-      )
       ),
       React.createElement(Box, { width: "100%", height: 1, overflow: "hidden", flexShrink: 0 },
           React.createElement(Text, { color: "gray", dimColor: true, wrap: "truncate" }, '━'.repeat(200))
