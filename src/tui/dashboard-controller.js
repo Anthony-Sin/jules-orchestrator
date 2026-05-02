@@ -46,6 +46,7 @@ export function useDashboardController() {
 
   const [diffFileSel, setDiffFileSel] = useState(0)
   const [diffScrollOffset, setDiffScrollOffset] = useState(0)
+  const [diffFocus, setDiffFocus] = useState('files') // 'files' or 'content'
 
   // ── Chat state ───────────────────────────────────────────────────
   const [chatInput, setChatInput]           = useState('')
@@ -62,7 +63,8 @@ export function useDashboardController() {
   const [expandedMessages, setExpandedMessages] = useState(new Set())
 
   // Which message is "focused" for keyboard toggle (separate from scroll)
-  const [focusedMsgIdx, setFocusedMsgIdx] = useState(null)
+  // Replaced focusedMsgIdx with chatCursorLine for line-by-line selection.
+  const [chatCursorLine, setChatCursorLine] = useState(0)
 
   const toggleMessageExpand = useCallback((idx) => {
     setExpandedMessages(prev => {
@@ -76,7 +78,7 @@ export function useDashboardController() {
   // Reset expanded messages when session changes
   const resetExpandedMessages = useCallback(() => {
     setExpandedMessages(new Set())
-    setFocusedMsgIdx(null)
+    setChatCursorLine(0)
   }, [])
 
   const [notes, setNotes] = useState(() => store.get('tuiNotes', ''))
@@ -547,6 +549,7 @@ export function useDashboardController() {
     lastLeftMode,
     diffFileSel, setDiffFileSel,
     diffScrollOffset, setDiffScrollOffset,
+    diffFocus, setDiffFocus,
     chatInput, setChatInput,
     messages, setMessages,
     scrollOffset, setScrollOffset,
@@ -559,7 +562,7 @@ export function useDashboardController() {
     latestProgress, setLatestProgress,
     // ── Dropdown state ──────────────────────────────────────────────
     expandedMessages, toggleMessageExpand,
-    focusedMsgIdx, setFocusedMsgIdx,
+    chatCursorLine, setChatCursorLine,
     // ───────────────────────────────────────────────────────────────
     queuedMessages, setQueuedMessages,
     queuedCycleIdx, setQueuedCycleIdx,

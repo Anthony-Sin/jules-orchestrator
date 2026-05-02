@@ -3,8 +3,8 @@
 // Agent messages are collapsible dropdowns. Press Space (in chat mode,
 // while hovering a message with ↑/↓) to toggle expand/collapse.
 
-import React, { useMemo } from 'react'
-import { Box, Text } from 'ink'
+import React, { useMemo, useEffect } from 'react'
+import { Box, Text, useInput } from 'ink'
 import TextInput from 'ink-text-input'
 import { wrapText, buildMarkdownLines } from '../markdown.js'
 import { Notepad } from './notepad.js'
@@ -23,7 +23,7 @@ export function ChatPanel({
   visibleAgentsCount, chatMenuOpen, chatMenuSel, chatVisibleRows = 10, latestProgress, promptPreview,
   // Dropdown props from dashboard-controller
   expandedMessages, toggleMessageExpand,
-  focusedMsgIdx, setFocusedMsgIdx, setScrollOffset,
+  chatCursorLine, setChatCursorLine, setScrollOffset,
 }) {
   const numWidth  = typeof width === 'number' && !isNaN(width) ? width : 40
   const wrapLimit = Math.max(10, numWidth - 4)
@@ -34,28 +34,21 @@ export function ChatPanel({
   // Prevent "Cannot read properties of undefined (reading 'has')"
   const _expanded = expandedMessages instanceof Set ? expandedMessages : new Set();
 
-  // Keep track of the first and last line index of the focused message
-  let focusedMsgStartLine = -1;
-  let focusedMsgEndLine = -1;
-
   // ── Build flat line list with dropdown awareness ──────────────────
   const allLines = useMemo(() => {
     const lines = []
 
     if (tab === 'chat') {
       if (repoName === 'NOT SET') {
-        lines.push({ type: 'label', text: '[SYSTEM]', color: 'gray', isFocusedMsg: false })
+        lines.push({ type: 'label', text: '[SYSTEM]', color: 'gray', msgIdx: -1 })
         for (const l of wrapText('Select a repository (Alt+M) to start.', wrapLimit))
-          lines.push({ type: 'text', text: l, color: 'yellow', isFocusedMsg: false })
-        lines.push({ type: 'gap', isFocusedMsg: false })
+          lines.push({ type: 'text', text: l, color: 'yellow', msgIdx: -1 })
+        lines.push({ type: 'gap', msgIdx: -1 })
         return lines
       }
 
       for (let msgIdx = 0; msgIdx < messages.length; msgIdx++) {
         const m = messages[msgIdx]
-        const isFocusedMsg = focusedMsgIdx === msgIdx
-
-        if (isFocusedMsg) focusedMsgStartLine = lines.length;
 
         if (m.role === 'agent') {
           // Build full markdown lines for this message
@@ -68,7 +61,6 @@ export function ChatPanel({
           const chevron     = isOpen ? '▼' : '▶'
           const lineCount   = mdLines.length
           const countSuffix = isLong ? ` ${lineCount}L` : ''
-          const focusBadge  = isFocusedMsg && focused ? ' ◀' : ''
 
           lines.push({
             type:     'dropdown-header',
@@ -77,20 +69,18 @@ export function ChatPanel({
             isLong,
             chevron,
             countSuffix,
-            focusBadge,
-            color:    isFocusedMsg && focused ? 'magentaBright' : (focused ? 'magenta' : 'gray'),
-            isFocusedMsg
+            color:    focused ? 'magenta' : 'gray'
           })
 
           if (isOpen) {
-            for (const ml of mdLines) lines.push({ ...ml, isFocusedMsg })
+            for (const ml of mdLines) lines.push({ ...ml, msgIdx })
           } else {
             // Show a brief preview (first PREVIEW_LINES of plain text)
             const previewLines = mdLines
               .filter(l => l.type === 'text' || (l.type === 'jsx'))
               .slice(0, PREVIEW_LINES)
             for (const pl of previewLines) {
-              lines.push({ ...pl, _isPreview: true, isFocusedMsg })
+              lines.push({ ...pl, _isPreview: true, msgIdx })
             }
             // "… N more lines" hint
             const hidden = lineCount - previewLines.length
@@ -99,71 +89,79 @@ export function ChatPanel({
                 type: 'more-hint',
                 hidden,
                 msgIdx,
-                focused,
-                isFocusedMsg
+                focused
               })
             }
           }
 
-          lines.push({ type: 'gap', isFocusedMsg })
+          lines.push({ type: 'gap', msgIdx })
 
         } else if (m.role === 'system') {
-          lines.push({ type: 'label', text: '[SYS]', color: 'gray', isFocusedMsg })
+          lines.push({ type: 'label', text: '[SYS]', color: 'gray', msgIdx })
           for (const l of wrapText(m.text, wrapLimit))
-            lines.push({ type: 'text', text: l, color: 'gray', isFocusedMsg })
-          lines.push({ type: 'gap', isFocusedMsg })
+            lines.push({ type: 'text', text: l, color: 'gray', msgIdx })
+          lines.push({ type: 'gap', msgIdx })
 
         } else {
           // user
           lines.push({
             type:  'label',
             text:  'you',
-            color: isFocusedMsg && focused ? 'cyanBright' : 'cyan',
-            isFocusedMsg
+            color: focused ? 'cyan' : 'gray',
+            msgIdx
           })
           for (const l of wrapText(m.text, wrapLimit))
-            lines.push({ type: 'text', text: l, color: focused ? 'cyan' : 'gray', isFocusedMsg })
-          lines.push({ type: 'gap', isFocusedMsg })
+            lines.push({ type: 'text', text: l, color: focused ? 'cyan' : 'gray', msgIdx })
+          lines.push({ type: 'gap', msgIdx })
         }
-
-        if (isFocusedMsg) focusedMsgEndLine = lines.length - 1;
       }
     }
 
     return lines
-  }, [messages, wrapLimit, tab, repoName, focused, _expanded, focusedMsgIdx])
+  }, [messages, wrapLimit, tab, repoName, focused, _expanded])
 
   const MESSAGE_ROWS = Math.max(2, chatVisibleRows)
   const total   = allLines.length
   const start   = Math.max(0, total - MESSAGE_ROWS - scrollOffset)
   const visible = allLines.slice(start, start + MESSAGE_ROWS)
 
-  // ── Auto-scroll to keep focused message in view ───────────────────
-  React.useEffect(() => {
-    if (!focused || tab !== 'chat' || !setScrollOffset) return;
-    if (focusedMsgIdx === null || focusedMsgStartLine === -1) return;
+  // ── Line-by-line selection hook ───────────────────
+  useInput((input, key) => {
+    if (!focused || tab !== 'chat') return
 
-    // The currently visible window is from `start` to `start + MESSAGE_ROWS - 1`.
-    const currentStart = total - MESSAGE_ROWS - scrollOffset;
-    const currentEnd = currentStart + MESSAGE_ROWS - 1;
+    if (key.upArrow) {
+      setChatCursorLine(l => Math.max(0, l - 1))
+      return
+    }
+    if (key.downArrow) {
+      setChatCursorLine(l => Math.min(total > 0 ? total - 1 : 0, l + 1))
+      return
+    }
+    if (key.meta && input === ' ') {
+      if (allLines[chatCursorLine] && allLines[chatCursorLine].msgIdx >= 0) {
+        toggleMessageExpand(allLines[chatCursorLine].msgIdx)
+      }
+      return
+    }
+  })
 
-    // If the top of the focused message is above the viewable area,
-    // we must increase scrollOffset to show it.
-    if (focusedMsgStartLine < currentStart) {
-      const neededScroll = total - MESSAGE_ROWS - focusedMsgStartLine;
-      setScrollOffset(Math.max(0, neededScroll));
+  // ── Auto-scroll to keep focused line in view ───────────────────
+  useEffect(() => {
+    if (chatCursorLine >= total && total > 0) {
+      setChatCursorLine(total - 1)
     }
-    // If the bottom of the focused message is below the viewable area,
-    // we must decrease scrollOffset to show it.
-    else if (focusedMsgEndLine > currentEnd) {
-      // Calculate how much we need to shift.
-      // E.g., if end line is at 50, and viewable ends at 48, we need viewable end to be at least 50.
-      // which means currentStart must be at least 50 - MESSAGE_ROWS + 1
-      const neededStart = focusedMsgEndLine - MESSAGE_ROWS + 1;
-      const neededScroll = total - MESSAGE_ROWS - neededStart;
-      setScrollOffset(Math.max(0, neededScroll));
+
+    if (!focused || tab !== 'chat' || !setScrollOffset || total === 0) return
+
+    const currentStart = total - MESSAGE_ROWS - scrollOffset
+    const currentEnd = currentStart + MESSAGE_ROWS - 1
+
+    if (chatCursorLine < currentStart) {
+      setScrollOffset(total - MESSAGE_ROWS - chatCursorLine)
+    } else if (chatCursorLine > currentEnd) {
+      setScrollOffset(total - MESSAGE_ROWS - (chatCursorLine - MESSAGE_ROWS + 1))
     }
-  }, [focusedMsgIdx, focusedMsgStartLine, focusedMsgEndLine, total, MESSAGE_ROWS, scrollOffset, focused, tab, setScrollOffset]);
+  }, [chatCursorLine, total, MESSAGE_ROWS, scrollOffset, focused, tab, setScrollOffset, setChatCursorLine])
 
   const isNewSession = chatTargetMode === 'CREATE_ORCHESTRATOR' ||
     (!chatTargetMode && agentId === 'NEW TASK')
@@ -273,11 +271,12 @@ export function ChatPanel({
               width: wrapLimit
             })
           : visible.map((l, i) => {
-            // Check if this specific line belongs to the focused message
-            const isFoc = l.isFocusedMsg && focused && tab === 'chat';
+            // Check if this specific line is currently focused
+            const globalLineIdx = start + i;
+            const isFoc = globalLineIdx === chatCursorLine && focused && tab === 'chat';
             
-            // Subtle but clear left border for the active message block
-            const prefixElt = React.createElement(Text, { color: 'cyanBright' }, isFoc ? '┃ ' : '  ');
+            // Highlight the exact focused line
+            const prefixElt = React.createElement(Text, { color: 'cyanBright' }, isFoc ? '▶ ' : '  ');
 
             // ── Dropdown header ──
             if (l.type === 'dropdown-header') {
@@ -296,11 +295,8 @@ export function ChatPanel({
                 l.countSuffix && React.createElement(Text, {
                   color: 'gray', dimColor: true, wrap: 'truncate'
                 }, l.countSuffix),
-                l.focusBadge && React.createElement(Text, {
-                  color: 'magentaBright', wrap: 'truncate'
-                }, l.focusBadge),
                 // Key hint for focused message
-                l.isLong && focused && React.createElement(Text, {
+                l.isLong && isFoc && React.createElement(Text, {
                   color: 'gray', dimColor: true, wrap: 'truncate'
                 }, '  [alt+spc]')
               )
