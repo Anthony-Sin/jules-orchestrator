@@ -46,6 +46,29 @@ export function useDashboardController() {
   const [chatMenuSel, setChatMenuSel]       = useState(0)
   const [chatTargetMode, setChatTargetMode] = useState('CREATE_ORCHESTRATOR')
 
+  // ── Collapsed message dropdowns ──────────────────────────────────
+  // Tracks which message indices are EXPANDED (default: all collapsed).
+  // Key: message index (stable per session load). Value: true = expanded.
+  const [expandedMessages, setExpandedMessages] = useState(new Set())
+
+  // Which message is "focused" for keyboard toggle (separate from scroll)
+  const [focusedMsgIdx, setFocusedMsgIdx] = useState(null)
+
+  const toggleMessageExpand = useCallback((idx) => {
+    setExpandedMessages(prev => {
+      const next = new Set(prev)
+      if (next.has(idx)) next.delete(idx)
+      else next.add(idx)
+      return next
+    })
+  }, [])
+
+  // Reset expanded messages when session changes
+  const resetExpandedMessages = useCallback(() => {
+    setExpandedMessages(new Set())
+    setFocusedMsgIdx(null)
+  }, [])
+
   const [notes, setNotes] = useState(() => store.get('tuiNotes', ''))
 
   // ── Session tracking ─────────────────────────────────────────────
@@ -235,8 +258,6 @@ export function useDashboardController() {
       try {
         const lastId = lastActivityIds[selectedSessionId]
 
-        // Use pagination token if possible, or we could fetch standard.
-        // The problem mentions the fetch itself is unpaginated so we do a standard fetch.
         const res  = await getAllActivities(selectedSessionId)
         const acts = res.activities || res || []
 
@@ -246,85 +267,81 @@ export function useDashboardController() {
           const sorted      = acts.sort((a, b) =>
             new Date(a.createTime || 0) - new Date(b.createTime || 0))
 
-          for (const act of sorted) {
-            if (lastId && act.name === lastId) {
-              foundNew = true;
-              continue;
-            }
-            if (!lastId || foundNew) {
-              if (!lastId) foundNew = true;
-              if (act.userMessaged?.userMessage?.trim()) {
-                newMessages.push({ role: 'user', text: act.userMessaged.userMessage })
-              } else if (act.agentMessaged?.agentMessage?.trim()) {
-                let msgText = act.agentMessaged.agentMessage;
-                // Clean up raw tool call blobs for better UI
-                try {
-                   if (msgText.includes('"function"')) {
-                       let jsonStr = '';
-                       const codeBlockRegex = /```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/;
-                       const match = codeBlockRegex.exec(msgText);
-                       if (match) {
-                           jsonStr = match[1];
-                       } else {
-                           const start = msgText.indexOf('[{');
-                           const end = msgText.lastIndexOf('}]');
-                           if (start !== -1 && end !== -1 && end > start) {
-                               jsonStr = msgText.substring(start, end + 2);
-                           }
-                       }
-                       if (jsonStr) {
-                           const parsedArr = JSON.parse(jsonStr);
-                           if (Array.isArray(parsedArr)) {
-                              let toolNames = [];
-                              for (const tc of parsedArr) {
-                                 if (tc && tc.function && tc.function.name) {
-                                    let name = tc.function.name;
-                                    if (name === 'dispatch_sub_agent') {
-                                        try {
-                                            const args = JSON.parse(tc.function.arguments);
-                                            name = `dispatch_sub_agent (${args.module_name})`;
-                                        } catch(e) {}
-                                    }
-                                    toolNames.push(name);
-                                 }
-                              }
-                              if (toolNames.length > 0) {
-                                  msgText = msgText.replace(jsonStr, `\n\n⚙️ [TOOL CALLS: ${toolNames.join(', ')}]\n\n`).trim();
-                              }
-                           }
-                       }
-                   }
-                } catch (e) {}
-                newMessages.push({ role: 'agent', text: msgText })
-              } else if (act.originator === 'agent' || act.originator === 'system') {
-                let text = act.description || ''
-                if (act.planGenerated) {
-                  const stepsStr = act.planGenerated.plan?.steps?.map(s => `  - ${s.title}: ${s.description}`).join('\n') || ''
-                  text += '\n📋 Plan Generated:\n' + stepsStr
-                }
-                if (act.planApproved) text += '\n✅ Plan Approved'
-                if (act.progressUpdated) text += `\n🔄 Progress: ${act.progressUpdated.title} - ${act.progressUpdated.description}`
-                if (act.sessionCompleted) text += '\n🎉 Session Completed!'
-                if (act.sessionFailed) text += `\n❌ Session Failed: ${act.sessionFailed.reason}`
-                if (act.artifacts && act.artifacts.length > 0) {
-                  act.artifacts.forEach(art => {
-                    if (art.changeSet?.gitPatch) {
-                      text += `\n💻 Code Changes Ready:\n${art.changeSet.gitPatch.suggestedCommitMessage || 'Code Changes'}`
+          const lastIndex = lastId ? sorted.findIndex(a => a.name === lastId) : -1
+
+          for (let i = lastIndex + 1; i < sorted.length; i++) {
+            const act = sorted[i]
+            foundNew = true
+            if (act.userMessaged?.userMessage?.trim()) {
+              newMessages.push({ role: 'user', text: act.userMessaged.userMessage })
+            } else if (act.agentMessaged?.agentMessage?.trim()) {
+              let msgText = act.agentMessaged.agentMessage;
+              try {
+                if (msgText.includes('"function"')) {
+                  let jsonStr = '';
+                  const codeBlockRegex = /```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/;
+                  const match = codeBlockRegex.exec(msgText);
+                  if (match) {
+                    jsonStr = match[1];
+                  } else {
+                    const start = msgText.indexOf('[{');
+                    const end = msgText.lastIndexOf('}]');
+                    if (start !== -1 && end !== -1 && end > start) {
+                      jsonStr = msgText.substring(start, end + 2);
                     }
-                    if (art.bashOutput) {
-                      text += `\n⚙️ Command Run: \`${art.bashOutput.command}\`\nOutput: ${art.bashOutput.output?.substring(0, 100)}...`
+                  }
+                  if (jsonStr) {
+                    const parsedArr = JSON.parse(jsonStr);
+                    if (Array.isArray(parsedArr)) {
+                      let toolNames = [];
+                      for (const tc of parsedArr) {
+                        if (tc && tc.function && tc.function.name) {
+                          let name = tc.function.name;
+                          if (name === 'dispatch_sub_agent') {
+                            try {
+                              const args = JSON.parse(tc.function.arguments);
+                              name = `dispatch_sub_agent (${args.module_name})`;
+                            } catch(e) {}
+                          }
+                          toolNames.push(name);
+                        }
+                      }
+                      if (toolNames.length > 0) {
+                        msgText = msgText.replace(jsonStr, `\n\n⚙️ [TOOL CALLS: ${toolNames.join(', ')}]\n\n`).trim();
+                      }
                     }
-                  })
+                  }
                 }
-                if (text.trim()) newMessages.push({ role: act.originator, text })
+              } catch (e) {}
+              newMessages.push({ role: 'agent', text: msgText })
+            } else if (act.originator === 'agent' || act.originator === 'system') {
+              let text = act.description || ''
+              if (act.planGenerated) {
+                const stepsStr = act.planGenerated.plan?.steps?.map(s => `  - ${s.title}: ${s.description}`).join('\n') || ''
+                text += '\n📋 Plan Generated:\n' + stepsStr
               }
+              if (act.planApproved) text += '\n✅ Plan Approved'
+              if (act.progressUpdated) text += `\n🔄 Progress: ${act.progressUpdated.title} - ${act.progressUpdated.description}`
+              if (act.sessionCompleted) text += '\n🎉 Session Completed!'
+              if (act.sessionFailed) text += `\n❌ Session Failed: ${act.sessionFailed.reason}`
+              if (act.artifacts && act.artifacts.length > 0) {
+                act.artifacts.forEach(art => {
+                  if (art.changeSet?.gitPatch) {
+                    text += `\n💻 Code Changes Ready:\n${art.changeSet.gitPatch.suggestedCommitMessage || 'Code Changes'}`
+                  }
+                  if (art.bashOutput) {
+                    text += `\n⚙️ Command Run: \`${art.bashOutput.command}\`\nOutput: ${art.bashOutput.output?.substring(0, 100)}...`
+                  }
+                })
+              }
+              if (text.trim()) newMessages.push({ role: act.originator, text })
+            }
           }
 
           if (newMessages.length > 0) {
             setMessages(m => [...m, ...newMessages])
             setLastActivityIds(prev => ({ ...prev, [selectedSessionId]: sorted[sorted.length - 1].name }))
           } else if (foundNew && sorted.length > 0) {
-            // We saw new activities, but they didn't generate viewable messages
             setLastActivityIds(prev => ({ ...prev, [selectedSessionId]: sorted[sorted.length - 1].name }))
           }
         }
@@ -373,6 +390,7 @@ export function useDashboardController() {
     setChatTargetMode('TALK_TO_SELECTED_AGENT')
     setMode('chat')
     setScrollOffset(0)
+    resetExpandedMessages()
 
     getAllActivities(agent.id).then(res => {
       const acts    = res.activities || res || []
@@ -385,41 +403,41 @@ export function useDashboardController() {
           } else if (act.agentMessaged?.agentMessage?.trim()) {
             let msgText = act.agentMessaged.agentMessage;
             try {
-               if (msgText.includes('"function"')) {
-                   let jsonStr = '';
-                   const codeBlockRegex = /```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/;
-                   const match = codeBlockRegex.exec(msgText);
-                   if (match) {
-                       jsonStr = match[1];
-                   } else {
-                       const start = msgText.indexOf('[{');
-                       const end = msgText.lastIndexOf('}]');
-                       if (start !== -1 && end !== -1 && end > start) {
-                           jsonStr = msgText.substring(start, end + 2);
-                       }
-                   }
-                   if (jsonStr) {
-                       const parsedArr = JSON.parse(jsonStr);
-                       if (Array.isArray(parsedArr)) {
-                          let toolNames = [];
-                          for (const tc of parsedArr) {
-                             if (tc && tc.function && tc.function.name) {
-                                let name = tc.function.name;
-                                if (name === 'dispatch_sub_agent') {
-                                    try {
-                                        const args = JSON.parse(tc.function.arguments);
-                                        name = `dispatch_sub_agent (${args.module_name})`;
-                                    } catch(e) {}
-                                }
-                                toolNames.push(name);
-                             }
-                          }
-                          if (toolNames.length > 0) {
-                              msgText = msgText.replace(jsonStr, `\n\n⚙️ [TOOL CALLS: ${toolNames.join(', ')}]\n\n`).trim();
-                          }
-                       }
-                   }
-               }
+              if (msgText.includes('"function"')) {
+                let jsonStr = '';
+                const codeBlockRegex = /```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/;
+                const match = codeBlockRegex.exec(msgText);
+                if (match) {
+                  jsonStr = match[1];
+                } else {
+                  const start = msgText.indexOf('[{');
+                  const end = msgText.lastIndexOf('}]');
+                  if (start !== -1 && end !== -1 && end > start) {
+                    jsonStr = msgText.substring(start, end + 2);
+                  }
+                }
+                if (jsonStr) {
+                  const parsedArr = JSON.parse(jsonStr);
+                  if (Array.isArray(parsedArr)) {
+                    let toolNames = [];
+                    for (const tc of parsedArr) {
+                      if (tc && tc.function && tc.function.name) {
+                        let name = tc.function.name;
+                        if (name === 'dispatch_sub_agent') {
+                          try {
+                            const args = JSON.parse(tc.function.arguments);
+                            name = `dispatch_sub_agent (${args.module_name})`;
+                          } catch(e) {}
+                        }
+                        toolNames.push(name);
+                      }
+                    }
+                    if (toolNames.length > 0) {
+                      msgText = msgText.replace(jsonStr, `\n\n⚙️ [TOOL CALLS: ${toolNames.join(', ')}]\n\n`).trim();
+                    }
+                  }
+                }
+              }
             } catch (e) {}
             history.push({ role: 'agent', text: msgText })
           } else if (act.originator === 'agent' || act.originator === 'system') {
@@ -444,7 +462,7 @@ export function useDashboardController() {
     }).catch(e => {
       setMessages([{ role: 'system', text: `Error loading history: ${e.message}` }])
     })
-  }, [])
+  }, [resetExpandedMessages])
 
   async function handleSend(val) {
     if (!val.trim()) return
@@ -516,6 +534,10 @@ export function useDashboardController() {
     chatTargetMode, setChatTargetMode,
     notes, setNotes,
     selectedSessionId, setSelectedSessionId,
+    // ── Dropdown state ──────────────────────────────────────────────
+    expandedMessages, toggleMessageExpand,
+    focusedMsgIdx, setFocusedMsgIdx,
+    // ───────────────────────────────────────────────────────────────
     queuedMessages, setQueuedMessages,
     repoInputMode, setRepoInputMode,
     repoInput, setRepoInput,

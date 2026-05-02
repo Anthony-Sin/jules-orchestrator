@@ -1,60 +1,132 @@
 // ── components/chat.js ───────────────────────────────────────────
 // ChatPanel — the right-side chat + notes panel.
+// Agent messages are collapsible dropdowns. Press Space (in chat mode,
+// while hovering a message with ↑/↓) to toggle expand/collapse.
 
 import React, { useMemo } from 'react'
 import { Box, Text } from 'ink'
 import TextInput from 'ink-text-input'
 import { wrapText, buildMarkdownLines } from '../markdown.js'
 
+// How many lines an agent message must exceed before it gets collapsed by default
+const COLLAPSE_THRESHOLD = 4
+// Max preview lines shown when collapsed
+const PREVIEW_LINES = 2
+
 export function ChatPanel({
-  messages, input, onChange, onSubmit,
-  focused, scrollOffset, width, tab,
+  messages = [], input, onChange, onSubmit,
+  focused, scrollOffset = 0, width, tab,
   notes, setNotes, isRepoInputMode,
   repoName, agentTitle, agentId,
   chatTargetMode,
-  visibleAgentsCount, chatMenuOpen, chatMenuSel, chatVisibleRows
+  visibleAgentsCount, chatMenuOpen, chatMenuSel, chatVisibleRows = 10,
+  // Dropdown props from dashboard-controller
+  expandedMessages, toggleMessageExpand,
+  focusedMsgIdx, setFocusedMsgIdx,
 }) {
   const numWidth  = typeof width === 'number' && !isNaN(width) ? width : 40
   const wrapLimit = Math.max(10, numWidth - 4)
 
-  // Warn when input overflows past 4 visible lines
   const isOverflowing = tab === 'chat' && (input || '').length > wrapLimit * 4
 
+  // ── SAFEGUARD ──────────────────────────────────────────────────────
+  // Prevent "Cannot read properties of undefined (reading 'has')"
+  const _expanded = expandedMessages instanceof Set ? expandedMessages : new Set();
+
+  // ── Build flat line list with dropdown awareness ──────────────────
   const allLines = useMemo(() => {
     const lines = []
 
     if (tab === 'chat') {
       if (repoName === 'NOT SET') {
-        lines.push({ type: 'label', text: '  [SYSTEM]', color: 'gray' })
+        lines.push({ type: 'label', text: '[SYSTEM]', color: 'gray', isFocusedMsg: false })
         for (const l of wrapText('Select a repository (Alt+M) to start.', wrapLimit))
-          lines.push({ type: 'text', text: l, color: 'yellow' })
-        lines.push({ type: 'gap' })
-      } else {
-        for (const m of messages) {
-          if (m.role === 'agent') {
-            lines.push({ type: 'label', text: '▸ AGENT', color: focused ? 'magenta' : 'gray' })
-            for (const ml of buildMarkdownLines(m.text, wrapLimit, focused)) lines.push(ml)
-            lines.push({ type: 'gap' })
-          } else if (m.role === 'system') {
-            lines.push({ type: 'label', text: '  [SYS]', color: 'gray' })
-            for (const l of wrapText(m.text, wrapLimit))
-              lines.push({ type: 'text', text: l, color: 'gray' })
-            lines.push({ type: 'gap' })
+          lines.push({ type: 'text', text: l, color: 'yellow', isFocusedMsg: false })
+        lines.push({ type: 'gap', isFocusedMsg: false })
+        return lines
+      }
+
+      for (let msgIdx = 0; msgIdx < messages.length; msgIdx++) {
+        const m = messages[msgIdx]
+        const isFocusedMsg = focusedMsgIdx === msgIdx
+
+        if (m.role === 'agent') {
+          // Build full markdown lines for this message
+          const mdLines = buildMarkdownLines(m.text, wrapLimit, focused)
+          const isLong  = mdLines.length > COLLAPSE_THRESHOLD
+          const isOpen  = !isLong || _expanded.has(msgIdx)
+
+          // ── Dropdown header row ──
+          // Shows: ▸ AGENT  [▼ expanded | ▶ collapsed]  (N lines)
+          const chevron     = isOpen ? '▼' : '▶'
+          const lineCount   = mdLines.length
+          const countSuffix = isLong ? ` ${lineCount}L` : ''
+          const focusBadge  = isFocusedMsg && focused ? ' ◀' : ''
+
+          lines.push({
+            type:     'dropdown-header',
+            msgIdx,
+            isOpen,
+            isLong,
+            chevron,
+            countSuffix,
+            focusBadge,
+            color:    isFocusedMsg && focused ? 'magentaBright' : (focused ? 'magenta' : 'gray'),
+            isFocusedMsg
+          })
+
+          if (isOpen) {
+            for (const ml of mdLines) lines.push({ ...ml, isFocusedMsg })
           } else {
-            lines.push({ type: 'label', text: '  you', color: 'cyan' })
-            for (const l of wrapText(m.text, wrapLimit))
-              lines.push({ type: 'text', text: l, color: focused ? 'cyan' : 'gray' })
-            lines.push({ type: 'gap' })
+            // Show a brief preview (first PREVIEW_LINES of plain text)
+            const previewLines = mdLines
+              .filter(l => l.type === 'text' || (l.type === 'jsx'))
+              .slice(0, PREVIEW_LINES)
+            for (const pl of previewLines) {
+              lines.push({ ...pl, _isPreview: true, isFocusedMsg })
+            }
+            // "… N more lines" hint
+            const hidden = lineCount - previewLines.length
+            if (hidden > 0) {
+              lines.push({
+                type: 'more-hint',
+                hidden,
+                msgIdx,
+                focused,
+                isFocusedMsg
+              })
+            }
           }
+
+          lines.push({ type: 'gap', isFocusedMsg })
+
+        } else if (m.role === 'system') {
+          lines.push({ type: 'label', text: '[SYS]', color: 'gray', isFocusedMsg })
+          for (const l of wrapText(m.text, wrapLimit))
+            lines.push({ type: 'text', text: l, color: 'gray', isFocusedMsg })
+          lines.push({ type: 'gap', isFocusedMsg })
+
+        } else {
+          // user
+          lines.push({
+            type:  'label',
+            text:  'you',
+            color: isFocusedMsg && focused ? 'cyanBright' : 'cyan',
+            isFocusedMsg
+          })
+          for (const l of wrapText(m.text, wrapLimit))
+            lines.push({ type: 'text', text: l, color: focused ? 'cyan' : 'gray', isFocusedMsg })
+          lines.push({ type: 'gap', isFocusedMsg })
         }
       }
     } else {
+      // Notes tab
       for (const l of wrapText(notes || 'Type your notes here...', wrapLimit))
-        lines.push({ type: 'text', text: l, color: focused ? 'white' : 'gray' })
+        lines.push({ type: 'text', text: l, color: focused ? 'white' : 'gray', isFocusedMsg: false })
     }
 
     return lines
-  }, [messages, wrapLimit, tab, repoName, focused, notes])
+  }, [messages, wrapLimit, tab, repoName, focused, notes, _expanded, focusedMsgIdx])
 
   const MESSAGE_ROWS = Math.max(2, chatVisibleRows)
   const total   = allLines.length
@@ -72,53 +144,72 @@ export function ChatPanel({
       ? agentTitle.substring(0, maxTitleLen) + '…'
       : (agentTitle || 'orchestrator')
 
+  // Count expandable messages for the hint in header
+  const agentMsgCount = messages.filter(m => m.role === 'agent').length
+  const collapsedCount = messages.filter((m, i) =>
+    m.role === 'agent' &&
+    buildMarkdownLines(m.text, wrapLimit, focused).length > COLLAPSE_THRESHOLD &&
+    !_expanded.has(i)
+  ).length
+
   return React.createElement(Box, {
     flexDirection: 'column', width,
     paddingLeft: 1, flexShrink: 0, minHeight: 0, overflow: 'hidden'
   },
-    // ── Header ──
-    React.createElement(Box, { flexShrink: 0, height: 1, minWidth: 0, overflow: 'hidden', flexDirection: 'row' },
-      isNewSession ? (
-        tab === 'chat' ? (
-          React.createElement(React.Fragment, null,
-            React.createElement(Text, { color: 'greenBright', bold: true, wrap: 'truncate' }, '✦ NEW SESSION  |  '),
-            React.createElement(Text, { color: 'gray', bold: true, dimColor: true, wrap: 'truncate' }, 'NOTES')
-          )
+    // ── Header ──────────────────────────────────────────────────────
+    React.createElement(Box, {
+      flexShrink: 0, height: 1, minWidth: 0,
+      overflow: 'hidden', flexDirection: 'row', justifyContent: 'space-between'
+    },
+      React.createElement(Box, { flexDirection: 'row', minWidth: 0, overflow: 'hidden', flexShrink: 1 },
+        isNewSession ? (
+          tab === 'chat'
+            ? React.createElement(React.Fragment, null,
+                React.createElement(Text, { color: 'greenBright', bold: true, wrap: 'truncate' }, '✦ NEW SESSION  |  '),
+                React.createElement(Text, { color: 'gray', bold: true, dimColor: true, wrap: 'truncate' }, 'NOTES')
+              )
+            : React.createElement(React.Fragment, null,
+                React.createElement(Text, { color: 'greenBright', bold: true, wrap: 'truncate' }, '✦ NEW SESSION  |  '),
+                React.createElement(Text, { color: 'gray', bold: true, dimColor: true, wrap: 'truncate' }, 'CHAT')
+              )
         ) : (
-          React.createElement(React.Fragment, null,
-            React.createElement(Text, { color: 'greenBright', bold: true, wrap: 'truncate' }, '✦ NEW SESSION  |  '),
-            React.createElement(Text, { color: 'gray', bold: true, dimColor: true, wrap: 'truncate' }, 'CHAT')
-          )
-        )
-      ) : (
-        tab === 'chat' ? (
-          React.createElement(React.Fragment, null,
-            React.createElement(Text, { color: focused ? 'cyanBright' : 'gray', bold: true, wrap: 'truncate' }, `▌ CHAT: ${shortTitle}  |  `),
-            React.createElement(Text, { color: 'gray', bold: true, dimColor: true, wrap: 'truncate' }, 'NOTES')
-          )
-        ) : (
-          React.createElement(React.Fragment, null,
-            React.createElement(Text, { color: focused ? 'cyanBright' : 'gray', bold: true, wrap: 'truncate' }, `▌ NOTES: ${shortTitle}  |  `),
-            React.createElement(Text, { color: 'gray', bold: true, dimColor: true, wrap: 'truncate' }, 'CHAT')
-          )
+          tab === 'chat'
+            ? React.createElement(React.Fragment, null,
+                React.createElement(Text, { color: focused ? 'cyanBright' : 'gray', bold: true, wrap: 'truncate' }, `▌ CHAT: ${shortTitle}  |  `),
+                React.createElement(Text, { color: 'gray', bold: true, dimColor: true, wrap: 'truncate' }, 'NOTES')
+              )
+            : React.createElement(React.Fragment, null,
+                React.createElement(Text, { color: focused ? 'cyanBright' : 'gray', bold: true, wrap: 'truncate' }, `▌ NOTES: ${shortTitle}  |  `),
+                React.createElement(Text, { color: 'gray', bold: true, dimColor: true, wrap: 'truncate' }, 'CHAT')
+              )
         )
       ),
-      scrollOffset > 0 && React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' },
-        ` ↑${scrollOffset}`)
+      // Collapsed count badge + scroll hint
+      React.createElement(Box, { flexDirection: 'row', flexShrink: 0, minWidth: 0 },
+        collapsedCount > 0 && focused && tab === 'chat' &&
+          React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' },
+            ` ${collapsedCount} collapsed  `),
+        scrollOffset > 0 &&
+          React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' },
+            `↑${scrollOffset} `)
+      )
     ),
+
+    // ── Header separator ──
     React.createElement(Box, { overflow: 'hidden', flexShrink: 0, height: 1, minWidth: 0 },
       React.createElement(Text, {
-        color: isNewSession ? 'green' : 'gray', dimColor: !isNewSession, wrap: 'truncate'
+        color: isNewSession ? 'green' : 'gray',
+        dimColor: !isNewSession,
+        wrap: 'truncate'
       }, '─'.repeat(100))
     ),
 
-    // ── Message area ──
+    // ── Message area ─────────────────────────────────────────────────
     React.createElement(Box, {
       flexDirection: 'column', height: MESSAGE_ROWS,
       flexShrink: 0, minHeight: 0, overflow: 'hidden',
       justifyContent: (isNewSession && !hasMessages) ? 'center' : 'flex-end'
     },
-      // ── New-session banner (shown when no agent is selected) ──
       (isNewSession && !hasMessages && tab === 'chat')
         ? React.createElement(Box, {
             flexDirection: 'column', alignItems: 'center',
@@ -130,13 +221,10 @@ export function ChatPanel({
               paddingX: 3, paddingY: 1,
               flexDirection: 'column', alignItems: 'center'
             },
-              React.createElement(Text, { color: focused ? 'greenBright' : 'gray', bold: true },
-                '✦  NEW SESSION'),
+              React.createElement(Text, { color: focused ? 'greenBright' : 'gray', bold: true }, '✦  NEW SESSION'),
               React.createElement(Box, { height: 1 }),
-              React.createElement(Text, { color: focused ? 'white' : 'gray', dimColor: !focused },
-                'Your message will spawn a'),
-              React.createElement(Text, { color: focused ? 'white' : 'gray', dimColor: !focused },
-                'fresh orchestrator agent.'),
+              React.createElement(Text, { color: focused ? 'white' : 'gray', dimColor: !focused }, 'Your message will spawn a'),
+              React.createElement(Text, { color: focused ? 'white' : 'gray', dimColor: !focused }, 'fresh orchestrator agent.'),
               React.createElement(Box, { height: 1 }),
               React.createElement(Text, { color: focused ? 'cyan' : 'gray', dimColor: !focused },
                 repoName === 'NOT SET'
@@ -145,32 +233,111 @@ export function ChatPanel({
             )
           )
         : visible.map((l, i) => {
-            if (l.type === 'jsx')
-              return React.createElement(Box, { key: i, height: 1, overflow: 'hidden', minWidth: 0, paddingLeft: 2 }, l.element)
-            if (l.type === 'gap')
+            // Check if this specific line belongs to the focused message
+            const isFoc = l.isFocusedMsg && focused && tab === 'chat';
+            
+            // Subtle but clear left border for the active message block
+            const prefixElt = React.createElement(Text, { color: 'cyanBright' }, isFoc ? '┃ ' : '  ');
+
+            // ── Dropdown header ──
+            if (l.type === 'dropdown-header') {
+              return React.createElement(Box, {
+                key: `dh_${i}`, height: 1, flexDirection: 'row',
+                minWidth: 0, overflow: 'hidden'
+              },
+                prefixElt,
+                React.createElement(Text, {
+                  color: l.color, bold: true, dimColor: !focused, wrap: 'truncate'
+                }, `▸ AGENT `),
+                React.createElement(Text, {
+                  color: l.isOpen ? (focused ? '#7EC8A4' : 'gray') : (focused ? '#FFB347' : 'gray'),
+                  dimColor: !focused, wrap: 'truncate'
+                }, l.chevron),
+                l.countSuffix && React.createElement(Text, {
+                  color: 'gray', dimColor: true, wrap: 'truncate'
+                }, l.countSuffix),
+                l.focusBadge && React.createElement(Text, {
+                  color: 'magentaBright', wrap: 'truncate'
+                }, l.focusBadge),
+                // Key hint for focused message
+                l.isLong && focused && React.createElement(Text, {
+                  color: 'gray', dimColor: true, wrap: 'truncate'
+                }, '  [spc]')
+              )
+            }
+
+            // ── "…N more" hint ──
+            if (l.type === 'more-hint') {
+              return React.createElement(Box, {
+                key: `mh_${i}`, height: 1,
+                minWidth: 0, overflow: 'hidden', flexDirection: 'row'
+              },
+                prefixElt,
+                React.createElement(Text, {
+                  color: focused ? '#FFB347' : 'gray',
+                  dimColor: !focused, wrap: 'truncate'
+                }, `┄ ${l.hidden} more line${l.hidden !== 1 ? 's' : ''} hidden — press `),
+                React.createElement(Text, {
+                  color: focused ? 'white' : 'gray',
+                  bold: true, dimColor: !focused, wrap: 'truncate'
+                }, '[spc]'),
+                React.createElement(Text, {
+                  color: focused ? '#FFB347' : 'gray',
+                  dimColor: !focused, wrap: 'truncate'
+                }, ' to expand')
+              )
+            }
+
+            // ── Standard line types ──
+            if (l.type === 'jsx') {
+              return React.createElement(Box, {
+                key: i, height: 1, overflow: 'hidden', minWidth: 0,
+                opacity: l._isPreview ? 0.6 : 1
+              }, 
+                prefixElt, 
+                l.element
+              )
+            }
+            if (l.type === 'gap') {
               return React.createElement(Box, { key: i, height: 1, minWidth: 0 },
-                React.createElement(Text, null, ' '))
-            if (l.type === 'label')
+                prefixElt
+              )
+            }
+            if (l.type === 'label') {
               return React.createElement(Box, { key: i, height: 1, overflow: 'hidden', minWidth: 0 },
-                React.createElement(Text, { color: l.color, bold: true, dimColor: l.color === 'gray' || !focused, wrap: 'truncate' }, l.text))
-            return React.createElement(Box, { key: i, paddingLeft: 2, height: 1, overflow: 'hidden', minWidth: 0 },
-              React.createElement(Text, { color: l.color, dimColor: !focused, wrap: 'truncate' }, l.text))
+                prefixElt,
+                React.createElement(Text, {
+                  color: l.color, bold: true,
+                  dimColor: (l.color === 'gray' || !focused), wrap: 'truncate'
+                }, l.text)
+              )
+            }
+            
+            // Standard Text Line
+            return React.createElement(Box, {
+              key: i, height: 1, overflow: 'hidden', minWidth: 0
+            },
+              prefixElt,
+              React.createElement(Text, {
+                color: l.color, dimColor: !focused, wrap: 'truncate'
+              }, l.text)
+            )
           })
     ),
 
-    // ── Slash-command menu ──
+    // ── Slash-command menu ──────────────────────────────────────────
     chatMenuOpen && tab === 'chat' && React.createElement(Box, {
       flexDirection: 'column', height: 4,
       borderStyle: 'round', borderColor: 'cyan',
       paddingX: 1, flexShrink: 0, minWidth: 0, overflow: 'hidden'
     },
-      ['Start New Task', 'Start New Orchestrator'].map((opt, i) =>
-        React.createElement(Text, { key: i, color: chatMenuSel === i ? 'cyanBright' : 'gray', wrap: 'truncate' },
-          chatMenuSel === i ? `▶ ${opt}` : `  ${opt}`)
+      ['Start New Task', 'Start New Orchestrator'].map((opt, idx) =>
+        React.createElement(Text, { key: idx, color: chatMenuSel === idx ? 'cyanBright' : 'gray', wrap: 'truncate' },
+          chatMenuSel === idx ? `▶ ${opt}` : `  ${opt}`)
       )
     ),
 
-    // ── Separator (with overflow hint) ──
+    // ── Bottom separator ────────────────────────────────────────────
     React.createElement(Box, { overflow: 'hidden', flexShrink: 0, height: 1, minWidth: 0 },
       isOverflowing
         ? React.createElement(Text, { color: 'red', bold: true, wrap: 'truncate' },
@@ -178,7 +345,7 @@ export function ChatPanel({
         : React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '─'.repeat(100))
     ),
 
-    // ── Input box (camera-window trick to cap at 4 lines) ──
+    // ── Input box ───────────────────────────────────────────────────
     React.createElement(Box, {
       height: Math.min(4, Math.max(1, Math.ceil((input || '').length / wrapLimit))),
       flexShrink: 0, flexDirection: 'column', minWidth: 0, overflow: 'hidden'
@@ -189,8 +356,9 @@ export function ChatPanel({
         flexDirection: 'row', minWidth: 0
       },
         React.createElement(Box, { flexShrink: 0, minWidth: 0 },
-          React.createElement(Text, { color: focused ? 'green' : 'gray', bold: focused, wrap: 'truncate' },
-            focused ? '▶ ' : '▷ ')
+          React.createElement(Text, {
+            color: focused ? 'green' : 'gray', bold: focused, wrap: 'truncate'
+          }, focused ? '▶ ' : '▷ ')
         ),
         React.createElement(Box, { flexGrow: 1, flexShrink: 1, minWidth: 0 },
           React.createElement(Box, { width: Math.max(10, numWidth - 4) },
@@ -198,7 +366,9 @@ export function ChatPanel({
               value:       tab === 'chat' ? input : (notes || ''),
               onChange:    tab === 'chat' ? onChange : (val) => setNotes(val),
               onSubmit:    tab === 'chat' && !chatMenuOpen ? onSubmit : () => {},
-              placeholder: focused ? (tab === 'chat' ? '/ for menu' : 'notes...') : 'Alt+E',
+              placeholder: focused
+                ? (tab === 'chat' ? '/ for menu · ↑↓ nav msgs · spc expand' : 'notes...')
+                : 'Alt+E',
               focus:       focused && !isRepoInputMode
             })
           )
