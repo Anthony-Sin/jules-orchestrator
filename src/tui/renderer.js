@@ -211,6 +211,8 @@ export function Dashboard({ searchTerm = '' }) {
         seen.add(s.id)
       }
     })
+    return mapped
+  }, [sessionsData, sortedIds])
 
     // Then add the sorted items
     sortedIds.forEach(id => {
