@@ -12,8 +12,23 @@ function headers() {
   return { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey() }
 }
 
+const FETCH_TIMEOUT_MS = 15000
+
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController()
+  const id = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal })
+    clearTimeout(id)
+    return res
+  } catch (err) {
+    clearTimeout(id)
+    throw err
+  }
+}
+
 export async function createSession({ prompt, source, startingBranch = 'main', requirePlanApproval = false }) {
-  const res = await fetch(`${DEFAULTS.JULES_API_BASE}/sessions`, {
+  const res = await fetchWithTimeout(`${DEFAULTS.JULES_API_BASE}/sessions`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify({
@@ -28,7 +43,7 @@ export async function createSession({ prompt, source, startingBranch = 'main', r
 }
 
 export async function getSession(sessionId) {
-  const res = await fetch(`${DEFAULTS.JULES_API_BASE}/sessions/${sessionId}`, { headers: headers() })
+  const res = await fetchWithTimeout(`${DEFAULTS.JULES_API_BASE}/sessions/${sessionId}`, { headers: headers() })
   if (!res.ok) throw new Error(`Jules API error ${res.status}`)
   const data = await res.json()
 
@@ -50,14 +65,33 @@ export async function getSessionActivities(sessionId) {
   return getActivities(sessionId)
 }
 
-export async function listSessions() {
-  const res = await fetch(`${DEFAULTS.JULES_API_BASE}/sessions`, { headers: headers() })
+export async function listSessions(pageToken = null) {
+  const url = new URL(`${DEFAULTS.JULES_API_BASE}/sessions`)
+  url.searchParams.append('pageSize', '100')
+  if (pageToken) url.searchParams.append('pageToken', pageToken)
+
+  const res = await fetchWithTimeout(url.toString(), { headers: headers() })
   if (!res.ok) throw new Error(`Jules API error ${res.status}`)
   return res.json()
 }
 
+export async function listAllSessions() {
+  let allSessions = []
+  let pageToken = null
+
+  do {
+    const res = await listSessions(pageToken)
+    if (res.sessions) {
+      allSessions = allSessions.concat(res.sessions)
+    }
+    pageToken = res.nextPageToken
+  } while (pageToken)
+
+  return { sessions: allSessions }
+}
+
 export async function deleteSession(sessionId) {
-  const res = await fetch(`${DEFAULTS.JULES_API_BASE}/sessions/${sessionId}`, {
+  const res = await fetchWithTimeout(`${DEFAULTS.JULES_API_BASE}/sessions/${sessionId}`, {
     method: 'DELETE',
     headers: headers(),
   })
@@ -66,7 +100,7 @@ export async function deleteSession(sessionId) {
 }
 
 export async function sendMessage(sessionId, message) {
-  const res = await fetch(`${DEFAULTS.JULES_API_BASE}/sessions/${sessionId}:sendMessage`, {
+  const res = await fetchWithTimeout(`${DEFAULTS.JULES_API_BASE}/sessions/${sessionId}:sendMessage`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify({ prompt: message }),
@@ -76,7 +110,7 @@ export async function sendMessage(sessionId, message) {
 }
 
 export async function approvePlan(sessionId) {
-  const res = await fetch(`${DEFAULTS.JULES_API_BASE}/sessions/${sessionId}:approvePlan`, {
+  const res = await fetchWithTimeout(`${DEFAULTS.JULES_API_BASE}/sessions/${sessionId}:approvePlan`, {
     method: 'POST',
     headers: headers(),
   })
@@ -89,7 +123,7 @@ export async function getActivities(sessionId, pageToken = null) {
   url.searchParams.append('pageSize', '100')
   if (pageToken) url.searchParams.append('pageToken', pageToken)
 
-  const res = await fetch(url.toString(), { headers: headers() })
+  const res = await fetchWithTimeout(url.toString(), { headers: headers() })
   if (!res.ok) throw new Error(`Jules API error ${res.status}`)
   return res.json()
 }
@@ -123,7 +157,7 @@ export function parseSourceDisplay(source) {
 }
 
 export async function listSources() {
-  const res = await fetch(`${DEFAULTS.JULES_API_BASE}/sources`, { headers: headers() })
+  const res = await fetchWithTimeout(`${DEFAULTS.JULES_API_BASE}/sources`, { headers: headers() })
   if (!res.ok) throw new Error(`Jules API error ${res.status}`)
   const data = await res.json()
 

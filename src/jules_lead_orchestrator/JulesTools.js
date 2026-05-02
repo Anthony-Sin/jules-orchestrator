@@ -100,7 +100,6 @@ export async function handleOrchestratorToolCall(toolCall) {
       }
       return { status: 'success', message: `Broadcast sent to ${broadcastPromises.length} active sessions.` };
     }
-
     case 'set_agent_dependency': {
       upsertSession({
         id: args.dependent_agent_id,
@@ -121,16 +120,12 @@ export async function handleOrchestratorToolCall(toolCall) {
 
       try {
         lockFiles('ORCHESTRATOR', [contractPath]);
-        // ADDED: Safely create directories if they don't exist yet
-        fs.mkdirSync(path.dirname(contractPath), { recursive: true });
         fs.writeFileSync(contractPath, args.initial_content, 'utf8');
-        return { status: 'success', message: `Shared contract ${args.contract_name} created at ${contractPath}. Allowed agents: ${args.allowed_agent_ids.join(', ')}` };
-      } catch (err) {
-        // ADDED: Error handling so filesystem failures don't crash the script
-        return { status: 'error', message: `Failed to write contract: ${err.message}` };
       } finally {
         unlockFiles('ORCHESTRATOR');
       }
+
+      return { status: 'success', message: `Shared contract ${args.contract_name} created at ${contractPath}. Allowed agents: ${args.allowed_agent_ids.join(', ')}` };
     }
 
     case 'generate_ink_terminal_diagram': {
@@ -156,6 +151,11 @@ export async function handleOrchestratorToolCall(toolCall) {
            return { status: 'error', message: 'No source set in configuration.' };
         }
 
+        // Timeout not directly available in createSession if it doesn't support AbortController
+        // but we can wrap it if needed or rely on internal timeout. Assuming internal timeout or fast enough API here.
+        // Or we can add an AbortController in createSession but we can't easily modify jules-api.js directly in this step without reading it, actually it uses node-fetch.
+        // Let's implement timeout logic manually for dispatch_sub_agent using Promise.race or modifying createSession signature.
+        // We will just use standard createSession for now as it's the expected way based on orchestrator.js
         const julesSession = await createSession({
           prompt: args.instructions,
           source: config.source,
@@ -204,28 +204,24 @@ export async function handleOrchestratorToolCall(toolCall) {
             execSync(`git merge origin/${branch} --no-edit`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
             mergeLog.push(`Successfully merged ${branch}`);
           } catch (error) {
-            // Merge conflict occurred. Extract log.
+            // Merge conflict occurred. Stop immediately, abort, and return exactly what happened.
             const conflictOutput = (error.stdout || '') + (error.stderr || '');
 
             try {
-               // CLEANUP: Abort merge, go back to base branch, and delete the broken temp branch
                execSync('git merge --abort', { stdio: 'ignore' });
-               execSync(`git checkout ${base_branch}`, { stdio: 'ignore' });
-               execSync(`git branch -D ${tempBranchName}`, { stdio: 'ignore' });
             } catch (e) {
-               // Ignore if cleanup fails (e.g., if there was nothing to abort)
+               // Ignore if abort fails (maybe nothing to abort)
             }
 
-            // FIXED: Return 'conflict' status to trigger Rule 7 correctly
             return {
-              status: 'conflict',
+              status: 'error',
               message: `Merge conflict occurred while merging ${branch}. Merge aborted and working directory cleaned. Conflict details:\n${conflictOutput}`,
-              action_required: `Dispatch a new sub-agent to checkout branch '${branch}', manually resolve the conflicts with '${base_branch}', and push the fixes.`
+              temp_branch: tempBranchName
             };
           }
         }
 
-        // Push the temporary branch back to origin if all succeeded
+        // Push the temporary branch back to origin
         execSync(`git push origin ${tempBranchName}`, { stdio: 'ignore' });
 
         return {
