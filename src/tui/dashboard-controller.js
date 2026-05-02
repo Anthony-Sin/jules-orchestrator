@@ -116,9 +116,15 @@ export function useDashboardController() {
   useEffect(() => {
     let active = true
     let t = null
+    let lastHash = ''
     const poll = () => {
       if (!active) return
-      setSessionsData(getSessions() || [])
+      const newData = getSessions() || []
+      const currentHash = JSON.stringify(newData)
+      if (currentHash !== lastHash) {
+        lastHash = currentHash
+        setSessionsData(newData)
+      }
       t = setTimeout(poll, 5000)
     }
     t = setTimeout(poll, 5000)
@@ -136,15 +142,20 @@ export function useDashboardController() {
   useEffect(() => {
     let active = true
     let t = null
+    let lastHash = ''
     const poll = () => {
       if (!active) return
       const current = getSessions() || []
-      setSortedIds(
-        current
-          .slice()
-          .sort((a, b) => new Date(b.lastUpdated || b.createdAt || 0).getTime() - new Date(a.lastUpdated || a.createdAt || 0).getTime())
-          .map(s => s.id)
-      )
+      const newSorted = current
+        .slice()
+        .sort((a, b) => new Date(b.lastUpdated || b.createdAt || 0).getTime() - new Date(a.lastUpdated || a.createdAt || 0).getTime())
+        .map(s => s.id)
+
+      const currentHash = JSON.stringify(newSorted)
+      if (currentHash !== lastHash) {
+        lastHash = currentHash
+        setSortedIds(newSorted)
+      }
       t = setTimeout(poll, 5 * 60 * 1000)
     }
     t = setTimeout(poll, 5 * 60 * 1000)
@@ -222,11 +233,15 @@ export function useDashboardController() {
         return
       }
       try {
+        const lastId = lastActivityIds[selectedSessionId]
+
+        // Use pagination token if possible, or we could fetch standard.
+        // The problem mentions the fetch itself is unpaginated so we do a standard fetch.
         const res  = await getAllActivities(selectedSessionId)
         const acts = res.activities || res || []
+
         if (Array.isArray(acts) && acts.length > 0) {
           const newMessages = []
-          const lastId      = lastActivityIds[selectedSessionId]
           let   foundNew    = false
           const sorted      = acts.sort((a, b) =>
             new Date(a.createTime || 0) - new Date(b.createTime || 0))
@@ -303,13 +318,13 @@ export function useDashboardController() {
                 }
                 if (text.trim()) newMessages.push({ role: act.originator, text })
               }
-            }
           }
 
           if (newMessages.length > 0) {
             setMessages(m => [...m, ...newMessages])
             setLastActivityIds(prev => ({ ...prev, [selectedSessionId]: sorted[sorted.length - 1].name }))
-          } else if (!lastId && sorted.length > 0) {
+          } else if (foundNew && sorted.length > 0) {
+            // We saw new activities, but they didn't generate viewable messages
             setLastActivityIds(prev => ({ ...prev, [selectedSessionId]: sorted[sorted.length - 1].name }))
           }
         }
@@ -350,7 +365,7 @@ export function useDashboardController() {
         setQueuedMessages(prev => { const q = { ...prev }; delete q[id]; return q })
       }
     }
-  }, [tick, queuedMessages, AGENTS])
+  }, [queuedMessages, AGENTS])
 
   const openAgentChat = useCallback((agent) => {
     if (!agent) return

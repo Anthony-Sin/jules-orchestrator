@@ -62,6 +62,9 @@ export function Dashboard({ searchTerm = '' }) {
     openAgentChat, handleSend, handleRepoSubmit
   } = useDashboardController()
 
+  // Memoized Table Rows
+  const allRows = React.useMemo(() => buildRows(AGENTS, expandedIds), [AGENTS, expandedIds])
+
   // ── Derived layout ───────────────────────────────────────────────
   const TERMINAL_ROWS = Math.max(10, rows - 1)
   const isWide        = columns >= 80
@@ -187,14 +190,17 @@ export function Dashboard({ searchTerm = '' }) {
       if (chatMenuOpen) {
         if (key.escape)    { setChatMenuOpen(false); setChatInput(''); return }
         if (key.upArrow)   { setChatMenuSel(i => Math.max(0, i - 1)); return }
-        if (key.downArrow) { setChatMenuSel(i => Math.min(2, i + 1)); return }
+        if (key.downArrow) { setChatMenuSel(i => Math.min(1, i + 1)); return }
         if (key.return) {
-          const opts = ['CREATE_ORCHESTRATOR', 'TALK_TO_SELECTED_AGENT', 'TALK_TO_LATEST_ORCHESTRATOR']
+          const opts = ['CREATE_ORCHESTRATOR', 'TALK_TO_LATEST_ORCHESTRATOR']
           setChatTargetMode(opts[chatMenuSel])
           setChatMenuOpen(false)
           setChatInput('')
-          if (chatMenuSel === 0)
-            setMessages(m => [...m, { role: 'system', text: '[SYSTEM] Warning: This will create a new session/task.' }])
+          if (chatMenuSel === 0) {
+            setMessages([{ role: 'system', text: '[SYSTEM] Warning: This will create a new session/task.' }])
+          } else if (chatMenuSel === 1) {
+            setMessages([{ role: 'system', text: '[SYSTEM] Warning: This will start a new Orchestrator.' }])
+          }
           return
         }
         return
@@ -434,7 +440,6 @@ export function Dashboard({ searchTerm = '' }) {
                     ? React.createElement(Box, { flexGrow: 1, alignItems: 'center', justifyContent: 'center' },
                         React.createElement(Text, { color: 'gray', dimColor: true }, 'No agents yet'))
                     : (() => {
-                        const allRows = buildRows(AGENTS, expandedIds)
                         const sessionRows = allRows.filter(r => r.type === 'session')
                         const visibleSessionIdxs = sessionRows.slice(tableOffset, tableOffset + VISIBLE_AGENTS).map(r => AGENTS.indexOf(r.data))
                         const visibleRows = allRows.filter(r => {
