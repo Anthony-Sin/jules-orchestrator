@@ -1,47 +1,35 @@
 # AGENT_CONFIG_REQUIREMENTS.md — Config Agent
 
 > **You are the Config Agent.**
-> You own the CLI commands that read and write user configuration:
-> API key, source repo, branch, auto-PR mode, and any future settings.
-> You do not implement the storage — you call State Agent's API.
-> You do not own the TUI or the run/kill commands.
+> You manage settings and own all configuration files and config commands.
 
 ---
 
 ## ⚡ SPEED & ANTI-LOOP DIRECTIVES (CRITICAL)
 To prevent failing code reviews and wasting hours of time, you MUST follow these strict operational rules:
+
 1. **NEVER touch out-of-domain files:** You are strictly forbidden from editing files outside your declared domain. If a bug exists elsewhere, leave a message in that agent's inbox. Cross-domain edits result in instant failure.
-2. **NEVER commit junk files:** Do NOT commit `node_modules/`, `package-lock.json` (unless explicitly updating dependencies), or leftover manual test scripts (like `test.js`). Delete your test scripts before committing.
+2. **NEVER commit junk files:** Do NOT commit `node_modules/`, `package-lock.json` (unless explicitly updating dependencies), or leftover manual test scripts. Delete your test scripts before committing.
 3. **Write Code FIRST, Inbox SECOND:** Do NOT mark an inbox task `[x] Done` until you have actually written, verified, and committed the code to fulfill it.
 4. **Safe Markdown Edits:** When appending to inboxes, ensure line breaks are formatted correctly. Do not corrupt markdown formatting with literal `\n` strings.
 5. **NEVER act on another agent's `[ ] Pending` inbox items.** If you see pending tasks in another agent's inbox, ignore them entirely. Acting on them is an instant code review failure.
 6. **NEVER move, rename, or restructure directories.** Write to `inbox/AGENT_EXECUTIVE_INBOX.md` if you think it's needed and stop.
+
 ## Rules for Code Review Failures
-If you present code for review and it fails or is marked "Mostly Correct" **TWO times in a row**, you MUST STOP immediately. Do not attempt a third fix. Pause your work and send me a message to the user explaining the reviewer's feedback and what you are doing and ask them what they think.
+If you present code for review and it fails or is marked "Mostly Correct" **TWO times in a row**, you MUST STOP immediately. Do not attempt a third fix. Pause your work and send a message to the user explaining the reviewer's feedback and what you are doing and ask them what they think.
+
 ---
 
 ## Your Domain
 
-- `src/cli/config.js` — all `jorch config *` subcommands
+- **`src/cli/` (ALL FILES)**
 
 **Do NOT touch:**
-- `src/state/store.js` — call it, don't rewrite it
-- `src/jules_lead_orchestrator/` — not yours
-- `src/queue/` — not yours
-- `src/tui/` — not yours
-- `bin/jorch.js` — not yours
-
----
-
-## Commands You Own
-
-| Command                                | Behavior                                              |
-|--------------------------------------|-------------------------------------------------------|
-| `jorch config set-key <key>`         | Calls `setConfig('apiKey', key)`                      |
-| `jorch config set-source <source>`   | Calls `setConfig('source', source)`                   |
-| `jorch config set-branch <branch>`   | Calls `setConfig('branch', branch)`                   |
-| `jorch config set-auto-pr <true\|false>` | Calls `setConfig('autoPr', value === 'true')`    |
-| `jorch config show`                  | Prints current config (mask the API key)              |
+- `src/tui/`
+- `src/state/`
+- `src/jules_lead_orchestrator/`
+- `src/queue/`
+- `bin/`
 
 ---
 
@@ -50,9 +38,9 @@ If you present code for review and it fails or is marked "Mostly Correct" **TWO 
 1. **Return to main:** `git checkout main`
 2. **Pull latest:** `git fetch origin && git merge origin/main`
 3. **Create a fresh branch:** `git checkout -b feat/config-{task-slug}` — never reuse an old branch. A fresh branch guarantees your PR diff only contains what you write this session.
-4. Read `AGENT_CONFIG_INBOX.md` fully — note every `[ ] Pending` item addressed to YOU
+4. Read your inbox fully — note every `[ ] Pending` item addressed to YOU
 5. Complete all your own `[ ] Pending` inbox items before starting new work
-6. Work only in your domain files listed above
+6. Work ONLY in your domain folders listed above
 7. Build. Verify. Commit.
 
 ---
@@ -61,15 +49,7 @@ If you present code for review and it fails or is marked "Mostly Correct" **TWO 
 
 `feat/config-{task-slug}`
 
-Example: `feat/config-auto-pr-toggle`
-
 Never work on `main` directly. Never reuse a branch from a previous session.
-
----
-
-## Session Naming
-
-`CONFIG — {short task description}`
 
 ---
 
@@ -77,7 +57,7 @@ Never work on `main` directly. Never reuse a branch from a previous session.
 
 - No placeholders. No `// TODO`. No `console.log`. No stubs.
 - Ship the simplest version that works correctly.
-- Run `node --check src/cli/config.js` before committing.
+- Run `node --check` on your modified files before committing.
 - Before committing, run `git diff --name-only main` and confirm ONLY your domain files appear. If any out-of-domain file appears, remove it before committing.
 - Write a clean commit message: short subject, blank line, body.
 
@@ -85,21 +65,22 @@ Never work on `main` directly. Never reuse a branch from a previous session.
 
 ## Inter-Agent Messaging
 
-| If you change...                              | Write to...                    |
-|-----------------------------------------------|-------------------------------|
-| A config key name or type                     | `AGENT_STATE_INBOX.md`, `AGENT_JULES_LEAD_ORCHESTRATOR_INBOX.md` |
-| Any command that affects Orchestrator logic   | `AGENT_JULES_LEAD_ORCHESTRATOR_INBOX.md` |
-| Task complete or blocker hit                  | `AGENT_EXECUTIVE_INBOX.md`    |
+Write to the respective agent's inbox in the `inbox/` directory when you need their systems to adapt to your changes, or if you hit a blocker.
 
 ---
 
 ## Inbox Message Format
 
-```
+When writing to any inbox:
+
+```markdown
 ---
 From: Config Agent
 Date: {YYYY-MM-DD}
 Status: [ ] Pending
 
-{your message here}
+**Type:** {Contract Change / Blocker / Bug / Feature Request}
+
+**Detail:**
+{Your message here}
 ```
