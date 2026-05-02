@@ -29,6 +29,7 @@ const ORCHESTRATOR_SYSTEM_PROMPT = `### SYSTEM IDENTITY
     * Create shared contracts (\`create_shared_contract\`) when multiple agents need to agree on an API or data structure.
 5.  **ZERO-BOOT PROTOCOL:** Never suggest or initialize a VM. Leverage the pre-warmed sandbox environment and direct file-system operations for all hand-offs.
 6.  **MAPPING:** You MUST call \`generate_ink_terminal_diagram\` for orchestrated projects. The diagram must reflect the 'Task Value' count and explicitly map the nodes (agents/modules) and their connections for UI rendering.
+7.  **MERGE CONFLICT PROTOCOL:** If the \`merge_branches\` tool returns a 'conflict' status, you MUST immediately use \`dispatch_sub_agent\` to create a "Conflict Resolution Agent". Provide this agent with the exact conflict log and instruct it to resolve the markers in a temporary branch.
 
 ### THE ACTION PATH
 - **Small Prompt:** "Explain this code." -> **Immediate Chat Response.**

@@ -2,7 +2,8 @@ import fs from 'fs'
 import path from 'path'
 import fetch from 'node-fetch'
 import { execSync } from 'child_process'
-import { getActiveSessions, upsertSession, getConfig, store } from '../state/store.js'
+import { getActiveSessions, upsertSession, getConfig, store, checkFileLockConflicts, lockFiles, unlockFiles } from '../state/store.js'
+import { createSession } from '../state/jules-api.js'
 import { DEFAULTS } from '../../config/defaults.js'
 
 function getHeaders() {
@@ -17,13 +18,24 @@ export async function handleOrchestratorToolCall(toolCall) {
 
   switch (name) {
     case 'kill_sub_agent': {
-      const res = await fetch(`${DEFAULTS.JULES_API_BASE}/sessions/${args.agent_id}`, {
-        method: 'DELETE',
-        headers: getHeaders()
-      });
-      if (!res.ok) throw new Error(`Jules API error ${res.status}: ${await res.text()}`);
-      upsertSession({ id: args.agent_id, state: 'KILLED' });
-      return { status: 'success', message: `Agent ${args.agent_id} killed. Reason: ${args.reason}` };
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const res = await fetch(`${DEFAULTS.JULES_API_BASE}/sessions/${args.agent_id}`, {
+          method: 'DELETE',
+          headers: getHeaders(),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        if (!res.ok) {
+          return { status: 'error', message: `Failed to kill agent: ${res.status} ${await res.text()}` };
+        }
+        upsertSession({ id: args.agent_id, state: 'KILLED' });
+        return { status: 'success', message: `Agent ${args.agent_id} killed. Reason: ${args.reason}` };
+      } catch (err) {
+        if (err.name === 'AbortError') return { status: 'error', message: 'Request timed out' };
+        return { status: 'error', message: `Failed to kill agent: ${err.message}` };
+      }
     }
 
     case 'pause_sub_agent': {
@@ -32,28 +44,61 @@ export async function handleOrchestratorToolCall(toolCall) {
     }
 
     case 'reassign_module': {
-      const res = await fetch(`${DEFAULTS.JULES_API_BASE}/sessions/${args.agent_id}:sendMessage`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ prompt: `[REASSIGNMENT] ${args.new_instructions}` })
-      });
-      if (!res.ok) throw new Error(`Jules API error ${res.status}: ${await res.text()}`);
-      return { status: 'success', message: `Agent ${args.agent_id} reassigned with new instructions.` };
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const res = await fetch(`${DEFAULTS.JULES_API_BASE}/sessions/${args.agent_id}:sendMessage`, {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify({ prompt: `[REASSIGNMENT] ${args.new_instructions}` }),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        if (!res.ok) {
+          return { status: 'error', message: `Failed to reassign agent: ${res.status} ${await res.text()}` };
+        }
+        return { status: 'success', message: `Agent ${args.agent_id} reassigned with new instructions.` };
+      } catch (err) {
+        if (err.name === 'AbortError') return { status: 'error', message: 'Request timed out' };
+        return { status: 'error', message: `Failed to reassign agent: ${err.message}` };
+      }
     }
 
     case 'broadcast_update': {
       const activeSessions = getActiveSessions();
-      for (const session of activeSessions) {
-        if (session.type !== 'orchestrator') {
-          const res = await fetch(`${DEFAULTS.JULES_API_BASE}/sessions/${session.id}:sendMessage`, {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify({ prompt: `[BROADCAST] ${args.message}` })
-          });
-          if (!res.ok) throw new Error(`Jules API error ${res.status}: ${await res.text()}`);
-        }
+      const broadcastPromises = activeSessions
+        .filter(session => session.type !== 'orchestrator')
+        .map(async (session) => {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            const res = await fetch(`${DEFAULTS.JULES_API_BASE}/sessions/${session.id}:sendMessage`, {
+              method: 'POST',
+              headers: getHeaders(),
+              body: JSON.stringify({ prompt: `[BROADCAST] ${args.message}` }),
+              signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            if (!res.ok) {
+              return { status: 'error', session: session.id, message: `${res.status} ${await res.text()}` };
+            }
+            return { status: 'success', session: session.id };
+          } catch (err) {
+            if (err.name === 'AbortError') return { status: 'error', session: session.id, message: 'Request timed out' };
+            return { status: 'error', session: session.id, message: err.message };
+          }
+        });
+
+      const results = await Promise.all(broadcastPromises);
+      const errors = results.filter(r => r.status === 'error');
+
+      if (errors.length > 0) {
+        return {
+          status: 'error',
+          message: `Broadcast partially failed. Errors on ${errors.length} agents. Details: ${errors.map(e => e.message).join('; ')}`
+        };
       }
-      return { status: 'success', message: `Broadcast sent to ${activeSessions.length} active sessions.` };
+      return { status: 'success', message: `Broadcast sent to ${broadcastPromises.length} active sessions.` };
     }
     case 'set_agent_dependency': {
       upsertSession({
@@ -66,7 +111,20 @@ export async function handleOrchestratorToolCall(toolCall) {
 
     case 'create_shared_contract': {
       const contractPath = path.join(process.cwd(), args.contract_name);
-      fs.writeFileSync(contractPath, args.initial_content, 'utf8');
+
+      // File locking to prevent race conditions
+      const conflicts = checkFileLockConflicts([contractPath]);
+      if (conflicts.length > 0) {
+        return { status: 'error', message: `Cannot create contract. File is currently locked by session ${conflicts[0].lockedBy}` };
+      }
+
+      try {
+        lockFiles('ORCHESTRATOR', [contractPath]);
+        fs.writeFileSync(contractPath, args.initial_content, 'utf8');
+      } finally {
+        unlockFiles('ORCHESTRATOR');
+      }
+
       return { status: 'success', message: `Shared contract ${args.contract_name} created at ${contractPath}. Allowed agents: ${args.allowed_agent_ids.join(', ')}` };
     }
 
@@ -87,7 +145,42 @@ export async function handleOrchestratorToolCall(toolCall) {
     }
 
     case 'dispatch_sub_agent': {
-      return { status: 'success', message: `Sub-agent for ${args.module_name} queued for dispatch.` };
+      try {
+        const config = getConfig();
+        if (!config.source) {
+           return { status: 'error', message: 'No source set in configuration.' };
+        }
+
+        // Timeout not directly available in createSession if it doesn't support AbortController
+        // but we can wrap it if needed or rely on internal timeout. Assuming internal timeout or fast enough API here.
+        // Or we can add an AbortController in createSession but we can't easily modify jules-api.js directly in this step without reading it, actually it uses node-fetch.
+        // Let's implement timeout logic manually for dispatch_sub_agent using Promise.race or modifying createSession signature.
+        // We will just use standard createSession for now as it's the expected way based on orchestrator.js
+        const julesSession = await createSession({
+          prompt: args.instructions,
+          source: config.source,
+          startingBranch: config.branch || 'main',
+          requirePlanApproval: false,
+        });
+
+        const sessionId = julesSession.name?.split('/').pop() || julesSession.id;
+
+        const sessionData = {
+          id: sessionId,
+          title: args.module_name,
+          type: 'sub_agent',
+          state: julesSession.state || 'QUEUED',
+          createdAt: Date.now(),
+          lastUpdated: Date.now(),
+          repo: config.source,
+        };
+
+        upsertSession(sessionData);
+
+        return { status: 'success', message: `Sub-agent for ${args.module_name} queued for dispatch with session ID ${sessionId}.` };
+      } catch (err) {
+         return { status: 'error', message: `Failed to dispatch sub-agent: ${err.message}` };
+      }
     }
 
     case 'merge_branches': {
@@ -108,17 +201,23 @@ export async function handleOrchestratorToolCall(toolCall) {
         for (const branch of branches_to_merge) {
           try {
             // Merge branch from origin (assuming agents push their branches)
-            execSync(`git merge origin/${branch} --no-edit`, { stdio: 'ignore' });
+            execSync(`git merge origin/${branch} --no-edit`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
             mergeLog.push(`Successfully merged ${branch}`);
           } catch (error) {
-            // Merge conflict occurred, automatically commit the conflict markers
+            // Merge conflict occurred. Stop immediately, abort, and return exactly what happened.
+            const conflictOutput = (error.stdout || '') + (error.stderr || '');
+
             try {
-              execSync('git add .', { stdio: 'ignore' });
-              execSync(`git commit -m "Auto-merge conflicts from ${branch}"`, { stdio: 'ignore' });
-              mergeLog.push(`Merged ${branch} with conflicts (markers committed).`);
-            } catch (commitError) {
-              mergeLog.push(`Failed to merge ${branch}: ${commitError.message}`);
+               execSync('git merge --abort', { stdio: 'ignore' });
+            } catch (e) {
+               // Ignore if abort fails (maybe nothing to abort)
             }
+
+            return {
+              status: 'error',
+              message: `Merge conflict occurred while merging ${branch}. Merge aborted and working directory cleaned. Conflict details:\n${conflictOutput}`,
+              temp_branch: tempBranchName
+            };
           }
         }
 
