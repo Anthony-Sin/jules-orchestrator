@@ -12,9 +12,20 @@ function getHeaders() {
   return { 'Content-Type': 'application/json', 'x-goog-api-key': key };
 }
 
-export async function handleOrchestratorToolCall(toolCall) {
+export async function handleOrchestratorToolCall(toolCall, orchestratorSessionId) {
   const { name, arguments: argsString } = toolCall.function;
   const args = JSON.parse(argsString);
+
+  const confirmToolCall = async (message) => {
+    if (orchestratorSessionId) {
+      try {
+        const { sendMessage } = await import('../state/jules-api.js');
+        await sendMessage(orchestratorSessionId, `[TOOL_RESULT: ${name}] ${message}`);
+      } catch (err) {
+        // Ignore errors sending confirmation back
+      }
+    }
+  };
 
   switch (name) {
     case 'kill_sub_agent': {
@@ -28,19 +39,27 @@ export async function handleOrchestratorToolCall(toolCall) {
         });
         clearTimeout(timeoutId);
         if (!res.ok) {
-          return { status: 'error', message: `Failed to kill agent: ${res.status} ${await res.text()}` };
+          const msg = `Failed to kill agent: ${res.status} ${await res.text()}`;
+          await confirmToolCall(msg);
+          return { status: 'error', message: msg };
         }
         upsertSession({ id: args.agent_id, state: 'KILLED' });
-        return { status: 'success', message: `Agent ${args.agent_id} killed. Reason: ${args.reason}` };
+        const msg = `Agent ${args.agent_id} killed. Reason: ${args.reason}`;
+        await confirmToolCall(msg);
+        return { status: 'success', message: msg };
       } catch (err) {
-        if (err.name === 'AbortError') return { status: 'error', message: 'Request timed out' };
-        return { status: 'error', message: `Failed to kill agent: ${err.message}` };
+        let msg = `Failed to kill agent: ${err.message}`;
+        if (err.name === 'AbortError') msg = 'Request timed out';
+        await confirmToolCall(msg);
+        return { status: 'error', message: msg };
       }
     }
 
     case 'pause_sub_agent': {
       upsertSession({ id: args.agent_id, state: 'PAUSED' });
-      return { status: 'success', message: `Agent ${args.agent_id} paused. Reason: ${args.reason}` };
+      const msg = `Agent ${args.agent_id} paused. Reason: ${args.reason}`;
+      await confirmToolCall(msg);
+      return { status: 'success', message: msg };
     }
 
     case 'reassign_module': {
@@ -55,12 +74,18 @@ export async function handleOrchestratorToolCall(toolCall) {
         });
         clearTimeout(timeoutId);
         if (!res.ok) {
-          return { status: 'error', message: `Failed to reassign agent: ${res.status} ${await res.text()}` };
+          const msg = `Failed to reassign agent: ${res.status} ${await res.text()}`;
+          await confirmToolCall(msg);
+          return { status: 'error', message: msg };
         }
-        return { status: 'success', message: `Agent ${args.agent_id} reassigned with new instructions.` };
+        const msg = `Agent ${args.agent_id} reassigned with new instructions.`;
+        await confirmToolCall(msg);
+        return { status: 'success', message: msg };
       } catch (err) {
-        if (err.name === 'AbortError') return { status: 'error', message: 'Request timed out' };
-        return { status: 'error', message: `Failed to reassign agent: ${err.message}` };
+        let msg = `Failed to reassign agent: ${err.message}`;
+        if (err.name === 'AbortError') msg = 'Request timed out';
+        await confirmToolCall(msg);
+        return { status: 'error', message: msg };
       }
     }
 
@@ -93,12 +118,13 @@ export async function handleOrchestratorToolCall(toolCall) {
       const errors = results.filter(r => r.status === 'error');
 
       if (errors.length > 0) {
-        return {
-          status: 'error',
-          message: `Broadcast partially failed. Errors on ${errors.length} agents. Details: ${errors.map(e => e.message).join('; ')}`
-        };
+        const msg = `Broadcast partially failed. Errors on ${errors.length} agents. Details: ${errors.map(e => e.message).join('; ')}`;
+        await confirmToolCall(msg);
+        return { status: 'error', message: msg };
       }
-      return { status: 'success', message: `Broadcast sent to ${broadcastPromises.length} active sessions.` };
+      const msg = `Broadcast sent to ${broadcastPromises.length} active sessions.`;
+      await confirmToolCall(msg);
+      return { status: 'success', message: msg };
     }
     case 'set_agent_dependency': {
       upsertSession({
@@ -106,7 +132,9 @@ export async function handleOrchestratorToolCall(toolCall) {
         state: 'PAUSED',
         waitingOn: args.target_agent_id
       });
-      return { status: 'success', message: `Agent ${args.dependent_agent_id} is now waiting for ${args.target_agent_id} to complete.` };
+      const msg = `Agent ${args.dependent_agent_id} is now waiting for ${args.target_agent_id} to complete.`;
+      await confirmToolCall(msg);
+      return { status: 'success', message: msg };
     }
 
     case 'create_shared_contract': {
@@ -115,7 +143,9 @@ export async function handleOrchestratorToolCall(toolCall) {
       // File locking to prevent race conditions
       const conflicts = checkFileLockConflicts([contractPath]);
       if (conflicts.length > 0) {
-        return { status: 'error', message: `Cannot create contract. File is currently locked by session ${conflicts[0].lockedBy}` };
+        const msg = `Cannot create contract. File is currently locked by session ${conflicts[0].lockedBy}`;
+        await confirmToolCall(msg);
+        return { status: 'error', message: msg };
       }
 
       try {
@@ -125,7 +155,9 @@ export async function handleOrchestratorToolCall(toolCall) {
         unlockFiles('ORCHESTRATOR');
       }
 
-      return { status: 'success', message: `Shared contract ${args.contract_name} created at ${contractPath}. Allowed agents: ${args.allowed_agent_ids.join(', ')}` };
+      const msg = `Shared contract ${args.contract_name} created at ${contractPath}. Allowed agents: ${args.allowed_agent_ids.join(', ')}`;
+      await confirmToolCall(msg);
+      return { status: 'success', message: msg };
     }
 
     case 'generate_ink_terminal_diagram': {
@@ -138,26 +170,28 @@ export async function handleOrchestratorToolCall(toolCall) {
           store.set('diagramLastUpdated', Date.now()); 
       }
       
-      return { 
-        status: 'success', 
-        message: 'Diagram generated and added to architecture history.' 
-      };
+      const msg = 'Diagram generated and added to architecture history.';
+      await confirmToolCall(msg);
+      return { status: 'success', message: msg };
     }
 
     case 'dispatch_sub_agent': {
       try {
         const config = getConfig();
         if (!config.source) {
-           return { status: 'error', message: 'No source set in configuration.' };
+           const msg = 'No source set in configuration.';
+           await confirmToolCall(msg);
+           return { status: 'error', message: msg };
         }
 
-        // Timeout not directly available in createSession if it doesn't support AbortController
-        // but we can wrap it if needed or rely on internal timeout. Assuming internal timeout or fast enough API here.
-        // Or we can add an AbortController in createSession but we can't easily modify jules-api.js directly in this step without reading it, actually it uses node-fetch.
-        // Let's implement timeout logic manually for dispatch_sub_agent using Promise.race or modifying createSession signature.
-        // We will just use standard createSession for now as it's the expected way based on orchestrator.js
+        const enforcedBranch = orchestratorSessionId
+          ? `jorch/${orchestratorSessionId}/${args.module_name}`
+          : `jorch/${Date.now()}/${args.module_name}`;
+
+        const instructionsWithBranch = `[IMPORTANT BRANCH NAMING] You must push your changes to branch: ${enforcedBranch}\n\n${args.instructions}`;
+
         const julesSession = await createSession({
-          prompt: args.instructions,
+          prompt: instructionsWithBranch,
           source: config.source,
           startingBranch: config.branch || 'main',
           requirePlanApproval: false,
@@ -173,64 +207,71 @@ export async function handleOrchestratorToolCall(toolCall) {
           createdAt: Date.now(),
           lastUpdated: Date.now(),
           repo: config.source,
+          parentOrchestratorId: orchestratorSessionId,
         };
 
         upsertSession(sessionData);
 
-        return { status: 'success', message: `Sub-agent for ${args.module_name} queued for dispatch with session ID ${sessionId}.` };
+        const msg = `Sub-agent for ${args.module_name} queued for dispatch with session ID ${sessionId}.`;
+        await confirmToolCall(msg);
+        return { status: 'success', message: msg, session_id: sessionId };
       } catch (err) {
-         return { status: 'error', message: `Failed to dispatch sub-agent: ${err.message}` };
+         const msg = `Failed to dispatch sub-agent: ${err.message}`;
+         await confirmToolCall(msg);
+         return { status: 'error', message: msg };
       }
     }
 
     case 'merge_branches': {
       const { base_branch, branches_to_merge } = args;
-      const timestamp = Date.now();
-      const tempBranchName = `temp-merge-${base_branch}-${timestamp}`;
 
       try {
-        // Fetch all latest branches
-        execSync('git fetch origin', { stdio: 'ignore' });
-
-        // Create and checkout the temporary branch from the base branch
-        execSync(`git checkout -b ${tempBranchName} origin/${base_branch}`, { stdio: 'ignore' });
-
-        const mergeLog = [];
-
-        // Attempt to merge each branch one by one
-        for (const branch of branches_to_merge) {
-          try {
-            // Merge branch from origin (assuming agents push their branches)
-            execSync(`git merge origin/${branch} --no-edit`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
-            mergeLog.push(`Successfully merged ${branch}`);
-          } catch (error) {
-            // Merge conflict occurred. Stop immediately, abort, and return exactly what happened.
-            const conflictOutput = (error.stdout || '') + (error.stderr || '');
-
-            try {
-               execSync('git merge --abort', { stdio: 'ignore' });
-            } catch (e) {
-               // Ignore if abort fails (maybe nothing to abort)
-            }
-
-            return {
-              status: 'error',
-              message: `Merge conflict occurred while merging ${branch}. Merge aborted and working directory cleaned. Conflict details:\n${conflictOutput}`,
-              temp_branch: tempBranchName
-            };
-          }
+        const config = getConfig();
+        if (!config.source) {
+          const msg = 'No source set in configuration.';
+          await confirmToolCall(msg);
+          return { status: 'error', message: msg };
         }
 
-        // Push the temporary branch back to origin
-        execSync(`git push origin ${tempBranchName}`, { stdio: 'ignore' });
+        const matchPattern = orchestratorSessionId ? `jorch/${orchestratorSessionId}/*` : '*';
 
-        return {
-          status: 'success',
-          message: `Created temporary branch '${tempBranchName}' and pushed to origin. Merge log: ${mergeLog.join(' | ')}`,
-          temp_branch: tempBranchName
+        const mergeInstructions = `You are a Merge Agent. Your ONLY job is to merge branches into a temporary branch.
+1. Base branch: ${base_branch}
+2. Branches to merge: ${branches_to_merge.join(', ')} (these should match ${matchPattern})
+3. Checkout a new temporary branch from ${base_branch}.
+4. Merge each specified branch. If there is a conflict, resolve it.
+5. Push the resulting temporary branch to origin.
+6. Return success with the temporary branch name.`;
+
+        const julesSession = await createSession({
+          prompt: mergeInstructions,
+          source: config.source,
+          startingBranch: config.branch || 'main',
+          requirePlanApproval: false,
+        });
+
+        const sessionId = julesSession.name?.split('/').pop() || julesSession.id;
+
+        const sessionData = {
+          id: sessionId,
+          title: 'Merge Agent',
+          type: 'sub_agent',
+          state: julesSession.state || 'QUEUED',
+          createdAt: Date.now(),
+          lastUpdated: Date.now(),
+          repo: config.source,
+          parentOrchestratorId: orchestratorSessionId,
         };
+
+        upsertSession(sessionData);
+
+        const msg = `Merge Agent dispatched with session ID ${sessionId} to handle merging.`;
+        await confirmToolCall(msg);
+        return { status: 'success', message: msg };
       } catch (err) {
-        return { status: 'error', message: `Failed during branch operations: ${err.message}` };
+        const msg = `Failed to dispatch Merge Agent: ${err.message}`;
+        await confirmToolCall(msg);
+        return { status: 'error', message: msg };
       }
     }
 

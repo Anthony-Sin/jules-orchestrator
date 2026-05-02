@@ -6,7 +6,9 @@ import React, { useState, useEffect } from 'react'
 import { render, useInput } from 'ink'
 import { dispatchLeadOrchestrator } from '../src/jules_lead_orchestrator/julesorchestrator.js'
 
-import { deleteSession, listSessions, getSession, parseSourceDisplay } from '../src/state/jules-api.js'
+import { deleteSession, listSessions, getSession, parseSourceDisplay, sendMessage, getAllActivities } from '../src/state/jules-api.js'
+import { getSessions, getQueue, getConfig, setConfig, quotaRemaining, getActiveSessions, syncQuota, setQuotaLimit, upsertSession, unlockFiles, store } from '../src/state/store.js'
+import { handleOrchestratorToolCall } from '../src/jules_lead_orchestrator/julesorchestrator.js'
 
 const TERMINAL_STATES = ['COMPLETED', 'FAILED', 'KILLED']
 
@@ -33,9 +35,93 @@ export async function pollAndUpdate() {
       if (fresh.julesUrl) updates.julesUrl = fresh.julesUrl
       if (fresh.sourceContext?.source) updates.repoDisplay = parseSourceDisplay(fresh.sourceContext.source)
       else if (fresh.repoDisplay) updates.repoDisplay = fresh.repoDisplay
+
+      const oldState = session.state;
       upsertSession(updates)
+
+      if (oldState !== newState && (newState === 'COMPLETED' || newState === 'FAILED')) {
+        if (session.parentOrchestratorId) {
+           await sendMessage(session.parentOrchestratorId, `[AGENT_UPDATE: ${session.id}] State changed to ${newState}`);
+        }
+
+        if (newState === 'COMPLETED') {
+           const allSessions = getSessions();
+           for (const dep of allSessions) {
+             if (dep.state === 'PAUSED' && dep.waitingOn === session.id) {
+               upsertSession({ id: dep.id, state: 'QUEUED', waitingOn: null });
+               await sendMessage(dep.id, `[RESUMED] Agent ${session.id} has completed. You may proceed.`);
+               if (dep.parentOrchestratorId) {
+                  await sendMessage(dep.parentOrchestratorId, `[AGENT_UPDATE: ${dep.id}] Resumed because dependency ${session.id} completed.`);
+               }
+             }
+           }
+        }
+      }
+
       if (TERMINAL_STATES.includes(newState)) unlockFiles(session.id)
       updated.push({ id: session.id, state: newState, title: updates.title || session.title })
+
+      if (session.type === 'orchestrator' && !TERMINAL_STATES.includes(newState)) {
+        try {
+          const res = await getAllActivities(session.id);
+          const acts = res.activities || res || [];
+          if (Array.isArray(acts) && acts.length > 0) {
+            const sorted = acts.sort((a, b) => new Date(a.createTime || 0).getTime() - new Date(b.createTime || 0).getTime());
+            const lastProcessedIdMap = store.get('lastProcessedActivityIds') || {};
+            const lastProcessedId = lastProcessedIdMap[session.id];
+
+            let foundNew = false;
+            for (const act of sorted) {
+              if (lastProcessedId && act.name === lastProcessedId) {
+                foundNew = true;
+                continue; // Skip the last processed one, start processing on the next loop iteration
+              }
+              if (!lastProcessedId || foundNew) {
+                if (!lastProcessedId) foundNew = true;
+
+                if (act.agentMessaged?.agentMessage) {
+                  const msgText = act.agentMessaged.agentMessage;
+                  let jsonStrs = [];
+                  const codeBlockRegex = /```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/g;
+                  let match;
+                  while ((match = codeBlockRegex.exec(msgText)) !== null) {
+                      jsonStrs.push(match[1]);
+                  }
+
+                  if (jsonStrs.length === 0 && msgText.includes('"function"')) {
+                     // Fallback for missing codeblocks
+                     const start = msgText.indexOf('[{');
+                     const end = msgText.lastIndexOf('}]');
+                     if (start !== -1 && end !== -1 && end > start) {
+                         jsonStrs.push(msgText.substring(start, end + 2));
+                     }
+                  }
+
+                  for (const jsonStr of jsonStrs) {
+                     try {
+                        const toolCalls = JSON.parse(jsonStr);
+                        if (Array.isArray(toolCalls)) {
+                           for (const tc of toolCalls) {
+                              if (tc && tc.function && tc.function.name) {
+                                 await handleOrchestratorToolCall(tc, session.id);
+                              }
+                           }
+                        }
+                     } catch (err) {
+                        // ignore JSON parse errors
+                     }
+                  }
+                }
+              }
+            }
+
+            if (sorted.length > 0) {
+              lastProcessedIdMap[session.id] = sorted[sorted.length - 1].name;
+              store.set('lastProcessedActivityIds', lastProcessedIdMap);
+            }
+          }
+        } catch (_) {}
+      }
     } catch (_) {}
   }
   return updated
@@ -63,7 +149,6 @@ export async function syncSessions() {
 }
 
 import { renderDashboard, Dashboard } from '../src/tui/renderer.js'
-import { getSessions, getQueue, getConfig, setConfig, quotaRemaining, getActiveSessions, syncQuota, setQuotaLimit, upsertSession, unlockFiles } from '../src/state/store.js'
 import { DEFAULTS } from '../config/defaults.js'
 import fs from 'fs'
 import path from 'path'

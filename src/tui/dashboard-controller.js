@@ -232,12 +232,55 @@ export function useDashboardController() {
             new Date(a.createTime || 0) - new Date(b.createTime || 0))
 
           for (const act of sorted) {
-            if (!lastId || foundNew || act.name > lastId) {
-              foundNew = true
+            if (lastId && act.name === lastId) {
+              foundNew = true;
+              continue;
+            }
+            if (!lastId || foundNew) {
+              if (!lastId) foundNew = true;
               if (act.userMessaged?.userMessage?.trim()) {
                 newMessages.push({ role: 'user', text: act.userMessaged.userMessage })
               } else if (act.agentMessaged?.agentMessage?.trim()) {
-                newMessages.push({ role: 'agent', text: act.agentMessaged.agentMessage })
+                let msgText = act.agentMessaged.agentMessage;
+                // Clean up raw tool call blobs for better UI
+                try {
+                   if (msgText.includes('"function"')) {
+                       let jsonStr = '';
+                       const codeBlockRegex = /```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/;
+                       const match = codeBlockRegex.exec(msgText);
+                       if (match) {
+                           jsonStr = match[1];
+                       } else {
+                           const start = msgText.indexOf('[{');
+                           const end = msgText.lastIndexOf('}]');
+                           if (start !== -1 && end !== -1 && end > start) {
+                               jsonStr = msgText.substring(start, end + 2);
+                           }
+                       }
+                       if (jsonStr) {
+                           const parsedArr = JSON.parse(jsonStr);
+                           if (Array.isArray(parsedArr)) {
+                              let toolNames = [];
+                              for (const tc of parsedArr) {
+                                 if (tc && tc.function && tc.function.name) {
+                                    let name = tc.function.name;
+                                    if (name === 'dispatch_sub_agent') {
+                                        try {
+                                            const args = JSON.parse(tc.function.arguments);
+                                            name = `dispatch_sub_agent (${args.module_name})`;
+                                        } catch(e) {}
+                                    }
+                                    toolNames.push(name);
+                                 }
+                              }
+                              if (toolNames.length > 0) {
+                                  msgText = msgText.replace(jsonStr, `\n\n⚙️ [TOOL CALLS: ${toolNames.join(', ')}]\n\n`).trim();
+                              }
+                           }
+                       }
+                   }
+                } catch (e) {}
+                newMessages.push({ role: 'agent', text: msgText })
               } else if (act.originator === 'agent' || act.originator === 'system') {
                 let text = act.description || ''
                 if (act.planGenerated) {
@@ -325,7 +368,45 @@ export function useDashboardController() {
           if (act.userMessaged?.userMessage?.trim()) {
             history.push({ role: 'user', text: act.userMessaged.userMessage })
           } else if (act.agentMessaged?.agentMessage?.trim()) {
-            history.push({ role: 'agent', text: act.agentMessaged.agentMessage })
+            let msgText = act.agentMessaged.agentMessage;
+            try {
+               if (msgText.includes('"function"')) {
+                   let jsonStr = '';
+                   const codeBlockRegex = /```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/;
+                   const match = codeBlockRegex.exec(msgText);
+                   if (match) {
+                       jsonStr = match[1];
+                   } else {
+                       const start = msgText.indexOf('[{');
+                       const end = msgText.lastIndexOf('}]');
+                       if (start !== -1 && end !== -1 && end > start) {
+                           jsonStr = msgText.substring(start, end + 2);
+                       }
+                   }
+                   if (jsonStr) {
+                       const parsedArr = JSON.parse(jsonStr);
+                       if (Array.isArray(parsedArr)) {
+                          let toolNames = [];
+                          for (const tc of parsedArr) {
+                             if (tc && tc.function && tc.function.name) {
+                                let name = tc.function.name;
+                                if (name === 'dispatch_sub_agent') {
+                                    try {
+                                        const args = JSON.parse(tc.function.arguments);
+                                        name = `dispatch_sub_agent (${args.module_name})`;
+                                    } catch(e) {}
+                                }
+                                toolNames.push(name);
+                             }
+                          }
+                          if (toolNames.length > 0) {
+                              msgText = msgText.replace(jsonStr, `\n\n⚙️ [TOOL CALLS: ${toolNames.join(', ')}]\n\n`).trim();
+                          }
+                       }
+                   }
+               }
+            } catch (e) {}
+            history.push({ role: 'agent', text: msgText })
           } else if (act.originator === 'agent' || act.originator === 'system') {
             let text = act.description || ''
             if (act.planGenerated) text += '\n📋 Plan Generated'
