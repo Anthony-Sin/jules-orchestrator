@@ -124,13 +124,19 @@ export function Dashboard({ searchTerm = '' }) {
     availableBodyHeight - (chatFixedHeights + chatMenuHeight + inputExtraHeight))
 
   // ── Data ─────────────────────────────────────────────────────────
-  const sessions  = getSessions() || []
-  const AGENTS    = sessions
+  // Use a state for sessions so we aren't reading from disk on every keystroke
+  const [sessionsData, setSessionsData] = useState(() => getSessions() || [])
+  useEffect(() => {
+    const t = setInterval(() => setSessionsData(getSessions() || []), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  const AGENTS = sessionsData
     .slice()
     .sort((a, b) => {
-      const ta = new Date(a.lastUpdated || a.createdAt || 0).getTime()
-      const tb = new Date(b.lastUpdated || b.createdAt || 0).getTime()
-      return tb - ta
+      const ta = new Date(a.createdAt || 0).getTime()
+      const tb = new Date(b.createdAt || 0).getTime()
+      return tb - ta // descending (newest first based strictly on creation time)
     })
 
   const orchAgents = AGENTS.filter(a =>
@@ -200,13 +206,30 @@ export function Dashboard({ searchTerm = '' }) {
         for (const act of sorted) {
           if (!lastId || foundNew || act.name > lastId) {
             foundNew = true
-            if (act.userMessaged?.userMessage?.trim())
+            if (act.userMessaged?.userMessage?.trim()) {
               newMessages.push({ role: 'user', text: act.userMessaged.userMessage })
-            else if (act.agentMessaged?.agentMessage?.trim())
+            } else if (act.agentMessaged?.agentMessage?.trim()) {
               newMessages.push({ role: 'agent', text: act.agentMessaged.agentMessage })
-            else if (act.originator === 'agent' || act.originator === 'system') {
+            } else if (act.originator === 'agent' || act.originator === 'system') {
               let text = act.description || ''
-              if (act.planGenerated) text += '\nPlan: ' + JSON.stringify(act.planGenerated)
+              if (act.planGenerated) {
+                const stepsStr = act.planGenerated.plan?.steps?.map(s => `  - ${s.title}: ${s.description}`).join('\n') || ''
+                text += '\n📋 Plan Generated:\n' + stepsStr
+              }
+              if (act.planApproved) text += '\n✅ Plan Approved'
+              if (act.progressUpdated) text += `\n🔄 Progress: ${act.progressUpdated.title} - ${act.progressUpdated.description}`
+              if (act.sessionCompleted) text += '\n🎉 Session Completed!'
+              if (act.sessionFailed) text += `\n❌ Session Failed: ${act.sessionFailed.reason}`
+              if (act.artifacts && act.artifacts.length > 0) {
+                act.artifacts.forEach(art => {
+                  if (art.changeSet?.gitPatch) {
+                    text += `\n💻 Code Changes Ready:\n${art.changeSet.gitPatch.suggestedCommitMessage || 'Code Changes'}`
+                  }
+                  if (art.bashOutput) {
+                    text += `\n⚙️ Command Run: \`${art.bashOutput.command}\`\nOutput: ${art.bashOutput.output?.substring(0, 100)}...`
+                  }
+                })
+              }
               if (text.trim()) newMessages.push({ role: act.originator, text })
             }
           }
@@ -280,13 +303,30 @@ export function Dashboard({ searchTerm = '' }) {
         const sorted = acts.sort((a, b) =>
           new Date(a.createTime || 0) - new Date(b.createTime || 0))
         for (const act of sorted) {
-          if (act.userMessaged?.userMessage?.trim())
+          if (act.userMessaged?.userMessage?.trim()) {
             history.push({ role: 'user', text: act.userMessaged.userMessage })
-          else if (act.agentMessaged?.agentMessage?.trim())
+          } else if (act.agentMessaged?.agentMessage?.trim()) {
             history.push({ role: 'agent', text: act.agentMessaged.agentMessage })
-          else if (act.originator === 'agent' || act.originator === 'system') {
+          } else if (act.originator === 'agent' || act.originator === 'system') {
             let text = act.description || ''
-            if (act.planGenerated) text += '\nPlan: ' + JSON.stringify(act.planGenerated)
+            if (act.planGenerated) {
+              const stepsStr = act.planGenerated.plan?.steps?.map(s => `  - ${s.title}: ${s.description}`).join('\n') || ''
+              text += '\n📋 Plan Generated:\n' + stepsStr
+            }
+            if (act.planApproved) text += '\n✅ Plan Approved'
+            if (act.progressUpdated) text += `\n🔄 Progress: ${act.progressUpdated.title} - ${act.progressUpdated.description}`
+            if (act.sessionCompleted) text += '\n🎉 Session Completed!'
+            if (act.sessionFailed) text += `\n❌ Session Failed: ${act.sessionFailed.reason}`
+            if (act.artifacts && act.artifacts.length > 0) {
+              act.artifacts.forEach(art => {
+                if (art.changeSet?.gitPatch) {
+                  text += `\n💻 Code Changes Ready:\n${art.changeSet.gitPatch.suggestedCommitMessage || 'Code Changes'}`
+                }
+                if (art.bashOutput) {
+                  text += `\n⚙️ Command Run: \`${art.bashOutput.command}\`\nOutput: ${art.bashOutput.output?.substring(0, 100)}...`
+                }
+              })
+            }
             if (text.trim()) history.push({ role: act.originator, text })
           }
         }
