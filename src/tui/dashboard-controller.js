@@ -116,9 +116,15 @@ export function useDashboardController() {
   useEffect(() => {
     let active = true
     let t = null
+    let lastHash = ''
     const poll = () => {
       if (!active) return
-      setSessionsData(getSessions() || [])
+      const newData = getSessions() || []
+      const currentHash = JSON.stringify(newData)
+      if (currentHash !== lastHash) {
+        lastHash = currentHash
+        setSessionsData(newData)
+      }
       t = setTimeout(poll, 5000)
     }
     t = setTimeout(poll, 5000)
@@ -136,15 +142,20 @@ export function useDashboardController() {
   useEffect(() => {
     let active = true
     let t = null
+    let lastHash = ''
     const poll = () => {
       if (!active) return
       const current = getSessions() || []
-      setSortedIds(
-        current
-          .slice()
-          .sort((a, b) => new Date(b.lastUpdated || b.createdAt || 0).getTime() - new Date(a.lastUpdated || a.createdAt || 0).getTime())
-          .map(s => s.id)
-      )
+      const newSorted = current
+        .slice()
+        .sort((a, b) => new Date(b.lastUpdated || b.createdAt || 0).getTime() - new Date(a.lastUpdated || a.createdAt || 0).getTime())
+        .map(s => s.id)
+
+      const currentHash = JSON.stringify(newSorted)
+      if (currentHash !== lastHash) {
+        lastHash = currentHash
+        setSortedIds(newSorted)
+      }
       t = setTimeout(poll, 5 * 60 * 1000)
     }
     t = setTimeout(poll, 5 * 60 * 1000)
@@ -222,19 +233,31 @@ export function useDashboardController() {
         return
       }
       try {
+        const lastId = lastActivityIds[selectedSessionId]
+
+        // Use pagination token if possible, or we could fetch standard.
+        // The problem mentions the fetch itself is unpaginated so we do a standard fetch.
         const res  = await getAllActivities(selectedSessionId)
         const acts = res.activities || res || []
+
         if (Array.isArray(acts) && acts.length > 0) {
           const newMessages = []
-          const lastId      = lastActivityIds[selectedSessionId]
           let   foundNew    = false
           const sorted      = acts.sort((a, b) =>
             new Date(a.createTime || 0) - new Date(b.createTime || 0))
 
-          for (const act of sorted) {
-            if (!lastId || foundNew || act.name > lastId) {
-              foundNew = true
-              if (act.userMessaged?.userMessage?.trim()) {
+          // Optimization: Check if the latest activity is actually newer than lastId
+          // comparing dates/time string or just index if we wanted, but simply checking
+          // if we add any new messages works without string comparison bugs on IDs
+
+          // In Jules API, activity names (IDs) are strings in format "sources/.../sessions/.../activities/ID"
+          // where ID is a numeric string or sortable UUID. Instead of string comparison, we'll track index.
+          const lastIndex = lastId ? sorted.findIndex(a => a.name === lastId) : -1;
+
+          for (let i = lastIndex + 1; i < sorted.length; i++) {
+            const act = sorted[i];
+            foundNew = true;
+            if (act.userMessaged?.userMessage?.trim()) {
                 newMessages.push({ role: 'user', text: act.userMessaged.userMessage })
               } else if (act.agentMessaged?.agentMessage?.trim()) {
                 newMessages.push({ role: 'agent', text: act.agentMessaged.agentMessage })
@@ -260,13 +283,13 @@ export function useDashboardController() {
                 }
                 if (text.trim()) newMessages.push({ role: act.originator, text })
               }
-            }
           }
 
           if (newMessages.length > 0) {
             setMessages(m => [...m, ...newMessages])
             setLastActivityIds(prev => ({ ...prev, [selectedSessionId]: sorted[sorted.length - 1].name }))
-          } else if (!lastId && sorted.length > 0) {
+          } else if (foundNew && sorted.length > 0) {
+            // We saw new activities, but they didn't generate viewable messages
             setLastActivityIds(prev => ({ ...prev, [selectedSessionId]: sorted[sorted.length - 1].name }))
           }
         }
@@ -307,7 +330,7 @@ export function useDashboardController() {
         setQueuedMessages(prev => { const q = { ...prev }; delete q[id]; return q })
       }
     }
-  }, [tick, queuedMessages, AGENTS])
+  }, [queuedMessages, AGENTS])
 
   const openAgentChat = useCallback((agent) => {
     if (!agent) return

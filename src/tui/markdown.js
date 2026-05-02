@@ -1,3 +1,5 @@
+const markdownCache = new Map()
+
 // ── markdown.js ───────────────────────────────────────────────────
 // Terminal markdown parser and renderer for Ink (React).
 // Exports: parseMarkdown, buildMarkdownLines, wrapText
@@ -256,6 +258,11 @@ function renderGenericToolArgs(args, segIdx, focused) {
 
 // ── Block renderer ────────────────────────────────────────────────
 export function buildMarkdownLines(text, wrapLimit, focused) {
+  const cacheKey = `${text}|${wrapLimit}|${focused}`;
+  if (markdownCache.has(cacheKey)) {
+    return markdownCache.get(cacheKey);
+  }
+
   const segments = parseMarkdown(text)
   const lines = []
 
@@ -457,5 +464,11 @@ export function buildMarkdownLines(text, wrapLimit, focused) {
     }
   }
 
+  // Prevent cache from growing infinitely
+  if (markdownCache.size > 1000) {
+    const firstKey = markdownCache.keys().next().value;
+    markdownCache.delete(firstKey);
+  }
+  markdownCache.set(cacheKey, lines);
   return lines
 }

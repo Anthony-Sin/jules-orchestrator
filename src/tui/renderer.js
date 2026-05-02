@@ -62,6 +62,9 @@ export function Dashboard({ searchTerm = '' }) {
     openAgentChat, handleSend, handleRepoSubmit
   } = useDashboardController()
 
+  // Memoized Table Rows
+  const allRows = React.useMemo(() => buildRows(AGENTS, expandedIds), [AGENTS, expandedIds])
+
   // ── Derived layout ───────────────────────────────────────────────
   const TERMINAL_ROWS = Math.max(10, rows - 1)
   const isWide        = columns >= 80
@@ -437,7 +440,6 @@ export function Dashboard({ searchTerm = '' }) {
                     ? React.createElement(Box, { flexGrow: 1, alignItems: 'center', justifyContent: 'center' },
                         React.createElement(Text, { color: 'gray', dimColor: true }, 'No agents yet'))
                     : (() => {
-                        const allRows = buildRows(AGENTS, expandedIds)
                         const sessionRows = allRows.filter(r => r.type === 'session')
                         const visibleSessionIdxs = sessionRows.slice(tableOffset, tableOffset + VISIBLE_AGENTS).map(r => AGENTS.indexOf(r.data))
                         const visibleRows = allRows.filter(r => {
