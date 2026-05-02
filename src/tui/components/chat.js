@@ -396,32 +396,29 @@ export function ChatPanel({
     ),
     // ── Input box ───────────────────────────────────────────────────
     tab === 'chat' && React.createElement(Box, {
-      height: Math.min(4, Math.max(1, Math.ceil((input || '').length / wrapLimit))),
-      flexShrink: 0, flexDirection: 'column', minWidth: 0, overflow: 'hidden'
+      flexShrink: 0, flexDirection: 'row', minWidth: 0, overflow: 'hidden',
+      height: Math.min(4, Math.max(1, Math.ceil((input || '').length / wrapLimit)))
     },
-      React.createElement(Box, {
-        marginTop: Math.ceil((input || '').length / wrapLimit) > 4
-          ? -(Math.ceil((input || '').length / wrapLimit) - 4) : 0,
-        flexDirection: 'row', minWidth: 0
-      },
-        React.createElement(Box, { flexShrink: 0, minWidth: 0 },
-          React.createElement(Text, {
-            color: focused ? 'green' : 'gray', bold: focused, wrap: 'truncate'
-          // ── FIX: suppress ▶ while slash menu is open to avoid duplicate arrows ──
-          }, (focused && !chatMenuOpen) ? '▶ ' : '▷ ')
-        ),
-        React.createElement(Box, { flexGrow: 1, flexShrink: 1, minWidth: 0 },
-          React.createElement(Box, { width: Math.max(10, numWidth - 4) },
-            React.createElement(TextInput, {
-              value:       input,
-              onChange:    onChange,
-              onSubmit:    !chatMenuOpen ? onSubmit : () => {},
-              placeholder: focused
-                ? '/ for menu · ↑↓ nav msgs · alt+a expand'
-                : 'Alt+E',
-              focus:       focused && !isRepoInputMode
-            })
-          )
+      React.createElement(Box, { flexShrink: 0, minWidth: 0 },
+        React.createElement(Text, {
+          color: focused ? 'green' : 'gray', bold: focused, wrap: 'truncate'
+        }, (focused && !chatMenuOpen) ? '▶ ' : '▷ ')
+      ),
+      React.createElement(Box, { flexGrow: 1, flexShrink: 1, minWidth: 0, flexDirection: 'column' },
+        React.createElement(Box, {
+          width: Math.max(10, numWidth - 4),
+          marginTop: Math.ceil((input || '').length / wrapLimit) > 4
+            ? -(Math.ceil((input || '').length / wrapLimit) - 4) : 0
+        },
+          React.createElement(TextInput, {
+            value:       input,
+            onChange:    onChange,
+            onSubmit:    !chatMenuOpen ? onSubmit : () => {},
+            placeholder: focused
+              ? '/ for menu · ↑↓ nav msgs · alt+a expand'
+              : 'Alt+E',
+            focus:       focused && !isRepoInputMode
+          })
         )
       )
     )
