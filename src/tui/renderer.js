@@ -9,7 +9,7 @@
 //   tui/components/help.js   — HelpScreen
 //   tui/markdown.js          — unchanged
 
-import { parseSourceDisplay, getActivities, getAllActivities, sendMessage, listSources, deleteSession } from '../state/jules-api.js'
+import { parseSourceDisplay, getActivities, getAllActivities, sendMessage, listSources, deleteSession, listAllSessions } from '../state/jules-api.js'
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { render, Box, Text, useInput, useApp } from 'ink'
 import TextInput from 'ink-text-input'
@@ -83,6 +83,27 @@ export function Dashboard({ searchTerm = '' }) {
   const [lastActivityIds, setLastActivityIds]     = useState({})
   const [queuedMessages, setQueuedMessages]       = useState({})
 
+  // Clean up archived/deleted remote sessions from local store on mount
+  useEffect(() => {
+    listAllSessions().then(res => {
+      const remoteIds = new Set((res.sessions || []).map(s => s.id))
+      const localSessions = getSessions() || []
+
+      let changed = false
+      for (const s of localSessions) {
+        // Only clean up sessions that should exist remotely (skip local-only QUEUED)
+        if (s.state !== 'QUEUED' && !remoteIds.has(s.id)) {
+          removeSession(s.id)
+          changed = true
+        }
+      }
+
+      if (changed) {
+        setSessionsData(getSessions() || [])
+      }
+    }).catch(() => {})
+  }, [])
+
   // ── Repo picker ──────────────────────────────────────────────────
   const [repoInputMode, setRepoInputMode] = useState(false)
   const [repoInput, setRepoInput]         = useState('')
@@ -125,10 +146,18 @@ export function Dashboard({ searchTerm = '' }) {
 
   // ── Data ─────────────────────────────────────────────────────────
   // Read sessions from disk periodically for fast status updates (every 5 seconds)
+  // Use recursive setTimeout to prevent overlap freezing
   const [sessionsData, setSessionsData] = useState(() => getSessions() || [])
   useEffect(() => {
-    const t = setInterval(() => setSessionsData(getSessions() || []), 5000)
-    return () => clearInterval(t)
+    let active = true
+    let t = null
+    const poll = () => {
+      if (!active) return
+      setSessionsData(getSessions() || [])
+      t = setTimeout(poll, 5000)
+    }
+    t = setTimeout(poll, 5000)
+    return () => { active = false; clearTimeout(t) }
   }, [])
 
   // To prevent the table from jumping, we only re-sort the IDs periodically (every 5 minutes)
@@ -145,7 +174,10 @@ export function Dashboard({ searchTerm = '' }) {
   })
 
   useEffect(() => {
-    const t = setInterval(() => {
+    let active = true
+    let t = null
+    const poll = () => {
+      if (!active) return
       const current = getSessions() || []
       setSortedIds(
         current
@@ -157,8 +189,10 @@ export function Dashboard({ searchTerm = '' }) {
           })
           .map(s => s.id)
       )
-    }, 5 * 60 * 1000) // 5 minutes
-    return () => clearInterval(t)
+      t = setTimeout(poll, 5 * 60 * 1000)
+    }
+    t = setTimeout(poll, 5 * 60 * 1000) // 5 minutes
+    return () => { active = false; clearTimeout(t) }
   }, [])
 
   // Map the stable sorted IDs back to their latest data, dropping any that were deleted
@@ -239,68 +273,74 @@ export function Dashboard({ searchTerm = '' }) {
   // Chat activity polling
   useEffect(() => {
     let active = true
+    let p = null
     const poll = async () => {
-      if (!active || mode !== 'chat' || !selectedSessionId) return
+      if (!active || mode !== 'chat' || !selectedSessionId) {
+        p = setTimeout(poll, 5000)
+        return
+      }
       try {
-        const res  = await getActivities(selectedSessionId)
+        const res  = await getAllActivities(selectedSessionId)
         const acts = res.activities || res || []
-        if (!Array.isArray(acts) || acts.length === 0) return
+        if (Array.isArray(acts) && acts.length > 0) {
+          const newMessages = []
+          const lastId      = lastActivityIds[selectedSessionId]
+          let   foundNew    = false
+          const sorted      = acts.sort((a, b) =>
+            new Date(a.createTime || 0) - new Date(b.createTime || 0))
 
-        const newMessages = []
-        const lastId      = lastActivityIds[selectedSessionId]
-        let   foundNew    = false
-        const sorted      = acts.sort((a, b) =>
-          new Date(a.createTime || 0) - new Date(b.createTime || 0))
-
-        for (const act of sorted) {
-          if (!lastId || foundNew || act.name > lastId) {
-            foundNew = true
-            if (act.userMessaged?.userMessage?.trim()) {
-              newMessages.push({ role: 'user', text: act.userMessaged.userMessage })
-            } else if (act.agentMessaged?.agentMessage?.trim()) {
-              newMessages.push({ role: 'agent', text: act.agentMessaged.agentMessage })
-            } else if (act.originator === 'agent' || act.originator === 'system') {
-              let text = act.description || ''
-              if (act.planGenerated) {
-                const stepsStr = act.planGenerated.plan?.steps?.map(s => `  - ${s.title}: ${s.description}`).join('\n') || ''
-                text += '\n📋 Plan Generated:\n' + stepsStr
+          for (const act of sorted) {
+            if (!lastId || foundNew || act.name > lastId) {
+              foundNew = true
+              if (act.userMessaged?.userMessage?.trim()) {
+                newMessages.push({ role: 'user', text: act.userMessaged.userMessage })
+              } else if (act.agentMessaged?.agentMessage?.trim()) {
+                newMessages.push({ role: 'agent', text: act.agentMessaged.agentMessage })
+              } else if (act.originator === 'agent' || act.originator === 'system') {
+                let text = act.description || ''
+                if (act.planGenerated) {
+                  const stepsStr = act.planGenerated.plan?.steps?.map(s => `  - ${s.title}: ${s.description}`).join('\n') || ''
+                  text += '\n📋 Plan Generated:\n' + stepsStr
+                }
+                if (act.planApproved) text += '\n✅ Plan Approved'
+                if (act.progressUpdated) text += `\n🔄 Progress: ${act.progressUpdated.title} - ${act.progressUpdated.description}`
+                if (act.sessionCompleted) text += '\n🎉 Session Completed!'
+                if (act.sessionFailed) text += `\n❌ Session Failed: ${act.sessionFailed.reason}`
+                if (act.artifacts && act.artifacts.length > 0) {
+                  act.artifacts.forEach(art => {
+                    if (art.changeSet?.gitPatch) {
+                      text += `\n💻 Code Changes Ready:\n${art.changeSet.gitPatch.suggestedCommitMessage || 'Code Changes'}`
+                    }
+                    if (art.bashOutput) {
+                      text += `\n⚙️ Command Run: \`${art.bashOutput.command}\`\nOutput: ${art.bashOutput.output?.substring(0, 100)}...`
+                    }
+                  })
+                }
+                if (text.trim()) newMessages.push({ role: act.originator, text })
               }
-              if (act.planApproved) text += '\n✅ Plan Approved'
-              if (act.progressUpdated) text += `\n🔄 Progress: ${act.progressUpdated.title} - ${act.progressUpdated.description}`
-              if (act.sessionCompleted) text += '\n🎉 Session Completed!'
-              if (act.sessionFailed) text += `\n❌ Session Failed: ${act.sessionFailed.reason}`
-              if (act.artifacts && act.artifacts.length > 0) {
-                act.artifacts.forEach(art => {
-                  if (art.changeSet?.gitPatch) {
-                    text += `\n💻 Code Changes Ready:\n${art.changeSet.gitPatch.suggestedCommitMessage || 'Code Changes'}`
-                  }
-                  if (art.bashOutput) {
-                    text += `\n⚙️ Command Run: \`${art.bashOutput.command}\`\nOutput: ${art.bashOutput.output?.substring(0, 100)}...`
-                  }
-                })
-              }
-              if (text.trim()) newMessages.push({ role: act.originator, text })
             }
           }
-        }
 
-        if (newMessages.length > 0) {
-          setMessages(m => [...m, ...newMessages])
-          setLastActivityIds(prev => ({
-            ...prev,
-            [selectedSessionId]: sorted[sorted.length - 1].name
-          }))
-        } else if (!lastId && sorted.length > 0) {
-          setLastActivityIds(prev => ({
-            ...prev,
-            [selectedSessionId]: sorted[sorted.length - 1].name
-          }))
+          if (newMessages.length > 0) {
+            setMessages(m => [...m, ...newMessages])
+            setLastActivityIds(prev => ({
+              ...prev,
+              [selectedSessionId]: sorted[sorted.length - 1].name
+            }))
+          } else if (!lastId && sorted.length > 0) {
+            setLastActivityIds(prev => ({
+              ...prev,
+              [selectedSessionId]: sorted[sorted.length - 1].name
+            }))
+          }
         }
       } catch (_) {}
+
+      if (active) p = setTimeout(poll, 5000)
     }
-    const p = setInterval(poll, 5000)
+
     poll()
-    return () => { active = false; clearInterval(p) }
+    return () => { active = false; clearTimeout(p) }
   }, [mode, selectedSessionId, lastActivityIds])
 
   // Poll for new architecture diagrams
