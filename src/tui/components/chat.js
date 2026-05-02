@@ -126,17 +126,23 @@ export function ChatPanel({
   // Calculate scrolling to keep cursor in view
   const targetLineIndex = Math.max(0, total - 1 - (chatCursorLine || 0))
 
+  // Track the last chatCursorLine we animated to avoid jumping when total lines change
+  const lastAnimatedCursor = React.useRef(chatCursorLine)
+
   useEffect(() => {
     if (focused && tab === 'chat' && total > 0 && setScrollOffset) {
-      // Try to keep the targetLineIndex near the center of the visible window
-      const idealStart = Math.max(0, targetLineIndex - Math.floor(MESSAGE_ROWS / 2))
-      const maxStart = Math.max(0, total - MESSAGE_ROWS)
-      const clampedStart = Math.min(idealStart, maxStart)
+      // Only auto-scroll when the user actively moves the cursor via keyboard
+      if (lastAnimatedCursor.current !== chatCursorLine) {
+        lastAnimatedCursor.current = chatCursorLine
+        const idealStart = Math.max(0, targetLineIndex - Math.floor(MESSAGE_ROWS / 2))
+        const maxStart = Math.max(0, total - MESSAGE_ROWS)
+        const clampedStart = Math.min(idealStart, maxStart)
 
-      const idealOffset = Math.max(0, total - MESSAGE_ROWS - clampedStart)
-      setScrollOffset(idealOffset)
+        const idealOffset = Math.max(0, total - MESSAGE_ROWS - clampedStart)
+        setScrollOffset(idealOffset)
+      }
     }
-  }, [chatCursorLine, total, MESSAGE_ROWS, focused, tab, setScrollOffset])
+  }, [chatCursorLine, targetLineIndex, total, MESSAGE_ROWS, focused, tab, setScrollOffset])
 
   const start   = Math.max(0, total - MESSAGE_ROWS - scrollOffset)
   const visible = allLines.slice(start, start + MESSAGE_ROWS)
