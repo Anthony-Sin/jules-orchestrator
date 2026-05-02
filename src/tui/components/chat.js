@@ -122,6 +122,22 @@ export function ChatPanel({
 
   const MESSAGE_ROWS = Math.max(2, chatVisibleRows)
   const total   = allLines.length
+
+  // Calculate scrolling to keep cursor in view
+  const targetLineIndex = Math.max(0, total - 1 - (chatCursorLine || 0))
+
+  useEffect(() => {
+    if (focused && tab === 'chat' && total > 0 && setScrollOffset) {
+      // Try to keep the targetLineIndex near the center of the visible window
+      const idealStart = Math.max(0, targetLineIndex - Math.floor(MESSAGE_ROWS / 2))
+      const maxStart = Math.max(0, total - MESSAGE_ROWS)
+      const clampedStart = Math.min(idealStart, maxStart)
+
+      const idealOffset = Math.max(0, total - MESSAGE_ROWS - clampedStart)
+      setScrollOffset(idealOffset)
+    }
+  }, [chatCursorLine, total, MESSAGE_ROWS, focused, tab, setScrollOffset])
+
   const start   = Math.max(0, total - MESSAGE_ROWS - scrollOffset)
   const visible = allLines.slice(start, start + MESSAGE_ROWS)
 
@@ -130,20 +146,21 @@ export function ChatPanel({
     if (!focused || tab !== 'chat') return
 
     if (key.upArrow) {
-      // scroll up: increase offset (further from bottom)
-      if (setScrollOffset) setScrollOffset(o => Math.min(Math.max(0, total - MESSAGE_ROWS), o + 1))
+      if (setChatCursorLine) {
+         setChatCursorLine(c => Math.min(total - 1, (c || 0) + 1))
+      }
       return
     }
     if (key.downArrow) {
-      // scroll down: decrease offset (towards bottom)
-      if (setScrollOffset) setScrollOffset(o => Math.max(0, o - 1))
+      if (setChatCursorLine) {
+         setChatCursorLine(c => Math.max(0, (c || 0) - 1))
+      }
       return
     }
-    if (key.meta && input === ' ') {
-      // expand the message nearest the middle of the visible area
-      const midVisible = visible[Math.floor(visible.length / 2)]
-      if (midVisible && midVisible.msgIdx >= 0) {
-        toggleMessageExpand(midVisible.msgIdx)
+    if (key.meta && input === 'a') {
+      const selectedLine = allLines[targetLineIndex]
+      if (selectedLine && selectedLine.msgIdx >= 0) {
+        toggleMessageExpand(selectedLine.msgIdx)
       }
       return
     }
@@ -259,9 +276,8 @@ export function ChatPanel({
               width: wrapLimit
             })
           : visible.map((l, i) => {
-            // Show ▶ on the middle visible line (that's what alt+spc will expand)
-            const midIdx = Math.floor(visible.length / 2);
-            const isFoc  = i === midIdx && focused && tab === 'chat';
+            const absoluteIdx = start + i
+            const isFoc  = absoluteIdx === targetLineIndex && focused && tab === 'chat';
             const prefixElt = React.createElement(Text, { color: 'cyanBright' }, (isFoc && !chatMenuOpen) ? '▶ ' : '  ');
 
             // ── Dropdown header ──
@@ -284,7 +300,7 @@ export function ChatPanel({
                 // Key hint for focused message
                 l.isLong && isFoc && React.createElement(Text, {
                   color: 'gray', dimColor: true, wrap: 'truncate'
-                }, '  [alt+spc]')
+                }, '  [alt+a]')
               )
             }
 
@@ -302,7 +318,7 @@ export function ChatPanel({
                 React.createElement(Text, {
                   color: focused ? 'white' : 'gray',
                   bold: true, dimColor: !focused, wrap: 'truncate'
-                }, '[alt+spc]'),
+                }, '[alt+a]'),
                 React.createElement(Text, {
                   color: focused ? '#FFB347' : 'gray',
                   dimColor: !focused, wrap: 'truncate'
@@ -401,7 +417,7 @@ export function ChatPanel({
               onChange:    onChange,
               onSubmit:    !chatMenuOpen ? onSubmit : () => {},
               placeholder: focused
-                ? '/ for menu · ↑↓ nav msgs · alt+spc expand'
+                ? '/ for menu · ↑↓ nav msgs · alt+a expand'
                 : 'Alt+E',
               focus:       focused && !isRepoInputMode
             })

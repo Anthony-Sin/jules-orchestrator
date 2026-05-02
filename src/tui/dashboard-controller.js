@@ -53,6 +53,7 @@ export function useDashboardController() {
   const [messages, setMessages]             = useState([])
   const [scrollOffset, setScrollOffset] = useState(0)
   const sessionScrollRef = useRef({})
+  const sessionCursorRef = useRef({})
 
   const [chatTab, setChatTab]               = useState('chat')
   const [chatMenuOpen, setChatMenuOpen]     = useState(false)
@@ -107,8 +108,9 @@ export function useDashboardController() {
     const id = selectedSessionId
     if (id) {
       sessionScrollRef.current[id] = scrollOffset
+      sessionCursorRef.current[id] = chatCursorLine
     }
-  }, [scrollOffset]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [scrollOffset, chatCursorLine]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync remote sessions with local store periodically
   useEffect(() => {
@@ -428,6 +430,7 @@ export function useDashboardController() {
     setMode('chat')
     switchingSessionRef.current = true  // prevent save effect from overwriting the restore
     setScrollOffset(sessionScrollRef.current[agent.id] ?? 0)  // restore saved, default 0 (bottom) for new
+    setChatCursorLine(sessionCursorRef.current[agent.id] ?? 0)
     resetExpandedMessages()
 
     getAllActivities(agent.id).then(res => {
