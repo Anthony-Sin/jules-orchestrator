@@ -9,7 +9,7 @@
 //   tui/components/help.js   — HelpScreen
 //   tui/markdown.js          — unchanged
 
-import { parseSourceDisplay, getActivities, sendMessage, listSources, deleteSession } from '../state/jules-api.js'
+import { parseSourceDisplay, getActivities, getAllActivities, sendMessage, listSources, deleteSession } from '../state/jules-api.js'
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { render, Box, Text, useInput, useApp } from 'ink'
 import TextInput from 'ink-text-input'
@@ -273,7 +273,7 @@ export function Dashboard({ searchTerm = '' }) {
     setMode('chat')
     setScrollOffset(0)
 
-    getActivities(agent.id).then(res => {
+    getAllActivities(agent.id).then(res => {
       const acts    = res.activities || res || []
       const history = []
       if (Array.isArray(acts)) {
@@ -289,6 +289,12 @@ export function Dashboard({ searchTerm = '' }) {
             if (act.planGenerated) text += '\nPlan: ' + JSON.stringify(act.planGenerated)
             if (text.trim()) history.push({ role: act.originator, text })
           }
+        }
+        if (sorted.length > 0) {
+          setLastActivityIds(prev => ({
+            ...prev,
+            [agent.id]: sorted[sorted.length - 1].name
+          }))
         }
       }
       history.push({
