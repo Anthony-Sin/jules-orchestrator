@@ -193,7 +193,7 @@ export async function handleOrchestratorToolCall(toolCall, orchestratorSessionId
         const julesSession = await createSession({
           prompt: instructionsWithBranch,
           source: config.source,
-          startingBranch: config.branch || 'main',
+          startingBranch: config.branch,
           requirePlanApproval: false,
         });
 
@@ -246,7 +246,7 @@ export async function handleOrchestratorToolCall(toolCall, orchestratorSessionId
         const julesSession = await createSession({
           prompt: mergeInstructions,
           source: config.source,
-          startingBranch: config.branch || 'main',
+          startingBranch: config.branch,
           requirePlanApproval: false,
         });
 

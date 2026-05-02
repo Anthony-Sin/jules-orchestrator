@@ -426,7 +426,7 @@ configCmd
 
 configCmd
   .command('set-branch <branch>')
-  .description('Set the default branch (default: main)')
+  .description('Set the default branch (default: uses repo default)')
   .action((branch) => {
     setConfig('branch', branch)
     console.log(chalk.green(`\n  ✓ Branch set to: ${branch}\n`))
@@ -448,7 +448,7 @@ configCmd
     console.log(chalk.white('\n  Current config:'))
     console.log(`  API key : ${cfg.apiKey ? chalk.green('set') : chalk.red('not set')}`)
     console.log(`  Source  : ${cfg.source || chalk.dim('not set')}`)
-    console.log(`  Branch  : ${cfg.branch || chalk.dim('main (default)')}`)
+    console.log(`  Branch  : ${cfg.branch || chalk.dim('uses repo default')}`)
     console.log(`  Auto-PR : ${cfg.autoPr !== undefined ? chalk.cyan(cfg.autoPr) : chalk.dim('true (default)')}`)
     console.log()
   })
