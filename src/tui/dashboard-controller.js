@@ -81,7 +81,6 @@ export function useDashboardController() {
   // Reset expanded messages when session changes
   const resetExpandedMessages = useCallback(() => {
     setExpandedMessages(new Set())
-    setChatCursorLine(0)
   }, [])
 
   const [notes, setNotes] = useState(() => store.get('tuiNotes', ''))
