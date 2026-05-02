@@ -13,7 +13,7 @@ import { parseSourceDisplay, getActivities, getAllActivities, sendMessage, listS
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { render, Box, Text, useInput, useApp } from 'ink'
 import TextInput from 'ink-text-input'
-import { getSessions, getConfig, setConfig, store, removeSession } from '../state/store.js'
+import { getSessions, getConfig, setConfig, store, removeSession, upsertSession } from '../state/store.js'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -83,25 +83,54 @@ export function Dashboard({ searchTerm = '' }) {
   const [lastActivityIds, setLastActivityIds]     = useState({})
   const [queuedMessages, setQueuedMessages]       = useState({})
 
-  // Clean up archived/deleted remote sessions from local store on mount
+  // Sync remote sessions with local store periodically
   useEffect(() => {
-    listAllSessions().then(res => {
-      const remoteIds = new Set((res.sessions || []).map(s => s.id))
-      const localSessions = getSessions() || []
+    let active = true
+    let syncTimer = null
+    const syncRemote = async () => {
+      if (!active) return
+      try {
+        const res = await listAllSessions()
+        const remoteSessions = res.sessions || []
+        const remoteIds = new Set(remoteSessions.map(s => s.id))
+        const localSessions = getSessions() || []
 
-      let changed = false
-      for (const s of localSessions) {
-        // Only clean up sessions that should exist remotely (skip local-only QUEUED)
-        if (s.state !== 'QUEUED' && !remoteIds.has(s.id)) {
-          removeSession(s.id)
-          changed = true
+        let changed = false
+
+        // 1. Clean up local sessions that no longer exist remotely (archived/deleted)
+        for (const s of localSessions) {
+          if (s.state !== 'QUEUED' && !remoteIds.has(s.id)) {
+            removeSession(s.id)
+            changed = true
+          }
         }
-      }
 
-      if (changed) {
-        setSessionsData(getSessions() || [])
-      }
-    }).catch(() => {})
+        // 2. Update local store with latest remote state
+        for (const rs of remoteSessions) {
+          const local = localSessions.find(ls => ls.id === rs.id)
+          if (!local || local.state !== rs.state || local.lastUpdated !== rs.updateTime) {
+            upsertSession({
+              id: rs.id,
+              state: rs.state,
+              lastUpdated: rs.updateTime || rs.createTime,
+              createdAt: rs.createTime,
+              title: rs.title || local?.title || 'jules-orchestrator',
+              repo: rs.sourceContext?.source || local?.repo
+            })
+            changed = true
+          }
+        }
+
+        if (changed) {
+          setSessionsData(getSessions() || [])
+        }
+      } catch (err) {} // silent fail on sync
+
+      if (active) syncTimer = setTimeout(syncRemote, 10000) // Sync every 10 seconds
+    }
+
+    syncRemote()
+    return () => { active = false; clearTimeout(syncTimer) }
   }, [])
 
   // ── Repo picker ──────────────────────────────────────────────────
