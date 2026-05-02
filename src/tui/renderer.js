@@ -44,6 +44,7 @@ export function Dashboard({ searchTerm = '' }) {
     mode, setMode, lastLeftMode,
     diffFileSel, setDiffFileSel,
     diffScrollOffset, setDiffScrollOffset,
+    diffFocus, setDiffFocus,
     chatInput, setChatInput,
     messages, setMessages,
     scrollOffset, setScrollOffset,
@@ -52,7 +53,7 @@ export function Dashboard({ searchTerm = '' }) {
     chatMenuSel, setChatMenuSel,
     chatTargetMode, setChatTargetMode,
     expandedMessages, toggleMessageExpand,
-    focusedMsgIdx, setFocusedMsgIdx,
+    chatCursorLine, setChatCursorLine,
     notes, setNotes,
     selectedSessionId, latestProgress,
     queuedMessages, setQueuedMessages,
@@ -248,13 +249,24 @@ export function Dashboard({ searchTerm = '' }) {
 
     if (key.escape) { setMode('table'); setChatMenuOpen(false); return }
     if (key.tab) {
-      setMode(m => {
-        if (m === 'table') return showGraph ? 'graph' : 'chat'
-        if (m === 'graph') return 'chat'
-        if (m === 'diff') return 'chat'
-        if (m === 'chat') return lastLeftMode
-        return 'table'
-      })
+      if (mode === 'diff') {
+        if (diffFocus === 'files') {
+          setDiffFocus('content')
+        } else {
+          setDiffFocus('files')
+          setMode('chat')
+        }
+      } else if (mode === 'chat' && lastLeftMode === 'diff') {
+        setMode('diff')
+        setDiffFocus('files')
+      } else {
+        setMode(m => {
+          if (m === 'table') return showGraph ? 'graph' : 'chat'
+          if (m === 'graph') return 'chat'
+          if (m === 'chat') return lastLeftMode
+          return 'table'
+        })
+      }
       setScrollOffset(0)
       return
     }
@@ -287,33 +299,25 @@ export function Dashboard({ searchTerm = '' }) {
       if (key.shift && (key.leftArrow || key.rightArrow)) {
         setChatTab(t => t === 'chat' ? 'notes' : 'chat'); return
       }
-      if (key.meta && input === ' ') {
-        if (focusedMsgIdx !== null) toggleMessageExpand(focusedMsgIdx);
-        return;
-      }
-      if (key.upArrow) {
-        if (focusedMsgIdx !== null && focusedMsgIdx > 0) { setFocusedMsgIdx(focusedMsgIdx - 1); return }
-        if (focusedMsgIdx === null && messages.length > 0) { setFocusedMsgIdx(messages.length - 1); return }
-        setScrollOffset(o => o + 1); return
-      }
-      if (key.downArrow) {
-        if (focusedMsgIdx !== null && focusedMsgIdx < messages.length - 1) { setFocusedMsgIdx(focusedMsgIdx + 1); return }
-        setScrollOffset(o => Math.max(0, o - 1)); return
-      }
+
+      // We will let chat.js handle up/down arrow and alt+space natively for line-by-line navigation
+      // when tab === 'chat', but we need to catch page up/page down.
       if (key.pageUp)    { setScrollOffset(o => o + 5); return }
       if (key.pageDown)  { setScrollOffset(o => Math.max(0, o - 5)); return }
       return
     }
 
     if (mode === 'diff') {
-      if (key.upArrow) { setDiffFileSel(i => Math.max(0, i - 1)); return }
-      if (key.downArrow) { setDiffFileSel(i => i + 1); return } // bounded internally
-      if (key.shift && key.upArrow) { setDiffScrollOffset(o => Math.max(0, o - 1)); return }
-      if (key.shift && key.downArrow) { setDiffScrollOffset(o => o + 1); return }
-      if (key.pageUp) { setDiffScrollOffset(o => Math.max(0, o - 10)); return }
-      if (key.pageDown) { setDiffScrollOffset(o => o + 10); return }
-      // The user wants to tab back into the chat and keep the diff open
-      if (key.tab) { setMode('chat'); return }
+      if (diffFocus === 'files') {
+        if (key.leftArrow) { setDiffFileSel(i => Math.max(0, i - 1)); return }
+        if (key.rightArrow) { setDiffFileSel(i => i + 1); return } // bounded in gitdiff component
+        if (key.return) { setDiffFocus('content'); return }
+      } else {
+        if (key.upArrow) { setDiffScrollOffset(o => Math.max(0, o - 1)); return }
+        if (key.downArrow) { setDiffScrollOffset(o => o + 1); return }
+        if (key.pageUp) { setDiffScrollOffset(o => Math.max(0, o - 10)); return }
+        if (key.pageDown) { setDiffScrollOffset(o => o + 10); return }
+      }
       return
     }
 
@@ -523,7 +527,9 @@ export function Dashboard({ searchTerm = '' }) {
                   height: availableBodyHeight,
                   isDimmed: mode !== 'diff',
                   fileSel: diffFileSel,
-                  scrollOffset: diffScrollOffset
+                  scrollOffset: diffScrollOffset,
+                  diffFocus: mode === 'diff' ? diffFocus : null,
+                  setDiffFileSel // pass setter to bound correctly inside component
                 })
               : ((mode === 'table' || (mode === 'chat' && lastLeftMode === 'table') || !graphVisible)
                   ? React.createElement(Box, { flexDirection: 'column', flexGrow: 1, overflow: 'hidden' },
@@ -577,7 +583,7 @@ export function Dashboard({ searchTerm = '' }) {
               scrollOffset, setScrollOffset, width: rightPanelWidth, tab: chatTab, notes, setNotes, isRepoInputMode: repoInputMode,
               repoName: currentRepoDisplay, agentTitle: activeAgentTitle, agentId: activeAgentId, chatTargetMode,
               visibleAgentsCount: VISIBLE_AGENTS, chatMenuOpen, chatMenuSel, chatVisibleRows: CHAT_VISIBLE_ROWS, latestProgress, promptPreview,
-              expandedMessages, toggleMessageExpand, focusedMsgIdx, setFocusedMsgIdx
+              expandedMessages, toggleMessageExpand, chatCursorLine, setChatCursorLine
             })
           )
         ),

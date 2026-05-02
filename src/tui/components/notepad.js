@@ -104,19 +104,29 @@ export function Notepad({ value = '', onChange, focused = true, height = 10, wid
 
     // Regular typed input
     if (input) {
+      const maxCol = width > 2 ? width - 2 : 10;
       // Handle pasted multiline input gracefully
       const isPaste = input.includes('\n') || input.includes('\r');
       if (isPaste) {
          const pastedLines = input.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-         const currentLine = lines[cursorLine];
-         const before = currentLine.substring(0, cursorCol);
-         const after = currentLine.substring(cursorCol);
+         let currentLine = lines[cursorLine];
+         let before = currentLine.substring(0, cursorCol);
+         let after = currentLine.substring(cursorCol);
 
-         const newLines = [...lines];
+         let newLines = [...lines];
          if (pastedLines.length === 1) {
-           newLines[cursorLine] = before + pastedLines[0] + after;
-           onChange(newLines.join('\n'));
-           setCursorCol(cursorCol + pastedLines[0].length);
+           const combined = before + pastedLines[0] + after;
+           if (combined.length > maxCol) {
+               newLines[cursorLine] = combined.substring(0, maxCol);
+               newLines.splice(cursorLine + 1, 0, combined.substring(maxCol));
+               onChange(newLines.join('\n'));
+               setCursorLine(cursorLine + 1);
+               setCursorCol(combined.substring(maxCol).length - after.length);
+           } else {
+               newLines[cursorLine] = combined;
+               onChange(newLines.join('\n'));
+               setCursorCol(cursorCol + pastedLines[0].length);
+           }
          } else {
            newLines[cursorLine] = before + pastedLines[0];
            for (let i = 1; i < pastedLines.length - 1; i++) {
@@ -132,9 +142,28 @@ export function Notepad({ value = '', onChange, focused = true, height = 10, wid
       } else {
         const currentLine = lines[cursorLine];
         const newLines = [...lines];
-        newLines[cursorLine] = currentLine.substring(0, cursorCol) + input + currentLine.substring(cursorCol);
-        onChange(newLines.join('\n'));
-        setCursorCol(c => c + input.length);
+        const combined = currentLine.substring(0, cursorCol) + input + currentLine.substring(cursorCol);
+
+        if (combined.length > maxCol) {
+            // Auto wrap
+            newLines[cursorLine] = combined.substring(0, maxCol);
+            const overflow = combined.substring(maxCol);
+            // If we are at the end of the line, push down
+            if (cursorCol >= maxCol - 1) {
+                newLines.splice(cursorLine + 1, 0, overflow);
+                onChange(newLines.join('\n'));
+                setCursorLine(l => l + 1);
+                setCursorCol(input.length);
+            } else {
+                newLines.splice(cursorLine + 1, 0, overflow);
+                onChange(newLines.join('\n'));
+                setCursorCol(c => c + input.length);
+            }
+        } else {
+            newLines[cursorLine] = combined;
+            onChange(newLines.join('\n'));
+            setCursorCol(c => c + input.length);
+        }
       }
     }
   });

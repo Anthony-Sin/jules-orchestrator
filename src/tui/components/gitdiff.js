@@ -3,7 +3,7 @@ import { Box, Text } from 'ink'
 import { getAllActivities } from '../../state/jules-api.js'
 import { parsePatch } from 'diff'
 
-export function GitDiffViewer({ sessionId, width, height, isDimmed, fileSel = 0, scrollOffset = 0 }) {
+export function GitDiffViewer({ sessionId, width, height, isDimmed, fileSel = 0, scrollOffset = 0, diffFocus, setDiffFileSel }) {
   const [activities, setActivities] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -81,8 +81,16 @@ export function GitDiffViewer({ sessionId, width, height, isDimmed, fileSel = 0,
   const filesPanelHeight = 4 // Title row + 1 active file name row + 2 border rows
   const diffPanelHeight = height - filesPanelHeight
 
+  useEffect(() => {
+    if (parsedDiff && parsedDiff.length > 0 && setDiffFileSel) {
+      if (fileSel >= parsedDiff.length) {
+        setDiffFileSel(parsedDiff.length - 1)
+      }
+    }
+  }, [fileSel, parsedDiff, setDiffFileSel])
+
   // Formatted file list row (just show one active with < > arrows to denote selection)
-  const fileListText = parsedDiff.map((file, idx) => {
+  const filesListElements = parsedDiff.map((file, idx) => {
       let fileName = file.newFileName || file.oldFileName
       if (fileName.startsWith('b/')) fileName = fileName.substring(2)
       else if (fileName.startsWith('a/')) fileName = fileName.substring(2)
@@ -92,8 +100,25 @@ export function GitDiffViewer({ sessionId, width, height, isDimmed, fileSel = 0,
           fileName = parts[0][0] + '/' + parts[1][0] + '/' + parts.slice(-2).join('/')
       }
 
-      return idx === fileSel ? `[${fileName}]` : fileName
-  }).join('  ·  ')
+      const isSelected = idx === fileSel
+      const isFilesFocused = diffFocus === 'files'
+
+      return React.createElement(Text, {
+        key: idx,
+        color: isDimmed ? 'gray' : (isSelected ? (isFilesFocused ? 'whiteBright' : 'cyanBright') : 'gray'),
+        backgroundColor: isSelected && isFilesFocused && !isDimmed ? 'blue' : undefined,
+      }, isSelected ? ` [${fileName}] ` : ` ${fileName} `)
+  })
+
+  // We only show a window of files so it doesn't wrap awkwardly or overflow.
+  // We'll calculate a simple sliding window so the selected file is in the middle.
+  let startIdx = Math.max(0, fileSel - 2)
+  let endIdx = Math.min(parsedDiff.length, startIdx + 5)
+  if (endIdx - startIdx < 5) {
+    startIdx = Math.max(0, endIdx - 5)
+  }
+
+  const visibleFilesList = filesListElements.slice(startIdx, endIdx)
 
   const filesPanel = React.createElement(Box, {
     flexDirection: 'column',
@@ -101,10 +126,20 @@ export function GitDiffViewer({ sessionId, width, height, isDimmed, fileSel = 0,
     height: filesPanelHeight,
     paddingX: 1,
     borderStyle: 'single',
-    borderColor: isDimmed ? 'gray' : 'green'
+    borderColor: isDimmed ? 'gray' : (diffFocus === 'files' ? 'greenBright' : 'green')
   },
-    React.createElement(Text, { color: 'whiteBright', bold: true, wrap: 'truncate' }, `Files Changed [${fileSel + 1}/${parsedDiff.length}] (Up/Down to switch)`),
-    React.createElement(Text, { color: isDimmed ? 'gray' : 'cyan', wrap: 'truncate' }, fileListText)
+    React.createElement(Text, { color: isDimmed ? 'gray' : (diffFocus === 'files' ? 'whiteBright' : 'gray'), bold: true, wrap: 'truncate' },
+      `Files Changed [${fileSel + 1}/${parsedDiff.length}]  (←/→ switch, ↵ to view diff, Tab for chat)`
+    ),
+    React.createElement(Box, { flexDirection: 'row', overflow: 'hidden' },
+      startIdx > 0 ? React.createElement(Text, { color: 'gray' }, '... ') : null,
+      ...visibleFilesList.reduce((acc, curr, idx) => {
+        if (idx > 0) acc.push(React.createElement(Text, { key: `dot-${idx}`, color: 'gray' }, ' · '))
+        acc.push(curr)
+        return acc
+      }, []),
+      endIdx < parsedDiff.length ? React.createElement(Text, { color: 'gray' }, ' ...') : null
+    )
   )
 
   // Render diff below
@@ -166,7 +201,9 @@ export function GitDiffViewer({ sessionId, width, height, isDimmed, fileSel = 0,
     width: width,
     height: diffPanelHeight,
     paddingX: 1,
-    overflow: 'hidden'
+    overflow: 'hidden',
+    borderStyle: 'single',
+    borderColor: isDimmed ? 'gray' : (diffFocus === 'content' ? 'greenBright' : 'gray'),
   },
     visibleDiffLines.map((l, i) => {
       if (l.isHunk || l.leftText === undefined) {
