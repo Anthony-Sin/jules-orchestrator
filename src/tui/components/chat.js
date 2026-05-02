@@ -367,11 +367,11 @@ export function ChatPanel({
 
     // ── Slash-command menu ──────────────────────────────────────────
     chatMenuOpen && tab === 'chat' && React.createElement(Box, {
-      flexDirection: 'column', height: 4,
+      flexDirection: 'column', height: 5,
       borderStyle: 'round', borderColor: 'cyan',
       paddingX: 1, flexShrink: 0, minWidth: 0, overflow: 'hidden'
     },
-      ['Start New Task', 'Start New Orchestrator'].map((opt, idx) =>
+      ['Start New Task', 'Start New Orchestrator', 'Approve Plan'].map((opt, idx) =>
         React.createElement(Text, { key: idx, color: chatMenuSel === idx ? 'cyanBright' : 'gray', wrap: 'truncate' },
           chatMenuSel === idx ? `▶ ${opt}` : `  ${opt}`)
       )
