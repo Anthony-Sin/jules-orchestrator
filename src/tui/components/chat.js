@@ -22,7 +22,7 @@ export function ChatPanel({
   visibleAgentsCount, chatMenuOpen, chatMenuSel, chatVisibleRows = 10, latestProgress, promptPreview,
   // Dropdown props from dashboard-controller
   expandedMessages, toggleMessageExpand,
-  focusedMsgIdx, setFocusedMsgIdx,
+  focusedMsgIdx, setFocusedMsgIdx, setScrollOffset,
 }) {
   const numWidth  = typeof width === 'number' && !isNaN(width) ? width : 40
   const wrapLimit = Math.max(10, numWidth - 4)
@@ -32,6 +32,10 @@ export function ChatPanel({
   // ── SAFEGUARD ──────────────────────────────────────────────────────
   // Prevent "Cannot read properties of undefined (reading 'has')"
   const _expanded = expandedMessages instanceof Set ? expandedMessages : new Set();
+
+  // Keep track of the first and last line index of the focused message
+  let focusedMsgStartLine = -1;
+  let focusedMsgEndLine = -1;
 
   // ── Build flat line list with dropdown awareness ──────────────────
   const allLines = useMemo(() => {
@@ -49,6 +53,8 @@ export function ChatPanel({
       for (let msgIdx = 0; msgIdx < messages.length; msgIdx++) {
         const m = messages[msgIdx]
         const isFocusedMsg = focusedMsgIdx === msgIdx
+
+        if (isFocusedMsg) focusedMsgStartLine = lines.length;
 
         if (m.role === 'agent') {
           // Build full markdown lines for this message
@@ -118,6 +124,8 @@ export function ChatPanel({
             lines.push({ type: 'text', text: l, color: focused ? 'cyan' : 'gray', isFocusedMsg })
           lines.push({ type: 'gap', isFocusedMsg })
         }
+
+        if (isFocusedMsg) focusedMsgEndLine = lines.length - 1;
       }
     } else {
       // Notes tab
@@ -132,6 +140,33 @@ export function ChatPanel({
   const total   = allLines.length
   const start   = Math.max(0, total - MESSAGE_ROWS - scrollOffset)
   const visible = allLines.slice(start, start + MESSAGE_ROWS)
+
+  // ── Auto-scroll to keep focused message in view ───────────────────
+  React.useEffect(() => {
+    if (!focused || tab !== 'chat' || !setScrollOffset) return;
+    if (focusedMsgIdx === null || focusedMsgStartLine === -1) return;
+
+    // The currently visible window is from `start` to `start + MESSAGE_ROWS - 1`.
+    const currentStart = total - MESSAGE_ROWS - scrollOffset;
+    const currentEnd = currentStart + MESSAGE_ROWS - 1;
+
+    // If the top of the focused message is above the viewable area,
+    // we must increase scrollOffset to show it.
+    if (focusedMsgStartLine < currentStart) {
+      const neededScroll = total - MESSAGE_ROWS - focusedMsgStartLine;
+      setScrollOffset(Math.max(0, neededScroll));
+    }
+    // If the bottom of the focused message is below the viewable area,
+    // we must decrease scrollOffset to show it.
+    else if (focusedMsgEndLine > currentEnd) {
+      // Calculate how much we need to shift.
+      // E.g., if end line is at 50, and viewable ends at 48, we need viewable end to be at least 50.
+      // which means currentStart must be at least 50 - MESSAGE_ROWS + 1
+      const neededStart = focusedMsgEndLine - MESSAGE_ROWS + 1;
+      const neededScroll = total - MESSAGE_ROWS - neededStart;
+      setScrollOffset(Math.max(0, neededScroll));
+    }
+  }, [focusedMsgIdx, focusedMsgStartLine, focusedMsgEndLine, total, MESSAGE_ROWS, scrollOffset, focused, tab, setScrollOffset]);
 
   const isNewSession = chatTargetMode === 'CREATE_ORCHESTRATOR' ||
     (!chatTargetMode && agentId === 'NEW TASK')
