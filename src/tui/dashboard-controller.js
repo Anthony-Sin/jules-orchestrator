@@ -507,9 +507,7 @@ export function useDashboardController() {
       return
     }
 
-    const targetAgent = chatTargetMode === 'TALK_TO_LATEST_ORCHESTRATOR'
-      ? (AGENTS.find(a => a.type === 'orchestrator') || AGENTS[0])
-      : AGENTS.find(a => a.id === selectedSessionId)
+    const targetAgent = AGENTS.find(a => a.id === selectedSessionId)
 
     if (!targetAgent) {
       setMessages(m => [...m, { role: 'system', text: 'Error: No agent found.' }]); return

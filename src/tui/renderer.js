@@ -258,14 +258,14 @@ export function Dashboard({ searchTerm = '' }) {
         if (key.upArrow)   { setChatMenuSel(i => Math.max(0, i - 1)); return }
         if (key.downArrow) { setChatMenuSel(i => Math.min(1, i + 1)); return }
         if (key.return) {
-          const opts = ['CREATE_ORCHESTRATOR', 'TALK_TO_LATEST_ORCHESTRATOR']
+          const opts = ['CREATE_ORCHESTRATOR', 'CREATE_ORCHESTRATOR']
           setChatTargetMode(opts[chatMenuSel])
           setChatMenuOpen(false)
           setChatInput('')
           if (chatMenuSel === 0) {
             setMessages([{ role: 'system', text: '[SYSTEM] Warning: This will create a new session/task.' }])
           } else if (chatMenuSel === 1) {
-            setMessages([{ role: 'system', text: '[SYSTEM] Warning: This will start a new Orchestrator.' }])
+            setMessages([{ role: 'system', text: '[SYSTEM] Warning: This will create a brand new Orchestrator.' }])
           }
           return
         }
