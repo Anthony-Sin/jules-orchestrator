@@ -125,43 +125,31 @@ export function ChatPanel({
   const start   = Math.max(0, total - MESSAGE_ROWS - scrollOffset)
   const visible = allLines.slice(start, start + MESSAGE_ROWS)
 
-  // ── Line-by-line selection hook ───────────────────
+  // ── Scroll + expand hook ─────────────────────────
   useInput((input, key) => {
     if (!focused || tab !== 'chat') return
 
     if (key.upArrow) {
-      setChatCursorLine(l => Math.max(0, l - 1))
+      // scroll up: increase offset (further from bottom)
+      if (setScrollOffset) setScrollOffset(o => Math.min(Math.max(0, total - MESSAGE_ROWS), o + 1))
       return
     }
     if (key.downArrow) {
-      setChatCursorLine(l => Math.min(total > 0 ? total - 1 : 0, l + 1))
+      // scroll down: decrease offset (towards bottom)
+      if (setScrollOffset) setScrollOffset(o => Math.max(0, o - 1))
       return
     }
     if (key.meta && input === ' ') {
-      if (allLines[chatCursorLine] && allLines[chatCursorLine].msgIdx >= 0) {
-        toggleMessageExpand(allLines[chatCursorLine].msgIdx)
+      // expand the message nearest the middle of the visible area
+      const midVisible = visible[Math.floor(visible.length / 2)]
+      if (midVisible && midVisible.msgIdx >= 0) {
+        toggleMessageExpand(midVisible.msgIdx)
       }
       return
     }
   })
 
-  // ── Auto-scroll to keep focused line in view ───────────────────
-  useEffect(() => {
-    if (chatCursorLine >= total && total > 0) {
-      setChatCursorLine(total - 1)
-    }
-
-    if (!focused || tab !== 'chat' || !setScrollOffset || total === 0) return
-
-    const currentStart = total - MESSAGE_ROWS - scrollOffset
-    const currentEnd = currentStart + MESSAGE_ROWS - 1
-
-    if (chatCursorLine < currentStart) {
-      setScrollOffset(total - MESSAGE_ROWS - chatCursorLine)
-    } else if (chatCursorLine > currentEnd) {
-      setScrollOffset(total - MESSAGE_ROWS - (chatCursorLine - MESSAGE_ROWS + 1))
-    }
-  }, [chatCursorLine, total, MESSAGE_ROWS, scrollOffset, focused, tab, setScrollOffset, setChatCursorLine])
+  // Scroll position is intentionally NOT reset on tab switch — user keeps their place
 
   const isNewSession = chatTargetMode === 'CREATE_ORCHESTRATOR' ||
     (!chatTargetMode && agentId === 'NEW TASK')
@@ -271,12 +259,10 @@ export function ChatPanel({
               width: wrapLimit
             })
           : visible.map((l, i) => {
-            // Check if this specific line is currently focused
-            const globalLineIdx = start + i;
-            const isFoc = globalLineIdx === chatCursorLine && focused && tab === 'chat';
-            
-            // Highlight the exact focused line
-            const prefixElt = React.createElement(Text, { color: 'cyanBright' }, isFoc ? '▶ ' : '  ');
+            // Show ▶ on the middle visible line (that's what alt+spc will expand)
+            const midIdx = Math.floor(visible.length / 2);
+            const isFoc  = i === midIdx && focused && tab === 'chat';
+            const prefixElt = React.createElement(Text, { color: 'cyanBright' }, (isFoc && !chatMenuOpen) ? '▶ ' : '  ');
 
             // ── Dropdown header ──
             if (l.type === 'dropdown-header') {
@@ -405,7 +391,8 @@ export function ChatPanel({
         React.createElement(Box, { flexShrink: 0, minWidth: 0 },
           React.createElement(Text, {
             color: focused ? 'green' : 'gray', bold: focused, wrap: 'truncate'
-          }, focused ? '▶ ' : '▷ ')
+          // ── FIX: suppress ▶ while slash menu is open to avoid duplicate arrows ──
+          }, (focused && !chatMenuOpen) ? '▶ ' : '▷ ')
         ),
         React.createElement(Box, { flexGrow: 1, flexShrink: 1, minWidth: 0 },
           React.createElement(Box, { width: Math.max(10, numWidth - 4) },

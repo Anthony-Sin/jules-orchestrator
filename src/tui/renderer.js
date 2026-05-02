@@ -228,7 +228,7 @@ export function Dashboard({ searchTerm = '' }) {
       })
       return
     }
-    if (key.meta && input === 'e') { setMode('chat'); setScrollOffset(0); return }
+    if (key.meta && input === 'e') { setMode('chat'); return }
     if (key.meta && input === 'n') { setMode('chat'); setChatTab(t => t === 'chat' ? 'notes' : 'chat'); return }
     if (key.meta && input === 'h') { setShowGraph(v => !v); return }
     if (key.meta && input === 'm') { setRepoInputMode(true); setRepoInput('/'); setSourceSel(0); return }
@@ -245,7 +245,7 @@ export function Dashboard({ searchTerm = '' }) {
       if (columns < 100 || rows < 15) { flash('Terminal too small for Graph View'); return }
       setShowGraph(true); setMode('graph'); return
     }
-    if (key.f3) { setMode('chat'); setScrollOffset(0); return }
+    if (key.f3) { setMode('chat'); return }
 
     if (key.escape) { setMode('table'); setChatMenuOpen(false); return }
     if (key.tab) {
@@ -267,7 +267,6 @@ export function Dashboard({ searchTerm = '' }) {
           return 'table'
         })
       }
-      setScrollOffset(0)
       return
     }
 

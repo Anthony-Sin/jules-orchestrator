@@ -51,7 +51,9 @@ export function useDashboardController() {
   // ── Chat state ───────────────────────────────────────────────────
   const [chatInput, setChatInput]           = useState('')
   const [messages, setMessages]             = useState([])
-  const [scrollOffset, setScrollOffset]     = useState(0)
+  const [scrollOffset, setScrollOffset] = useState(0)
+  const sessionScrollRef = useRef({})
+
   const [chatTab, setChatTab]               = useState('chat')
   const [chatMenuOpen, setChatMenuOpen]     = useState(false)
   const [chatMenuSel, setChatMenuSel]       = useState(0)
@@ -90,6 +92,23 @@ export function useDashboardController() {
   const [queuedCycleIdx, setQueuedCycleIdx]       = useState(0)
   const [promptPreview, setPromptPreview]         = useState(null)
   const [latestProgress, setLatestProgress]       = useState(null)
+
+  // Tracks whether we're mid-session-switch so the save effect doesn't
+  // overwrite the just-restored scroll position on the same render cycle.
+  const switchingSessionRef = useRef(false)
+
+  // Save scroll position whenever it changes, but skip the write that fires
+  // immediately after openAgentChat sets the restored value.
+  useEffect(() => {
+    if (switchingSessionRef.current) {
+      switchingSessionRef.current = false
+      return
+    }
+    const id = selectedSessionId
+    if (id) {
+      sessionScrollRef.current[id] = scrollOffset
+    }
+  }, [scrollOffset]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync remote sessions with local store periodically
   useEffect(() => {
@@ -407,7 +426,8 @@ export function useDashboardController() {
     setSelectedSessionId(agent.id)
     setChatTargetMode('TALK_TO_SELECTED_AGENT')
     setMode('chat')
-    setScrollOffset(0)
+    switchingSessionRef.current = true  // prevent save effect from overwriting the restore
+    setScrollOffset(sessionScrollRef.current[agent.id] ?? 0)  // restore saved, default 0 (bottom) for new
     resetExpandedMessages()
 
     getAllActivities(agent.id).then(res => {

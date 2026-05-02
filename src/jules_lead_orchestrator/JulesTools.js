@@ -67,7 +67,7 @@ export async function handleOrchestratorToolCall(toolCall, orchestratorSessionId
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
         const res = await fetch(`${DEFAULTS.JULES_API_BASE}/sessions/${args.agent_id}:sendMessage`, {
-          method: 'POST',
+          method: 'POST', 
           headers: getHeaders(),
           body: JSON.stringify({ prompt: `[REASSIGNMENT] ${args.new_instructions}` }),
           signal: controller.signal
