@@ -9,11 +9,11 @@
 //   tui/components/help.js   — HelpScreen
 //   tui/markdown.js          — unchanged
 
-import { parseSourceDisplay, getActivities, sendMessage, listSources } from '../state/jules-api.js'
+import { parseSourceDisplay, getActivities, sendMessage, listSources, deleteSession } from '../state/jules-api.js'
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { render, Box, Text, useInput, useApp } from 'ink'
 import TextInput from 'ink-text-input'
-import { getSessions, getConfig, setConfig, store } from '../state/store.js'
+import { getSessions, getConfig, setConfig, store, removeSession } from '../state/store.js'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -323,6 +323,23 @@ export function Dashboard({ searchTerm = '' }) {
     if (key.meta && input === '?') { setShowHelp(v => !v); return }
     if (showHelp && (key.escape || (key.meta && input === '?'))) { setShowHelp(false); return }
     if (showHelp) return
+
+    // ── Session Deletion ──
+    if (key.meta && input === 'd' && mode === 'table') {
+      const agent = AGENTS[sel]
+      if (agent) {
+        flash(`Deleting session ${agent.id.substring(0, 6)}...`)
+        deleteSession(agent.id)
+          .then(() => {
+            removeSession(agent.id)
+            flash(`✓ Deleted session ${agent.id.substring(0, 6)}`)
+          })
+          .catch(err => {
+            flash(`Delete failed: ${err.message}`)
+          })
+      }
+      return
+    }
 
     // ── Queue Item Deletion ──
     if (key.meta && input && input >= '1' && input <= '9') {
@@ -856,9 +873,10 @@ export function Dashboard({ searchTerm = '' }) {
                 React.createElement(Text, { color: 'whiteBright', bold: true, wrap: 'truncate' }, ' alt+e'),
                 React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ' :chat '),
                 React.createElement(Text, { color: 'whiteBright', bold: true, wrap: 'truncate' }, ' alt+m'),
-                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ' :repo │ '),
-                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '↑↓:nav →:expand ←:collapse ↵:chat │ '),
-                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, 'alt+?:help │ '),
+                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ' :repo '),
+                React.createElement(Text, { color: 'whiteBright', bold: true, wrap: 'truncate' }, ' alt+d'),
+                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ' :del │ '),
+                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '↑↓:nav →:exp ←:col ↵:chat │ '),
                 React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, `agents:${AGENTS.length}`)
               ),
               React.createElement(Box, { flexShrink: 0, flexDirection: 'row' },
