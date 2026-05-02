@@ -75,6 +75,9 @@ export function useDashboardController() {
   const [selectedSessionId, setSelectedSessionId] = useState(null)
   const [lastActivityIds, setLastActivityIds]     = useState({})
   const [queuedMessages, setQueuedMessages]       = useState({})
+  const [queuedCycleIdx, setQueuedCycleIdx]       = useState(0)
+  const [promptPreview, setPromptPreview]         = useState(null)
+  const [latestProgress, setLatestProgress]       = useState(null)
 
   // Sync remote sessions with local store periodically
   useEffect(() => {
@@ -321,7 +324,9 @@ export function useDashboardController() {
                 text += '\n📋 Plan Generated:\n' + stepsStr
               }
               if (act.planApproved) text += '\n✅ Plan Approved'
-              if (act.progressUpdated) text += `\n🔄 Progress: ${act.progressUpdated.title} - ${act.progressUpdated.description}`
+              if (act.progressUpdated) {
+                setLatestProgress(`🔄 Progress: ${act.progressUpdated.title} - ${act.progressUpdated.description}`);
+              }
               if (act.sessionCompleted) text += '\n🎉 Session Completed!'
               if (act.sessionFailed) text += `\n❌ Session Failed: ${act.sessionFailed.reason}`
               if (act.artifacts && act.artifacts.length > 0) {
@@ -339,6 +344,7 @@ export function useDashboardController() {
           }
 
           if (newMessages.length > 0) {
+            setLatestProgress(null);
             setMessages(m => [...m, ...newMessages])
             setLastActivityIds(prev => ({ ...prev, [selectedSessionId]: sorted[sorted.length - 1].name }))
           } else if (foundNew && sorted.length > 0) {
@@ -444,7 +450,9 @@ export function useDashboardController() {
             let text = act.description || ''
             if (act.planGenerated) text += '\n📋 Plan Generated'
             if (act.planApproved) text += '\n✅ Plan Approved'
-            if (act.progressUpdated) text += `\n🔄 Progress: ${act.progressUpdated.title}`
+            if (act.progressUpdated) {
+              setLatestProgress(`🔄 Progress: ${act.progressUpdated.title}`);
+            }
             if (act.sessionCompleted) text += '\n🎉 Session Completed!'
             if (act.sessionFailed) text += `\n❌ Session Failed`
             if (text.trim()) history.push({ role: act.originator, text })
@@ -458,6 +466,7 @@ export function useDashboardController() {
         role: 'system',
         text: `Context: ${agent.id.substring(0, 8)}. State: ${agent.state}. Repo: ${agent.repoDisplay || agent.repo || 'unknown'}.`
       })
+      setLatestProgress(null);
       setMessages(history)
     }).catch(e => {
       setMessages([{ role: 'system', text: `Error loading history: ${e.message}` }])
@@ -534,11 +543,14 @@ export function useDashboardController() {
     chatTargetMode, setChatTargetMode,
     notes, setNotes,
     selectedSessionId, setSelectedSessionId,
+    latestProgress, setLatestProgress,
     // ── Dropdown state ──────────────────────────────────────────────
     expandedMessages, toggleMessageExpand,
     focusedMsgIdx, setFocusedMsgIdx,
     // ───────────────────────────────────────────────────────────────
     queuedMessages, setQueuedMessages,
+    queuedCycleIdx, setQueuedCycleIdx,
+    promptPreview, setPromptPreview,
     repoInputMode, setRepoInputMode,
     repoInput, setRepoInput,
     sourcesList, setSourcesList,

@@ -19,7 +19,7 @@ export function ChatPanel({
   notes, setNotes, isRepoInputMode,
   repoName, agentTitle, agentId,
   chatTargetMode,
-  visibleAgentsCount, chatMenuOpen, chatMenuSel, chatVisibleRows = 10,
+  visibleAgentsCount, chatMenuOpen, chatMenuSel, chatVisibleRows = 10, latestProgress, promptPreview,
   // Dropdown props from dashboard-controller
   expandedMessages, toggleMessageExpand,
   focusedMsgIdx, setFocusedMsgIdx,
@@ -262,7 +262,7 @@ export function ChatPanel({
                 // Key hint for focused message
                 l.isLong && focused && React.createElement(Text, {
                   color: 'gray', dimColor: true, wrap: 'truncate'
-                }, '  [spc]')
+                }, '  [alt+spc]')
               )
             }
 
@@ -280,7 +280,7 @@ export function ChatPanel({
                 React.createElement(Text, {
                   color: focused ? 'white' : 'gray',
                   bold: true, dimColor: !focused, wrap: 'truncate'
-                }, '[spc]'),
+                }, '[alt+spc]'),
                 React.createElement(Text, {
                   color: focused ? '#FFB347' : 'gray',
                   dimColor: !focused, wrap: 'truncate'
@@ -345,6 +345,17 @@ export function ChatPanel({
         : React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '─'.repeat(100))
     ),
 
+    (latestProgress || promptPreview) && tab === 'chat' && React.createElement(Box, {
+      flexDirection: 'row',
+      borderStyle: 'round',
+      borderColor: 'magenta',
+      paddingX: 1,
+      flexShrink: 0,
+      minWidth: 0,
+      overflow: 'hidden'
+    },
+      React.createElement(Text, { color: promptPreview ? 'cyanBright' : 'magenta', wrap: 'truncate' }, promptPreview || latestProgress)
+    ),
     // ── Input box ───────────────────────────────────────────────────
     React.createElement(Box, {
       height: Math.min(4, Math.max(1, Math.ceil((input || '').length / wrapLimit))),
@@ -367,7 +378,7 @@ export function ChatPanel({
               onChange:    tab === 'chat' ? onChange : (val) => setNotes(val),
               onSubmit:    tab === 'chat' && !chatMenuOpen ? onSubmit : () => {},
               placeholder: focused
-                ? (tab === 'chat' ? '/ for menu · ↑↓ nav msgs · spc expand' : 'notes...')
+                ? (tab === 'chat' ? '/ for menu · ↑↓ nav msgs · alt+spc expand' : 'notes...')
                 : 'Alt+E',
               focus:       focused && !isRepoInputMode
             })
