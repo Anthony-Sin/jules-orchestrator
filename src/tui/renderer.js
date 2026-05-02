@@ -10,7 +10,7 @@
 //   tui/markdown.js          — unchanged
 
 import { parseSourceDisplay, getActivities, getAllActivities, sendMessage, listSources, deleteSession } from '../state/jules-api.js'
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { render, Box, Text, useInput, useApp } from 'ink'
 import TextInput from 'ink-text-input'
 import { getSessions, getConfig, setConfig, store, removeSession } from '../state/store.js'
@@ -124,20 +124,69 @@ export function Dashboard({ searchTerm = '' }) {
     availableBodyHeight - (chatFixedHeights + chatMenuHeight + inputExtraHeight))
 
   // ── Data ─────────────────────────────────────────────────────────
-  // Use a state for sessions so we aren't reading from disk on every keystroke
+  // Read sessions from disk periodically for fast status updates (every 5 seconds)
   const [sessionsData, setSessionsData] = useState(() => getSessions() || [])
   useEffect(() => {
-    const t = setInterval(() => setSessionsData(getSessions() || []), 1000)
+    const t = setInterval(() => setSessionsData(getSessions() || []), 5000)
     return () => clearInterval(t)
   }, [])
 
-  const AGENTS = sessionsData
-    .slice()
-    .sort((a, b) => {
-      const ta = new Date(a.createdAt || 0).getTime()
-      const tb = new Date(b.createdAt || 0).getTime()
-      return tb - ta // descending (newest first based strictly on creation time)
+  // To prevent the table from jumping, we only re-sort the IDs periodically (every 5 minutes)
+  const [sortedIds, setSortedIds] = useState(() => {
+    const initial = getSessions() || []
+    return initial
+      .slice()
+      .sort((a, b) => {
+        const ta = new Date(a.lastUpdated || a.createdAt || 0).getTime()
+        const tb = new Date(b.lastUpdated || b.createdAt || 0).getTime()
+        return tb - ta
+      })
+      .map(s => s.id)
+  })
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      const current = getSessions() || []
+      setSortedIds(
+        current
+          .slice()
+          .sort((a, b) => {
+            const ta = new Date(a.lastUpdated || a.createdAt || 0).getTime()
+            const tb = new Date(b.lastUpdated || b.createdAt || 0).getTime()
+            return tb - ta
+          })
+          .map(s => s.id)
+      )
+    }, 5 * 60 * 1000) // 5 minutes
+    return () => clearInterval(t)
+  }, [])
+
+  // Map the stable sorted IDs back to their latest data, dropping any that were deleted
+  // and appending any brand new ones that haven't been sorted yet to the top.
+  const AGENTS = useMemo(() => {
+    const dataMap = {}
+    sessionsData.forEach(s => { dataMap[s.id] = s })
+
+    const mapped = []
+    const seen = new Set()
+
+    // First, add any brand new sessions that aren't in our sortedIds yet
+    sessionsData.forEach(s => {
+      if (!sortedIds.includes(s.id)) {
+        mapped.push(s)
+        seen.add(s.id)
+      }
     })
+
+    // Then add the sorted items
+    sortedIds.forEach(id => {
+      if (dataMap[id] && !seen.has(id)) {
+        mapped.push(dataMap[id])
+        seen.add(id)
+      }
+    })
+    return mapped
+  }, [sessionsData, sortedIds])
 
   const orchAgents = AGENTS.filter(a =>
     a.type === 'orchestrator' || (a.title || '').toLowerCase().includes('orchestrator'))
@@ -923,6 +972,7 @@ export function Dashboard({ searchTerm = '' }) {
                 React.createElement(Text, { color: 'whiteBright', bold: true, wrap: 'truncate' }, ' alt+d'),
                 React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ' :del │ '),
                 React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '↑↓:nav →:exp ←:col ↵:chat │ '),
+                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, 'alt+?:help │ '),
                 React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, `agents:${AGENTS.length}`)
               ),
               React.createElement(Box, { flexShrink: 0, flexDirection: 'row' },
