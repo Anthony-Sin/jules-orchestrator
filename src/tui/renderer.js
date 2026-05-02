@@ -324,6 +324,22 @@ export function Dashboard({ searchTerm = '' }) {
     if (showHelp && (key.escape || (key.meta && input === '?'))) { setShowHelp(false); return }
     if (showHelp) return
 
+    // ── Queue Item Deletion ──
+    if (key.meta && input && input >= '1' && input <= '9') {
+      const idx = parseInt(input, 10) - 1
+      const entries = Object.entries(queuedMessages)
+      if (idx >= 0 && idx < Math.min(entries.length, 9)) {
+        const [idToRemove] = entries[idx]
+        setQueuedMessages(prev => {
+          const next = { ...prev }
+          delete next[idToRemove]
+          return next
+        })
+        flash(`Deleted queued message for ${idToRemove.substring(0, 6)}`)
+      }
+      return
+    }
+
     // ── Mode switches ──
     if (key.meta && input === 't') { setMode('table'); return }
     if (key.meta && input === 'g') {
@@ -596,12 +612,38 @@ export function Dashboard({ searchTerm = '' }) {
   const dropdownOffset         = sourceSel >= 5 ? sourceSel - 4 : 0
   const visibleDropdownSources = filteredSources.slice(dropdownOffset, dropdownOffset + 5)
 
+  const queuedEntries = Object.entries(queuedMessages)
+
   // ── Render ────────────────────────────────────────────────────────
   return React.createElement(Box, {
     flexDirection: 'column',
     width: columns, height: TERMINAL_ROWS,
     minWidth: 0, overflow: 'hidden'
   },
+    // ── Queue Overlay ──
+    queuedEntries.length > 0 && React.createElement(Box, {
+      position: 'absolute',
+      right: 1,
+      top: 1,
+      flexDirection: 'column',
+      borderStyle: 'single',
+      borderColor: 'magenta',
+      paddingX: 1,
+      backgroundColor: '#000000',
+      zIndex: 100
+    },
+      React.createElement(Text, { color: 'magentaBright', bold: true }, ' QUEUED MESSAGES '),
+      queuedEntries.slice(0, 9).map(([id, msg], idx) => {
+        const ag = AGENTS.find(a => a.id === id)
+        const title = ag ? (ag.title || id.substring(0, 6)) : id.substring(0, 6)
+        const preview = msg.length > 20 ? msg.substring(0, 17) + '...' : msg
+        return React.createElement(Text, { key: id, color: 'gray' },
+          React.createElement(Text, { color: 'white' }, `[alt+${idx + 1}] `),
+          React.createElement(Text, { color: 'cyan' }, `${title}: `),
+          `"${preview}"`
+        )
+      })
+    ),
 
     // ── Top bar ──
     React.createElement(Box, {
