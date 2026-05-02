@@ -50,10 +50,7 @@ const ORCHESTRATOR_TOOLS = [
       parameters: {
         type: "object",
         properties: {
-          title: {
-            type: "string",
-            description: "Title of the architecture (e.g., 'TUI App Architecture')"
-          },
+          title: { type: "string", description: "Title of the architecture (e.g., 'TUI App Architecture')" },
           nodes: {
             type: "array",
             items: { type: "string" },
@@ -77,14 +74,8 @@ const ORCHESTRATOR_TOOLS = [
       parameters: {
         type: "object",
         properties: {
-          module_name: {
-            type: "string",
-            description: "The name of the module or task to be assigned."
-          },
-          instructions: {
-            type: "string",
-            description: "Clear, detailed instructions for the sub-agent."
-          }
+          module_name: { type: "string", description: "The name of the module or task to be assigned." },
+          instructions: { type: "string", description: "Clear, detailed instructions for the sub-agent." }
         },
         required: ["module_name", "instructions"]
       }
@@ -220,6 +211,7 @@ export async function dispatchLeadOrchestrator(userInput, taskValue = 1, title =
 
   // Inject user input and Task Value into the final payload
   const fullPrompt = `${ORCHESTRATOR_SYSTEM_PROMPT}\n\n[ORCHESTRATOR TOOLSET]\nYou have access to the following specialized tools to manage sub-agents:\n${JSON.stringify(ORCHESTRATOR_TOOLS, null, 2)}\n\n[USER INPUT]\nTask Value: ${taskValue}\nPrompt: ${userInput}`;
+  
   // Create Jules session configured as the Hybrid Orchestrator
   const julesSession = await createSession({
     prompt: fullPrompt,
