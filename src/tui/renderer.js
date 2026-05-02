@@ -48,9 +48,13 @@ export function Dashboard({ searchTerm = '' }) {
     chatMenuOpen, setChatMenuOpen,
     chatMenuSel, setChatMenuSel,
     chatTargetMode, setChatTargetMode,
+    expandedMessages, toggleMessageExpand,
+    focusedMsgIdx, setFocusedMsgIdx,
     notes, setNotes,
-    selectedSessionId,
+    selectedSessionId, latestProgress,
     queuedMessages, setQueuedMessages,
+    queuedCycleIdx, setQueuedCycleIdx,
+    promptPreview, setPromptPreview,
     repoInputMode, setRepoInputMode,
     repoInput, setRepoInput,
     sourcesList,
@@ -138,19 +142,47 @@ export function Dashboard({ searchTerm = '' }) {
       return
     }
 
-    if (key.meta && input && input >= '1' && input <= '9') {
-      const idx = parseInt(input, 10) - 1
+    if (key.meta && input === '/') {
       const entries = Object.entries(queuedMessages)
-      if (idx >= 0 && idx < Math.min(entries.length, 9)) {
-        const [idToRemove] = entries[idx]
-        setQueuedMessages(prev => {
-          const next = { ...prev }
-          delete next[idToRemove]
-          return next
-        })
-        flash(`Deleted queued message for ${idToRemove.substring(0, 6)}`)
+      if (entries.length > 0) {
+        let nextIdx = queuedCycleIdx + 1
+        if (nextIdx >= entries.length) nextIdx = 0
+        setQueuedCycleIdx(nextIdx)
+        const [id, msg] = entries[nextIdx]
+        setChatInput(msg)
       }
       return
+    }
+
+    if (key.meta && input && input >= '1' && input <= '9') {
+      const promptNum = input;
+      const notesLines = (notes || '').split('\n');
+      let foundPrompt = false;
+      let promptText = '';
+
+      for (let i = 0; i < notesLines.length; i++) {
+        const line = notesLines[i];
+        if (line.trim().startsWith(`${promptNum}.`)) {
+          foundPrompt = true;
+          promptText += line.replace(new RegExp(`^\\s*${promptNum}\\.\\s*`), '') + '\n';
+        } else if (foundPrompt) {
+          if (/^\s*\d+\./.test(line)) {
+            break; // next prompt reached
+          } else {
+            promptText += line + '\n';
+          }
+        }
+      }
+
+      if (foundPrompt && promptText.trim()) {
+        const finalPrompt = promptText.trim();
+        setChatInput(finalPrompt);
+        setPromptPreview(`Prompt ${promptNum}: ${finalPrompt.split('\n')[0].substring(0, 50)}...`);
+        setTimeout(() => setPromptPreview(null), 3000);
+      } else {
+        flash(`Prompt ${promptNum} not found in notes.`);
+      }
+      return;
     }
 
     if (key.meta && input === 't') { setMode('table'); return }
@@ -208,8 +240,19 @@ export function Dashboard({ searchTerm = '' }) {
       if (key.shift && (key.leftArrow || key.rightArrow)) {
         setChatTab(t => t === 'chat' ? 'notes' : 'chat'); return
       }
-      if (key.upArrow)   { setScrollOffset(o => o + 1); return }
-      if (key.downArrow) { setScrollOffset(o => Math.max(0, o - 1)); return }
+      if (key.meta && input === ' ') {
+        if (focusedMsgIdx !== null) toggleMessageExpand(focusedMsgIdx);
+        return;
+      }
+      if (key.upArrow) {
+        if (focusedMsgIdx !== null && focusedMsgIdx > 0) { setFocusedMsgIdx(focusedMsgIdx - 1); return }
+        if (focusedMsgIdx === null && messages.length > 0) { setFocusedMsgIdx(messages.length - 1); return }
+        setScrollOffset(o => o + 1); return
+      }
+      if (key.downArrow) {
+        if (focusedMsgIdx !== null && focusedMsgIdx < messages.length - 1) { setFocusedMsgIdx(focusedMsgIdx + 1); return }
+        setScrollOffset(o => Math.max(0, o - 1)); return
+      }
       if (key.pageUp)    { setScrollOffset(o => o + 5); return }
       if (key.pageDown)  { setScrollOffset(o => Math.max(0, o - 5)); return }
       return
@@ -351,17 +394,18 @@ export function Dashboard({ searchTerm = '' }) {
       borderStyle: 'single', borderColor: 'magenta', paddingX: 1,
       backgroundColor: '#000000', zIndex: 100
     },
-      React.createElement(Text, { color: 'magentaBright', bold: true }, ' QUEUED MESSAGES '),
-      queuedEntries.slice(0, 9).map(([id, msg], idx) => {
+      React.createElement(Text, { color: 'magentaBright', bold: true }, ` QUEUED MESSAGES [${queuedCycleIdx + 1}/${queuedEntries.length}] `),
+      React.createElement(Text, { color: 'gray', dimColor: true }, 'Press alt+/ to cycle'),
+      queuedEntries.length > 0 && (() => {
+        const [id, msg] = queuedEntries[queuedCycleIdx % queuedEntries.length]
         const ag = AGENTS.find(a => a.id === id)
         const title = ag ? (ag.title || id.substring(0, 6)) : id.substring(0, 6)
-        const preview = msg.length > 20 ? msg.substring(0, 17) + '...' : msg
+        const preview = msg.length > 30 ? msg.substring(0, 27) + '...' : msg
         return React.createElement(Text, { key: id, color: 'gray' },
-          React.createElement(Text, { color: 'white' }, `[alt+${idx + 1}] `),
           React.createElement(Text, { color: 'cyan' }, `${title}: `),
           `"${preview}"`
         )
-      })
+      })()
     ),
 
     React.createElement(Box, {
@@ -478,7 +522,8 @@ export function Dashboard({ searchTerm = '' }) {
               messages, input: chatInput, onChange: setChatInput, onSubmit: handleSend, focused: mode === 'chat',
               scrollOffset, width: rightPanelWidth, tab: chatTab, notes, setNotes, isRepoInputMode: repoInputMode,
               repoName: currentRepoDisplay, agentTitle: activeAgentTitle, agentId: activeAgentId, chatTargetMode,
-              visibleAgentsCount: VISIBLE_AGENTS, chatMenuOpen, chatMenuSel, chatVisibleRows: CHAT_VISIBLE_ROWS
+              visibleAgentsCount: VISIBLE_AGENTS, chatMenuOpen, chatMenuSel, chatVisibleRows: CHAT_VISIBLE_ROWS, latestProgress, promptPreview,
+              expandedMessages, toggleMessageExpand, focusedMsgIdx, setFocusedMsgIdx
             })
           )
         ),
