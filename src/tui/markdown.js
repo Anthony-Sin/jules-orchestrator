@@ -62,7 +62,15 @@ export function parseMarkdown(text) {
         if (beforeText) segments.push(...parseCoreMarkdown(beforeText))
 
         let args = {}
-        try { args = JSON.parse(parsed.function.arguments || '{}') } catch (_) {}
+        try {
+          // Safely handle both direct objects and stringified JSON payloads
+          const rawArgs = parsed.function.arguments || parsed.arguments;
+          if (typeof rawArgs === 'object' && rawArgs !== null) {
+            args = rawArgs;
+          } else if (typeof rawArgs === 'string') {
+            args = JSON.parse(rawArgs);
+          }
+        } catch (_) {}
 
         segments.push({ type: 'toolcall', toolName: parsed.function.name, args })
 
@@ -265,15 +273,25 @@ export function buildMarkdownLines(text, wrapLimit, focused) {
       const { toolName, args } = seg
       
       // ── generate_ink_terminal_diagram: silent in chat, lives in graph panel
+        // ── generate_ink_terminal_diagram: silent in chat, lives in graph panel
+        // ── generate_ink_terminal_diagram: silent in chat, lives in graph panel
       if (toolName === 'generate_ink_terminal_diagram') {
-        // Agent may print the tool call as text instead of executing it — push
-        // the new diagram format directly into the store so PlannedGraphViewer updates immediately!
-        try { 
-          store.set('architectureDiagrams', [args]); // OVERWRITE
-          // DO NOT call store.set('diagramLastUpdated', Date.now()) here!
-          // This function runs on every re-render. Setting Date.now() here causes an infinite
-          // auto-switching loop locking the user in the plan view. JulesTools already handles it.
+        try {
+          const currentDiagrams = store.get('architectureDiagrams') || [];
+          const newDiagStr = JSON.stringify(args);
+          
+          // FIX: Check if this exact diagram has already been processed.
+          // By keeping a history of diagrams, we prevent infinite render loops
+          // when multiple different diagrams exist in the chat history.
+          const alreadyExists = currentDiagrams.some(d => JSON.stringify(d) === newDiagStr);
+
+          if (!alreadyExists && args && args.title) {
+            currentDiagrams.unshift(args); // Add the new diagram to the front
+            store.set('architectureDiagrams', currentDiagrams.slice(0, 10)); // Keep the last 10
+            store.set('diagramLastUpdated', Date.now()); 
+          }
         } catch (_) {}
+        
         lines.push({ type: 'gap' })
         lines.push({ type: 'jsx', element: React.createElement(Box, { key: `tc_diag_hint_${i}`, minWidth: 0, overflow: 'hidden', flexDirection: 'row' },
           React.createElement(Text, { color: focused ? 'magentaBright' : 'gray', bold: focused, dimColor: !focused, wrap: 'truncate' },
@@ -283,7 +301,7 @@ export function buildMarkdownLines(text, wrapLimit, focused) {
         )})
         lines.push({ type: 'gap' })
         continue
-        }
+      }
     }
     // ── execution plan json block ─────────────────────────────────
     if (seg.type === 'plan') {

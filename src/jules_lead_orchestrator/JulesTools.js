@@ -71,16 +71,21 @@ export async function handleOrchestratorToolCall(toolCall) {
     }
 
     case 'generate_ink_terminal_diagram': {
-      // Overwrite with a single-item array instead of pushing to history
-      store.set('architectureDiagrams', [args]);
-      store.set('diagramLastUpdated', Date.now()); 
+      const currentDiagrams = store.get('architectureDiagrams') || [];
+      const newDiagStr = JSON.stringify(args);
+      
+      if (!currentDiagrams.some(d => JSON.stringify(d) === newDiagStr)) {
+          currentDiagrams.unshift(args);
+          store.set('architectureDiagrams', currentDiagrams.slice(0, 10));
+          store.set('diagramLastUpdated', Date.now()); 
+      }
       
       return { 
         status: 'success', 
-        message: 'Diagram generated and successfully replaced the current architecture.' 
+        message: 'Diagram generated and added to architecture history.' 
       };
     }
-    
+
     case 'dispatch_sub_agent': {
       return { status: 'success', message: `Sub-agent for ${args.module_name} queued for dispatch.` };
     }
