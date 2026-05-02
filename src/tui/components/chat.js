@@ -77,14 +77,31 @@ export function ChatPanel({
     paddingLeft: 1, flexShrink: 0, minHeight: 0, overflow: 'hidden'
   },
     // ── Header ──
-    React.createElement(Box, { flexShrink: 0, height: 1, minWidth: 0, overflow: 'hidden' },
-      React.createElement(Text, {
-        color: isNewSession ? 'greenBright' : (focused ? 'cyanBright' : 'gray'),
-        bold: true, wrap: 'truncate'
-      },
-        tab === 'chat'
-          ? (isNewSession ? `✦ NEW SESSION  |  NOTES` : `▌ CHAT: ${shortTitle}  |  NOTES`)
-          : (isNewSession ? `✦ NEW SESSION  |  CHAT`  : `▌ NOTES: ${shortTitle}  |  CHAT`)
+    React.createElement(Box, { flexShrink: 0, height: 1, minWidth: 0, overflow: 'hidden', flexDirection: 'row' },
+      isNewSession ? (
+        tab === 'chat' ? (
+          React.createElement(React.Fragment, null,
+            React.createElement(Text, { color: 'greenBright', bold: true, wrap: 'truncate' }, '✦ NEW SESSION  |  '),
+            React.createElement(Text, { color: 'gray', bold: true, dimColor: true, wrap: 'truncate' }, 'NOTES')
+          )
+        ) : (
+          React.createElement(React.Fragment, null,
+            React.createElement(Text, { color: 'greenBright', bold: true, wrap: 'truncate' }, '✦ NEW SESSION  |  '),
+            React.createElement(Text, { color: 'gray', bold: true, dimColor: true, wrap: 'truncate' }, 'CHAT')
+          )
+        )
+      ) : (
+        tab === 'chat' ? (
+          React.createElement(React.Fragment, null,
+            React.createElement(Text, { color: focused ? 'cyanBright' : 'gray', bold: true, wrap: 'truncate' }, `▌ CHAT: ${shortTitle}  |  `),
+            React.createElement(Text, { color: 'gray', bold: true, dimColor: true, wrap: 'truncate' }, 'NOTES')
+          )
+        ) : (
+          React.createElement(React.Fragment, null,
+            React.createElement(Text, { color: focused ? 'cyanBright' : 'gray', bold: true, wrap: 'truncate' }, `▌ NOTES: ${shortTitle}  |  `),
+            React.createElement(Text, { color: 'gray', bold: true, dimColor: true, wrap: 'truncate' }, 'CHAT')
+          )
+        )
       ),
       scrollOffset > 0 && React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' },
         ` ↑${scrollOffset}`)

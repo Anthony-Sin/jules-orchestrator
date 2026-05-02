@@ -84,10 +84,29 @@ export async function approvePlan(sessionId) {
   return res.json()
 }
 
-export async function getActivities(sessionId) {
-  const res = await fetch(`${DEFAULTS.JULES_API_BASE}/sessions/${sessionId}/activities`, { headers: headers() })
+export async function getActivities(sessionId, pageToken = null) {
+  const url = new URL(`${DEFAULTS.JULES_API_BASE}/sessions/${sessionId}/activities`)
+  url.searchParams.append('pageSize', '100')
+  if (pageToken) url.searchParams.append('pageToken', pageToken)
+
+  const res = await fetch(url.toString(), { headers: headers() })
   if (!res.ok) throw new Error(`Jules API error ${res.status}`)
   return res.json()
+}
+
+export async function getAllActivities(sessionId) {
+  let allActivities = []
+  let pageToken = null
+
+  do {
+    const res = await getActivities(sessionId, pageToken)
+    if (res.activities) {
+      allActivities = allActivities.concat(res.activities)
+    }
+    pageToken = res.nextPageToken
+  } while (pageToken)
+
+  return { activities: allActivities }
 }
 
 export function parseSourceDisplay(source) {
