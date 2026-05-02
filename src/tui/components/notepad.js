@@ -1,0 +1,167 @@
+import React, { useState, useEffect } from 'react';
+import { Box, Text, useInput } from 'ink';
+
+export function Notepad({ value = '', onChange, focused = true, height = 10, width }) {
+  const [cursorLine, setCursorLine] = useState(0);
+  const [cursorCol, setCursorCol] = useState(0);
+  const [scrollOffset, setScrollOffset] = useState(0);
+
+  // Normalize lines
+  const lines = value.split('\n');
+  if (lines.length === 0) lines.push('');
+
+  // Keep cursor within bounds
+  useEffect(() => {
+    let newL = Math.max(0, Math.min(cursorLine, lines.length - 1));
+    let newC = Math.max(0, Math.min(cursorCol, lines[newL].length));
+
+    if (newL !== cursorLine || newC !== cursorCol) {
+      setCursorLine(newL);
+      setCursorCol(newC);
+    }
+  }, [value, cursorLine, cursorCol, lines]);
+
+  // Adjust scroll offset based on cursor position
+  useEffect(() => {
+    if (cursorLine < scrollOffset) {
+      setScrollOffset(cursorLine);
+    } else if (cursorLine >= scrollOffset + height) {
+      setScrollOffset(cursorLine - height + 1);
+    }
+  }, [cursorLine, height, scrollOffset]);
+
+  useInput((input, key) => {
+    if (!focused) return;
+
+    if (key.upArrow) {
+      setCursorLine(l => Math.max(0, l - 1));
+      return;
+    }
+    if (key.downArrow) {
+      setCursorLine(l => Math.min(lines.length - 1, l + 1));
+      return;
+    }
+    if (key.leftArrow) {
+      if (cursorCol > 0) {
+        setCursorCol(c => c - 1);
+      } else if (cursorLine > 0) {
+        const prevLineIdx = cursorLine - 1;
+        setCursorLine(prevLineIdx);
+        setCursorCol(lines[prevLineIdx].length);
+      }
+      return;
+    }
+    if (key.rightArrow) {
+      if (cursorCol < lines[cursorLine].length) {
+        setCursorCol(c => c + 1);
+      } else if (cursorLine < lines.length - 1) {
+        setCursorLine(cursorLine + 1);
+        setCursorCol(0);
+      }
+      return;
+    }
+
+    // Ignore modifier combos handled globally (like alt+...)
+    if (key.meta || key.ctrl) return;
+
+    if (key.return) {
+      const currentLine = lines[cursorLine];
+      const before = currentLine.substring(0, cursorCol);
+      const after = currentLine.substring(cursorCol);
+
+      const newLines = [...lines];
+      newLines[cursorLine] = before;
+      newLines.splice(cursorLine + 1, 0, after);
+
+      onChange(newLines.join('\n'));
+      setCursorLine(l => l + 1);
+      setCursorCol(0);
+      return;
+    }
+
+    if (key.backspace || key.delete) {
+      if (cursorCol > 0) {
+        const currentLine = lines[cursorLine];
+        const newLines = [...lines];
+        newLines[cursorLine] = currentLine.substring(0, cursorCol - 1) + currentLine.substring(cursorCol);
+        onChange(newLines.join('\n'));
+        setCursorCol(c => c - 1);
+      } else if (cursorLine > 0) {
+        const prevLineIdx = cursorLine - 1;
+        const prevLine = lines[prevLineIdx];
+        const currentLine = lines[cursorLine];
+
+        const newLines = [...lines];
+        newLines[prevLineIdx] = prevLine + currentLine;
+        newLines.splice(cursorLine, 1);
+
+        onChange(newLines.join('\n'));
+        setCursorLine(prevLineIdx);
+        setCursorCol(prevLine.length);
+      }
+      return;
+    }
+
+    // Regular typed input
+    if (input) {
+      // Handle pasted multiline input gracefully
+      const isPaste = input.includes('\n') || input.includes('\r');
+      if (isPaste) {
+         const pastedLines = input.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+         const currentLine = lines[cursorLine];
+         const before = currentLine.substring(0, cursorCol);
+         const after = currentLine.substring(cursorCol);
+
+         const newLines = [...lines];
+         if (pastedLines.length === 1) {
+           newLines[cursorLine] = before + pastedLines[0] + after;
+           onChange(newLines.join('\n'));
+           setCursorCol(cursorCol + pastedLines[0].length);
+         } else {
+           newLines[cursorLine] = before + pastedLines[0];
+           for (let i = 1; i < pastedLines.length - 1; i++) {
+             newLines.splice(cursorLine + i, 0, pastedLines[i]);
+           }
+           const lastPasted = pastedLines[pastedLines.length - 1];
+           newLines.splice(cursorLine + pastedLines.length - 1, 0, lastPasted + after);
+
+           onChange(newLines.join('\n'));
+           setCursorLine(cursorLine + pastedLines.length - 1);
+           setCursorCol(lastPasted.length);
+         }
+      } else {
+        const currentLine = lines[cursorLine];
+        const newLines = [...lines];
+        newLines[cursorLine] = currentLine.substring(0, cursorCol) + input + currentLine.substring(cursorCol);
+        onChange(newLines.join('\n'));
+        setCursorCol(c => c + input.length);
+      }
+    }
+  });
+
+  const visibleLines = lines.slice(scrollOffset, scrollOffset + height);
+
+  return React.createElement(Box, { flexDirection: "column", width: width, height: height, overflow: "hidden" },
+    visibleLines.map((line, i) => {
+      const actualLineIdx = scrollOffset + i;
+      const isCursorLine = actualLineIdx === cursorLine && focused;
+
+      if (!isCursorLine) {
+         return React.createElement(Box, { key: actualLineIdx, minWidth: 0, overflow: "hidden" },
+           React.createElement(Text, { color: "gray", wrap: "truncate" }, line || ' ')
+         );
+      }
+
+      // Render cursor
+      const beforeCursor = line.substring(0, cursorCol);
+      const atCursor = line.substring(cursorCol, cursorCol + 1) || ' ';
+      const afterCursor = line.substring(cursorCol + 1);
+
+      return React.createElement(Box, { key: actualLineIdx, minWidth: 0, overflow: "hidden", flexDirection: "row" },
+        React.createElement(Text, { color: "white", wrap: "truncate" }, beforeCursor),
+        React.createElement(Text, { backgroundColor: "white", color: "black", wrap: "truncate" }, atCursor),
+        React.createElement(Text, { color: "white", wrap: "truncate" }, afterCursor)
+      );
+    })
+  );
+}

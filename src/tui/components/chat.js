@@ -7,6 +7,7 @@ import React, { useMemo } from 'react'
 import { Box, Text } from 'ink'
 import TextInput from 'ink-text-input'
 import { wrapText, buildMarkdownLines } from '../markdown.js'
+import { Notepad } from './notepad.js'
 
 // How many lines an agent message must exceed before it gets collapsed by default
 const COLLAPSE_THRESHOLD = 4
@@ -127,14 +128,10 @@ export function ChatPanel({
 
         if (isFocusedMsg) focusedMsgEndLine = lines.length - 1;
       }
-    } else {
-      // Notes tab
-      for (const l of wrapText(notes || 'Type your notes here...', wrapLimit))
-        lines.push({ type: 'text', text: l, color: focused ? 'white' : 'gray', isFocusedMsg: false })
     }
 
     return lines
-  }, [messages, wrapLimit, tab, repoName, focused, notes, _expanded, focusedMsgIdx])
+  }, [messages, wrapLimit, tab, repoName, focused, _expanded, focusedMsgIdx])
 
   const MESSAGE_ROWS = Math.max(2, chatVisibleRows)
   const total   = allLines.length
@@ -267,7 +264,15 @@ export function ChatPanel({
                   : `repo: ${repoName}`)
             )
           )
-        : visible.map((l, i) => {
+        : tab === 'notes'
+          ? React.createElement(Notepad, {
+              value: notes || '',
+              onChange: setNotes,
+              focused: focused && !isRepoInputMode,
+              height: MESSAGE_ROWS,
+              width: wrapLimit
+            })
+          : visible.map((l, i) => {
             // Check if this specific line belongs to the focused message
             const isFoc = l.isFocusedMsg && focused && tab === 'chat';
             
@@ -362,18 +367,18 @@ export function ChatPanel({
 
     // ── Slash-command menu ──────────────────────────────────────────
     chatMenuOpen && tab === 'chat' && React.createElement(Box, {
-      flexDirection: 'column', height: 4,
+      flexDirection: 'column', height: 5,
       borderStyle: 'round', borderColor: 'cyan',
       paddingX: 1, flexShrink: 0, minWidth: 0, overflow: 'hidden'
     },
-      ['Start New Task', 'Start New Orchestrator'].map((opt, idx) =>
+      ['Start New Task', 'Start New Orchestrator', 'Approve Plan'].map((opt, idx) =>
         React.createElement(Text, { key: idx, color: chatMenuSel === idx ? 'cyanBright' : 'gray', wrap: 'truncate' },
           chatMenuSel === idx ? `▶ ${opt}` : `  ${opt}`)
       )
     ),
 
     // ── Bottom separator ────────────────────────────────────────────
-    React.createElement(Box, { overflow: 'hidden', flexShrink: 0, height: 1, minWidth: 0 },
+    tab === 'chat' && React.createElement(Box, { overflow: 'hidden', flexShrink: 0, height: 1, minWidth: 0 },
       isOverflowing
         ? React.createElement(Text, { color: 'red', bold: true, wrap: 'truncate' },
             '─[ ◀ ▶ TEXT HIDDEN: Use Left/Right arrows to move cursor ]' + '─'.repeat(60))
@@ -392,7 +397,7 @@ export function ChatPanel({
       React.createElement(Text, { color: promptPreview ? 'cyanBright' : 'magenta', wrap: 'truncate' }, promptPreview || latestProgress)
     ),
     // ── Input box ───────────────────────────────────────────────────
-    React.createElement(Box, {
+    tab === 'chat' && React.createElement(Box, {
       height: Math.min(4, Math.max(1, Math.ceil((input || '').length / wrapLimit))),
       flexShrink: 0, flexDirection: 'column', minWidth: 0, overflow: 'hidden'
     },
@@ -409,11 +414,11 @@ export function ChatPanel({
         React.createElement(Box, { flexGrow: 1, flexShrink: 1, minWidth: 0 },
           React.createElement(Box, { width: Math.max(10, numWidth - 4) },
             React.createElement(TextInput, {
-              value:       tab === 'chat' ? input : (notes || ''),
-              onChange:    tab === 'chat' ? onChange : (val) => setNotes(val),
-              onSubmit:    tab === 'chat' && !chatMenuOpen ? onSubmit : () => {},
+              value:       input,
+              onChange:    onChange,
+              onSubmit:    !chatMenuOpen ? onSubmit : () => {},
               placeholder: focused
-                ? (tab === 'chat' ? '/ for menu · ↑↓ nav msgs · alt+spc expand' : 'notes...')
+                ? '/ for menu · ↑↓ nav msgs · alt+spc expand'
                 : 'Alt+E',
               focus:       focused && !isRepoInputMode
             })

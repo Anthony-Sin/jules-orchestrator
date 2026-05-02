@@ -36,6 +36,14 @@ export function useDashboardController() {
 
   // ── Layout mode: 'table' | 'graph' | 'chat' | 'diff' ─────────────────────
   const [mode, setMode] = useState('table')
+  const [lastLeftMode, setLastLeftMode] = useState('table')
+
+  useEffect(() => {
+    if (['table', 'graph', 'diff'].includes(mode)) {
+      setLastLeftMode(mode)
+    }
+  }, [mode])
+
   const [diffFileSel, setDiffFileSel] = useState(0)
   const [diffScrollOffset, setDiffScrollOffset] = useState(0)
 
@@ -334,10 +342,10 @@ export function useDashboardController() {
               if (act.artifacts && act.artifacts.length > 0) {
                 act.artifacts.forEach(art => {
                   if (art.changeSet?.gitPatch) {
-                    text += `\n💻 Code Changes Ready:\n${art.changeSet.gitPatch.suggestedCommitMessage || 'Code Changes'}`
+                    setLatestProgress(`💻 Code Changes Ready`);
                   }
                   if (art.bashOutput) {
-                    text += `\n⚙️ Command Run: \`${art.bashOutput.command}\`\nOutput: ${art.bashOutput.output?.substring(0, 100)}...`
+                    setLatestProgress(`⚙️ Command Run: ${art.bashOutput.command}`);
                   }
                 })
               }
@@ -457,16 +465,6 @@ export function useDashboardController() {
             }
             if (act.sessionCompleted) text += '\n🎉 Session Completed!'
             if (act.sessionFailed) text += `\n❌ Session Failed`
-            if (act.artifacts && act.artifacts.length > 0) {
-              act.artifacts.forEach(art => {
-                if (art.changeSet?.gitPatch) {
-                  text += `\n💻 Code Changes Ready:\n${art.changeSet.gitPatch.suggestedCommitMessage || 'Code Changes'}`
-                }
-                if (art.bashOutput) {
-                  text += `\n⚙️ Command Run: \`${art.bashOutput.command}\`\nOutput: ${art.bashOutput.output?.substring(0, 100)}...`
-                }
-              })
-            }
             if (text.trim()) history.push({ role: act.originator, text })
           }
         }
@@ -507,24 +505,24 @@ export function useDashboardController() {
       return
     }
 
-    const targetAgent = chatTargetMode === 'TALK_TO_LATEST_ORCHESTRATOR'
-      ? (AGENTS.find(a => a.type === 'orchestrator') || AGENTS[0])
-      : AGENTS.find(a => a.id === selectedSessionId)
+    const targetAgent = AGENTS.find(a => a.id === selectedSessionId)
 
     if (!targetAgent) {
       setMessages(m => [...m, { role: 'system', text: 'Error: No agent found.' }]); return
     }
 
+    const actualMessage = val.trim() === '/approve' ? 'Approve' : val.trim()
+
     if (targetAgent.state === 'IN_PROGRESS') {
-      setQueuedMessages(prev => ({ ...prev, [targetAgent.id]: val.trim() }))
-      setMessages(m => [...m, { role: 'user', text: val.trim() }, { role: 'system', text: `Message queued` }])
+      setQueuedMessages(prev => ({ ...prev, [targetAgent.id]: actualMessage }))
+      setMessages(m => [...m, { role: 'user', text: actualMessage }, { role: 'system', text: `Message queued` }])
       setChatInput(''); setScrollOffset(0); return
     }
 
-    setMessages(m => [...m, { role: 'user', text: val.trim() }, { role: 'system', text: 'Sending…' }])
+    setMessages(m => [...m, { role: 'user', text: actualMessage }, { role: 'system', text: 'Sending…' }])
     setChatInput(''); setScrollOffset(0)
     try {
-      await sendMessage(targetAgent.id, val.trim())
+      await sendMessage(targetAgent.id, actualMessage)
     } catch (e) {
       setMessages(m => [...m, { role: 'system', text: `Send error: ${e.message}` }])
     }
@@ -546,6 +544,7 @@ export function useDashboardController() {
     planNodeSel, setPlanNodeSel,
     savedDiagrams,
     mode, setMode,
+    lastLeftMode,
     diffFileSel, setDiffFileSel,
     diffScrollOffset, setDiffScrollOffset,
     chatInput, setChatInput,

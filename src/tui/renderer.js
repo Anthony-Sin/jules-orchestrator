@@ -41,7 +41,7 @@ export function Dashboard({ searchTerm = '' }) {
     graphViewMode, setGraphViewMode,
     planNodeSel, setPlanNodeSel,
     savedDiagrams,
-    mode, setMode,
+    mode, setMode, lastLeftMode,
     diffFileSel, setDiffFileSel,
     diffScrollOffset, setDiffScrollOffset,
     chatInput, setChatInput,
@@ -98,8 +98,9 @@ export function Dashboard({ searchTerm = '' }) {
   const inputExtraHeight = Math.min(3, inputLines - 1)
   const chatFixedHeights = 4
   const chatMenuHeight   = chatMenuOpen && chatTab === 'chat' ? 5 : 0
+  const progressHeight   = (latestProgress || promptPreview) && chatTab === 'chat' ? 3 : 0
   const CHAT_VISIBLE_ROWS = Math.max(1,
-    availableBodyHeight - (chatFixedHeights + chatMenuHeight + inputExtraHeight))
+    availableBodyHeight - (chatFixedHeights + chatMenuHeight + inputExtraHeight + progressHeight))
 
   // Table scroll: keep selected row in view
   useEffect(() => {
@@ -247,7 +248,13 @@ export function Dashboard({ searchTerm = '' }) {
 
     if (key.escape) { setMode('table'); setChatMenuOpen(false); return }
     if (key.tab) {
-      setMode(m => m === 'table' ? (showGraph ? 'graph' : 'chat') : m === 'graph' ? 'chat' : 'table')
+      setMode(m => {
+        if (m === 'table') return showGraph ? 'graph' : 'chat'
+        if (m === 'graph') return 'chat'
+        if (m === 'diff') return 'chat'
+        if (m === 'chat') return lastLeftMode
+        return 'table'
+      })
       setScrollOffset(0)
       return
     }
@@ -256,16 +263,22 @@ export function Dashboard({ searchTerm = '' }) {
       if (chatMenuOpen) {
         if (key.escape)    { setChatMenuOpen(false); setChatInput(''); return }
         if (key.upArrow)   { setChatMenuSel(i => Math.max(0, i - 1)); return }
-        if (key.downArrow) { setChatMenuSel(i => Math.min(1, i + 1)); return }
+        if (key.downArrow) { setChatMenuSel(i => Math.min(2, i + 1)); return }
         if (key.return) {
-          const opts = ['CREATE_ORCHESTRATOR', 'TALK_TO_LATEST_ORCHESTRATOR']
+          if (chatMenuSel === 2) { // Approve Plan
+            setChatMenuOpen(false)
+            setChatInput('')
+            handleSend('/approve')
+            return
+          }
+          const opts = ['CREATE_ORCHESTRATOR', 'CREATE_ORCHESTRATOR']
           setChatTargetMode(opts[chatMenuSel])
           setChatMenuOpen(false)
           setChatInput('')
           if (chatMenuSel === 0) {
             setMessages([{ role: 'system', text: '[SYSTEM] Warning: This will create a new session/task.' }])
           } else if (chatMenuSel === 1) {
-            setMessages([{ role: 'system', text: '[SYSTEM] Warning: This will start a new Orchestrator.' }])
+            setMessages([{ role: 'system', text: '[SYSTEM] Warning: This will create a brand new Orchestrator.' }])
           }
           return
         }
@@ -299,6 +312,8 @@ export function Dashboard({ searchTerm = '' }) {
       if (key.shift && key.downArrow) { setDiffScrollOffset(o => o + 1); return }
       if (key.pageUp) { setDiffScrollOffset(o => Math.max(0, o - 10)); return }
       if (key.pageDown) { setDiffScrollOffset(o => o + 10); return }
+      // The user wants to tab back into the chat and keep the diff open
+      if (key.tab) { setMode('chat'); return }
       return
     }
 
@@ -433,25 +448,6 @@ export function Dashboard({ searchTerm = '' }) {
     width: columns, height: TERMINAL_ROWS,
     minWidth: 0, overflow: 'hidden'
   },
-    queuedEntries.length > 0 && React.createElement(Box, {
-      position: 'absolute', right: 1, top: 1, flexDirection: 'column',
-      borderStyle: 'single', borderColor: 'magenta', paddingX: 1,
-      backgroundColor: '#000000', zIndex: 100
-    },
-      React.createElement(Text, { color: 'magentaBright', bold: true }, ` QUEUED MESSAGES [${queuedCycleIdx + 1}/${queuedEntries.length}] `),
-      React.createElement(Text, { color: 'gray', dimColor: true }, 'Press alt+/ to cycle'),
-      queuedEntries.length > 0 && (() => {
-        const [id, msg] = queuedEntries[queuedCycleIdx % queuedEntries.length]
-        const ag = AGENTS.find(a => a.id === id)
-        const title = ag ? (ag.title || id.substring(0, 6)) : id.substring(0, 6)
-        const preview = msg.length > 30 ? msg.substring(0, 27) + '...' : msg
-        return React.createElement(Text, { key: id, color: 'gray' },
-          React.createElement(Text, { color: 'cyan' }, `${title}: `),
-          `"${preview}"`
-        )
-      })()
-    ),
-
     React.createElement(Box, {
       flexDirection: 'row', width: '100%', height: 1,
       overflow: 'hidden', flexShrink: 0, justifyContent: 'space-between'
@@ -465,6 +461,10 @@ export function Dashboard({ searchTerm = '' }) {
         statusFlash ? React.createElement(Text, { color: 'green', wrap: 'truncate' }, `│ ${statusFlash}`) : null
       ),
       React.createElement(Box, { flexShrink: 0, flexDirection: 'row', minWidth: 0 },
+        queuedEntries.length > 0 && React.createElement(React.Fragment, null,
+          React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '│ '),
+          React.createElement(Text, { color: 'magentaBright', wrap: 'truncate' }, `⧖ ${queuedEntries.length} queued (Alt+/) `)
+        ),
         React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '│ '),
         React.createElement(Text, { color: 'greenBright', wrap: 'truncate' },
           (() => {
@@ -511,62 +511,62 @@ export function Dashboard({ searchTerm = '' }) {
 
     showHelp
       ? React.createElement(HelpScreen)
-      : (mode === 'diff' ? React.createElement(Box, { width: '100%', height: availableBodyHeight, overflow: 'hidden' },
-          React.createElement(GitDiffViewer, {
-            sessionId: activeAgentId,
-            width: columns,
-            height: availableBodyHeight,
-            isDimmed: false,
-            fileSel: diffFileSel,
-            scrollOffset: diffScrollOffset
-          })
-        )
       : React.createElement(Box, { flexDirection: 'row', height: availableBodyHeight, overflow: 'hidden', minWidth: 0, minHeight: 0 },
           showLeftPanel && React.createElement(Box, {
             flexDirection: 'column', width: leftPanelWidth, paddingRight: isWide ? 1 : 0, overflow: 'hidden', minWidth: 0, minHeight: 0
           },
-            mode === 'table' || !graphVisible
-              ? React.createElement(Box, { flexDirection: 'column', flexGrow: 1, overflow: 'hidden' },
-                  React.createElement(Box, { height: 1, justifyContent: 'center' },
-                    React.createElement(Text, { color: mode === 'table' ? 'cyanBright' : 'gray', bold: mode === 'table' },
-                      `  AGENT LIST  [${AGENTS.length > 0 ? sel + 1 : 0}/${AGENTS.length}]  ·  ${currentRepoDisplay}`)
-                  ),
-                  React.createElement(Box, { height: 1, overflow: 'hidden' },
-                    React.createElement(Text, { color: 'gray', dimColor: true }, '─'.repeat(100))
-                  ),
-                  AGENTS.length === 0
-                    ? React.createElement(Box, { flexGrow: 1, alignItems: 'center', justifyContent: 'center' },
-                        React.createElement(Text, { color: 'gray', dimColor: true }, 'No agents yet'))
-                    : (() => {
-                        const sessionRows = allRows.filter(r => r.type === 'session')
-                        const visibleSessionIdxs = sessionRows.slice(tableOffset, tableOffset + VISIBLE_AGENTS).map(r => AGENTS.indexOf(r.data))
-                        const visibleRows = allRows.filter(r => {
-                          if (r.type === 'session') return visibleSessionIdxs.includes(AGENTS.indexOf(r.data))
-                          if (r.type === 'sub' || r.type === 'empty') {
-                            const parent = AGENTS.find(a => a.id === r.parentId)
-                            return parent && visibleSessionIdxs.includes(AGENTS.indexOf(parent))
-                          }
-                          return false
+            // Show diff if mode is diff, OR if chat is focused and the last left mode was diff
+            (mode === 'diff' || (mode === 'chat' && lastLeftMode === 'diff'))
+              ? React.createElement(GitDiffViewer, {
+                  sessionId: activeAgentId,
+                  width: leftPanelWidth - (isWide ? 1 : 0),
+                  height: availableBodyHeight,
+                  isDimmed: mode !== 'diff',
+                  fileSel: diffFileSel,
+                  scrollOffset: diffScrollOffset
+                })
+              : ((mode === 'table' || (mode === 'chat' && lastLeftMode === 'table') || !graphVisible)
+                  ? React.createElement(Box, { flexDirection: 'column', flexGrow: 1, overflow: 'hidden' },
+                      React.createElement(Box, { height: 1, justifyContent: 'center' },
+                        React.createElement(Text, { color: mode === 'table' ? 'cyanBright' : 'gray', bold: mode === 'table' },
+                          `  AGENT LIST  [${AGENTS.length > 0 ? sel + 1 : 0}/${AGENTS.length}]  ·  ${currentRepoDisplay}`)
+                      ),
+                      React.createElement(Box, { height: 1, overflow: 'hidden' },
+                        React.createElement(Text, { color: 'gray', dimColor: true }, '─'.repeat(100))
+                      ),
+                      AGENTS.length === 0
+                        ? React.createElement(Box, { flexGrow: 1, alignItems: 'center', justifyContent: 'center' },
+                            React.createElement(Text, { color: 'gray', dimColor: true }, 'No agents yet'))
+                        : (() => {
+                            const sessionRows = allRows.filter(r => r.type === 'session')
+                            const visibleSessionIdxs = sessionRows.slice(tableOffset, tableOffset + VISIBLE_AGENTS).map(r => AGENTS.indexOf(r.data))
+                            const visibleRows = allRows.filter(r => {
+                              if (r.type === 'session') return visibleSessionIdxs.includes(AGENTS.indexOf(r.data))
+                              if (r.type === 'sub' || r.type === 'empty') {
+                                const parent = AGENTS.find(a => a.id === r.parentId)
+                                return parent && visibleSessionIdxs.includes(AGENTS.indexOf(parent))
+                              }
+                              return false
+                            })
+                            return visibleRows.map((row, i) => {
+                              if (row.type === 'empty') return React.createElement(EmptySubAgentsRow, { key: 'empty-' + row.parentId })
+                              if (row.type === 'sub') return React.createElement(SubAgentRow, { key: 'sub-' + (row.data.id || i), agent: row.data, tick, isLast: row.isLast })
+                              const agentIdx = AGENTS.indexOf(row.data)
+                              return React.createElement(AgentRow, {
+                                key: row.data.id, agent: row.data, selected: agentIdx === sel, tick, isDimmed: mode !== 'table', expanded: row.expanded,
+                              })
+                            })
+                          })()
+                    )
+                  : (graphViewMode === 'live'
+                      ? React.createElement(MiniGraph, {
+                          tick, isDimmed: mode !== 'graph', height: graphHeight, width: leftPanelWidth, sessions: AGENTS, graphSel, onGraphNav: setGraphSel,
+                          onGraphSelect: (idx) => { setGraphSel(idx); const agent = graphNodes[idx]; if (agent) openAgentChat(agent) }
                         })
-                        return visibleRows.map((row, i) => {
-                          if (row.type === 'empty') return React.createElement(EmptySubAgentsRow, { key: 'empty-' + row.parentId })
-                          if (row.type === 'sub') return React.createElement(SubAgentRow, { key: 'sub-' + (row.data.id || i), agent: row.data, tick, isLast: row.isLast })
-                          const agentIdx = AGENTS.indexOf(row.data)
-                          return React.createElement(AgentRow, {
-                            key: row.data.id, agent: row.data, selected: agentIdx === sel, tick, isDimmed: mode !== 'table', expanded: row.expanded,
-                          })
+                      : React.createElement(PlannedGraphViewer, {
+                          diagram: savedDiagrams[0], selectedNodeIdx: planNodeSel, height: graphHeight, isDimmed: mode !== 'graph'
                         })
-                      })()
-                )
-              : (graphViewMode === 'live'
-                  ? React.createElement(MiniGraph, {
-                      tick, isDimmed: mode !== 'graph', height: graphHeight, width: leftPanelWidth, sessions: AGENTS, graphSel, onGraphNav: setGraphSel,
-                      onGraphSelect: (idx) => { setGraphSel(idx); const agent = graphNodes[idx]; if (agent) openAgentChat(agent) }
-                    })
-                  : React.createElement(PlannedGraphViewer, {
-                      diagram: savedDiagrams[0], selectedNodeIdx: planNodeSel, height: graphHeight, isDimmed: mode !== 'graph'
-                    })
-                )
+                    ))
           ),
 
           showRightPanel && React.createElement(Box, {
@@ -580,7 +580,7 @@ export function Dashboard({ searchTerm = '' }) {
               expandedMessages, toggleMessageExpand, focusedMsgIdx, setFocusedMsgIdx
             })
           )
-        )),
+        ),
 
     React.createElement(Box, { width: '100%', height: 1, overflow: 'hidden', flexShrink: 0, minWidth: 0 },
       React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '━'.repeat(200))

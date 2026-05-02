@@ -75,39 +75,41 @@ export function GitDiffViewer({ sessionId, width, height, isDimmed, fileSel = 0,
     )
   }
 
-  const leftPanelWidth = Math.max(20, Math.floor(width * 0.2))
-  const rightPanelWidth = width - leftPanelWidth - 1 // -1 for border
-
   const selectedFile = parsedDiff[fileSel] || parsedDiff[0]
 
-  // Render left panel (files changed)
-  const filesPanel = React.createElement(Box, {
-    flexDirection: 'column',
-    width: leftPanelWidth,
-    height: '100%',
-    borderStyle: 'single',
-    borderColor: isDimmed ? 'gray' : 'green',
-    paddingX: 1
-  },
-    React.createElement(Text, { color: 'gray', bold: true }, 'Files Changed'),
-    ...parsedDiff.map((file, idx) => {
+  // Ensure files are shown at top instead of left
+  const filesPanelHeight = 4 // Title row + 1 active file name row + 2 border rows
+  const diffPanelHeight = height - filesPanelHeight
+
+  // Formatted file list row (just show one active with < > arrows to denote selection)
+  const fileListText = parsedDiff.map((file, idx) => {
       let fileName = file.newFileName || file.oldFileName
       if (fileName.startsWith('b/')) fileName = fileName.substring(2)
       else if (fileName.startsWith('a/')) fileName = fileName.substring(2)
 
-      const isSelected = idx === fileSel
-      return React.createElement(Text, {
-        key: idx,
-        color: isDimmed ? 'gray' : (isSelected ? 'whiteBright' : 'white'),
-        backgroundColor: isSelected && !isDimmed ? 'blue' : undefined,
-        wrap: 'truncate'
-      }, fileName)
-    })
+      const parts = fileName.split('/')
+      if (parts.length > 3) {
+          fileName = parts[0][0] + '/' + parts[1][0] + '/' + parts.slice(-2).join('/')
+      }
+
+      return idx === fileSel ? `[${fileName}]` : fileName
+  }).join('  ·  ')
+
+  const filesPanel = React.createElement(Box, {
+    flexDirection: 'column',
+    width: width,
+    height: filesPanelHeight,
+    paddingX: 1,
+    borderStyle: 'single',
+    borderColor: isDimmed ? 'gray' : 'green'
+  },
+    React.createElement(Text, { color: 'whiteBright', bold: true, wrap: 'truncate' }, `Files Changed [${fileSel + 1}/${parsedDiff.length}] (Up/Down to switch)`),
+    React.createElement(Text, { color: isDimmed ? 'gray' : 'cyan', wrap: 'truncate' }, fileListText)
   )
 
-  // Render right panel (diff)
-  // The user requested a 2-pane side-by-side view (split the screen in half).
-  const halfWidth = Math.floor((rightPanelWidth - 3) / 2); // subtract borders/spacing
+  // Render diff below
+  // Split the screen in half for side-by-side
+  const halfWidth = Math.floor((width - 3) / 2); // subtract borders/spacing
 
   const allLines = []
   if (selectedFile && selectedFile.hunks) {
@@ -155,14 +157,14 @@ export function GitDiffViewer({ sessionId, width, height, isDimmed, fileSel = 0,
     }
   }
 
-  const VISIBLE_DIFF_ROWS = height - 2 // approx
+  const VISIBLE_DIFF_ROWS = diffPanelHeight
   const diffStart = Math.min(scrollOffset, Math.max(0, allLines.length - VISIBLE_DIFF_ROWS))
   const visibleDiffLines = allLines.slice(diffStart, diffStart + VISIBLE_DIFF_ROWS)
 
   const diffPanel = React.createElement(Box, {
     flexDirection: 'column',
-    width: rightPanelWidth,
-    height: '100%',
+    width: width,
+    height: diffPanelHeight,
     paddingX: 1,
     overflow: 'hidden'
   },
@@ -180,7 +182,7 @@ export function GitDiffViewer({ sessionId, width, height, isDimmed, fileSel = 0,
               color: isDimmed ? 'gray' : l.leftColor,
               dimColor: l.leftDim,
               backgroundColor: isDimmed ? undefined : l.leftBg,
-              wrap: 'truncate'
+              wrap: 'wrap' // wrap text horizontally
             }, l.leftText)
           ),
           // separator
@@ -191,7 +193,7 @@ export function GitDiffViewer({ sessionId, width, height, isDimmed, fileSel = 0,
               color: isDimmed ? 'gray' : l.rightColor,
               dimColor: l.rightDim,
               backgroundColor: isDimmed ? undefined : l.rightBg,
-              wrap: 'truncate'
+              wrap: 'wrap' // wrap text horizontally
             }, l.rightText)
           )
         )
@@ -199,9 +201,8 @@ export function GitDiffViewer({ sessionId, width, height, isDimmed, fileSel = 0,
     })
   )
 
-  return React.createElement(Box, { flexDirection: 'row', width, height, overflow: 'hidden' },
+  return React.createElement(Box, { flexDirection: 'column', width, height, overflow: 'hidden' },
     filesPanel,
-    React.createElement(Box, { width: 1, height: '100%' }, React.createElement(Text, null, ' ')), // spacer
     diffPanel
   )
 }
