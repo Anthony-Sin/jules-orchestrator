@@ -412,7 +412,8 @@ export function ChatPanel({
       ),
       React.createElement(Box, { flexGrow: 1, flexShrink: 1, minWidth: 0, flexDirection: 'column' },
         React.createElement(Box, {
-          width: Math.max(10, numWidth - 4),
+          flexShrink: 1,
+          minWidth: 0,
           marginTop: Math.ceil((input || '').length / wrapLimit) > 4
             ? -(Math.ceil((input || '').length / wrapLimit) - 4) : 0
         },

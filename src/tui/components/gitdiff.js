@@ -184,22 +184,28 @@ export function GitDiffViewer({ sessionId, width, height, isDimmed, fileSel = 0,
           React.createElement(Text, { color: isDimmed ? 'gray' : (l.color || 'white'), wrap: 'truncate' }, l.text))
       }
       return React.createElement(Box, { key: i, height: 1, flexDirection: 'row', overflow: 'hidden' },
-        React.createElement(Box, { width: halfWidth, overflow: 'hidden', paddingRight: 1 },
+        React.createElement(Box, {
+          width: halfWidth,
+          overflow: 'hidden',
+          backgroundColor: isDimmed ? undefined : l.leftBg
+        },
           React.createElement(Text, {
             color: isDimmed ? 'gray' : l.leftColor,
             dimColor: l.leftDim,
-            backgroundColor: isDimmed ? undefined : l.leftBg,
             wrap: 'wrap',
-          }, l.leftText)),
+          }, (l.leftText || '').padEnd(halfWidth))),
         React.createElement(Box, { width: 1, flexShrink: 0 },
           React.createElement(Text, { color: 'gray' }, '│')),
-        React.createElement(Box, { width: halfWidth, overflow: 'hidden', paddingLeft: 1 },
+        React.createElement(Box, {
+          width: halfWidth,
+          overflow: 'hidden',
+          backgroundColor: isDimmed ? undefined : l.rightBg
+        },
           React.createElement(Text, {
             color: isDimmed ? 'gray' : l.rightColor,
             dimColor: l.rightDim,
-            backgroundColor: isDimmed ? undefined : l.rightBg,
             wrap: 'wrap',
-          }, l.rightText))
+          }, (l.rightText || '').padEnd(halfWidth)))
       )
     })
   )
