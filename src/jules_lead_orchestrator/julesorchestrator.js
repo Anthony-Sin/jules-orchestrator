@@ -205,7 +205,7 @@ export async function dispatchLeadOrchestrator(userInput, taskValue = 1, title =
   const julesSession = await createSession({
     prompt: fullPrompt,
     source: config.source,
-    startingBranch: config.branch,
+    startingBranch: config.branch || 'main',
     requirePlanApproval: false, // Orchestrator handles triage autonomously
     tools: ORCHESTRATOR_TOOLS
   });

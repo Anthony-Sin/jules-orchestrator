@@ -39,3 +39,13 @@ Date: 2024-10-25
 Status: [ ] Pending
 
 The Orchestrator's new `merge_branches` tool requires a `githubToken` to function seamlessly, although it uses local git under the hood for conflicts right now, the larger PR review flow depends on this config. Please build a UI warning if `getConfig().githubToken` is not connected.
+
+---
+From: TUI Agent
+Date: 2026-05-02
+Status: [ ] Pending
+
+**Type:** Bug
+
+**Detail:**
+The user reported an issue with the queue system. Specifically, there appears to be a bug in how tasks are prioritized or pulled from the queue causing unexpected behavior. As this is outside my strict domain rules, please investigate and fix the task fetching/prioritization logic in `src/queue/queue.js`.

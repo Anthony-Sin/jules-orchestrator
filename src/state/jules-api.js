@@ -27,18 +27,13 @@ async function fetchWithTimeout(url, options = {}) {
   }
 }
 
-export async function createSession({ prompt, source, startingBranch, requirePlanApproval = false }) {
-  const sourceContext = { source }
-  if (startingBranch) {
-    sourceContext.githubRepoContext = { startingBranch }
-  }
-
+export async function createSession({ prompt, source, startingBranch = 'main', requirePlanApproval = false }) {
   const res = await fetchWithTimeout(`${DEFAULTS.JULES_API_BASE}/sessions`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify({
       prompt,
-      sourceContext,
+      sourceContext: { source, githubRepoContext: { startingBranch } },
       requirePlanApproval,
       automationMode: getConfig().autoPr !== false ? "AUTO_CREATE_PR" : undefined,
     }),
