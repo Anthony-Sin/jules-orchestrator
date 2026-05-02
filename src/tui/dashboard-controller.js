@@ -34,8 +34,10 @@ export function useDashboardController() {
   const [planNodeSel, setPlanNodeSel]     = useState(0)
   const savedDiagrams = store.get('architectureDiagrams') || []
 
-  // ── Layout mode: 'table' | 'graph' | 'chat' ─────────────────────
+  // ── Layout mode: 'table' | 'graph' | 'chat' | 'diff' ─────────────────────
   const [mode, setMode] = useState('table')
+  const [diffFileSel, setDiffFileSel] = useState(0)
+  const [diffScrollOffset, setDiffScrollOffset] = useState(0)
 
   // ── Chat state ───────────────────────────────────────────────────
   const [chatInput, setChatInput]           = useState('')
@@ -455,6 +457,16 @@ export function useDashboardController() {
             }
             if (act.sessionCompleted) text += '\n🎉 Session Completed!'
             if (act.sessionFailed) text += `\n❌ Session Failed`
+            if (act.artifacts && act.artifacts.length > 0) {
+              act.artifacts.forEach(art => {
+                if (art.changeSet?.gitPatch) {
+                  text += `\n💻 Code Changes Ready:\n${art.changeSet.gitPatch.suggestedCommitMessage || 'Code Changes'}`
+                }
+                if (art.bashOutput) {
+                  text += `\n⚙️ Command Run: \`${art.bashOutput.command}\`\nOutput: ${art.bashOutput.output?.substring(0, 100)}...`
+                }
+              })
+            }
             if (text.trim()) history.push({ role: act.originator, text })
           }
         }
@@ -534,6 +546,8 @@ export function useDashboardController() {
     planNodeSel, setPlanNodeSel,
     savedDiagrams,
     mode, setMode,
+    diffFileSel, setDiffFileSel,
+    diffScrollOffset, setDiffScrollOffset,
     chatInput, setChatInput,
     messages, setMessages,
     scrollOffset, setScrollOffset,

@@ -17,6 +17,7 @@ import { useTerminalSize } from './hooks.js'
 import { MiniGraph, PlannedGraphViewer, GRAPH_NODE_W } from './components/graph.js'
 import { ChatPanel } from './components/chat.js'
 import { HelpScreen } from './components/help.js'
+import { GitDiffViewer, applyDiff } from './components/gitdiff.js'
 
 // Import our massive state controller
 import { useDashboardController, saveToDrive } from './dashboard-controller.js'
@@ -41,6 +42,8 @@ export function Dashboard({ searchTerm = '' }) {
     planNodeSel, setPlanNodeSel,
     savedDiagrams,
     mode, setMode,
+    diffFileSel, setDiffFileSel,
+    diffScrollOffset, setDiffScrollOffset,
     chatInput, setChatInput,
     messages, setMessages,
     scrollOffset, setScrollOffset,
@@ -187,9 +190,40 @@ export function Dashboard({ searchTerm = '' }) {
 
     if (key.meta && input === 't') { setMode('table'); return }
     if (key.meta && input === 'g') {
-      if (columns < 100 || rows < 15) { flash('Terminal too small for Graph View (need 100x15)'); return }
-      if (mode !== 'graph') { setShowGraph(true); setMode('graph') }
-      else { setGraphViewMode(v => v === 'live' ? 'plan' : 'live') }
+      if (columns < 100 || rows < 15) { flash('Terminal too small for Diff View (need 100x15)'); return }
+      if (mode !== 'diff') { setMode('diff') }
+      else { setMode('table') }
+      return
+    }
+    if (key.meta && input === 'a' && mode === 'diff' && activeAgentId) {
+      flash('Applying diff...')
+      import('./components/gitdiff.js').then(({ applyDiff }) => {
+        import('../state/jules-api.js').then(({ getAllActivities }) => {
+          getAllActivities(activeAgentId).then(res => {
+            const acts = res.activities || res || []
+            const sorted = [...acts].sort((a, b) => new Date(a.createTime || 0) - new Date(b.createTime || 0))
+            let diffStr = null
+            for (let i = sorted.length - 1; i >= 0; i--) {
+              const act = sorted[i]
+              if (act.artifacts && act.artifacts.length > 0) {
+                for (const art of act.artifacts) {
+                  if (art.changeSet?.gitPatch?.unidiffPatch) {
+                    diffStr = art.changeSet.gitPatch.unidiffPatch
+                    break
+                  }
+                }
+              }
+              if (diffStr) break
+            }
+            if (diffStr) {
+              applyDiff(diffStr).then(() => flash('✓ Diff applied successfully'))
+                .catch(err => flash(`✗ Failed to apply diff: ${err.message}`))
+            } else {
+              flash('✗ No diff found to apply')
+            }
+          })
+        })
+      })
       return
     }
     if (key.meta && input === 'e') { setMode('chat'); setScrollOffset(0); return }
@@ -255,6 +289,16 @@ export function Dashboard({ searchTerm = '' }) {
       }
       if (key.pageUp)    { setScrollOffset(o => o + 5); return }
       if (key.pageDown)  { setScrollOffset(o => Math.max(0, o - 5)); return }
+      return
+    }
+
+    if (mode === 'diff') {
+      if (key.upArrow) { setDiffFileSel(i => Math.max(0, i - 1)); return }
+      if (key.downArrow) { setDiffFileSel(i => i + 1); return } // bounded internally
+      if (key.shift && key.upArrow) { setDiffScrollOffset(o => Math.max(0, o - 1)); return }
+      if (key.shift && key.downArrow) { setDiffScrollOffset(o => o + 1); return }
+      if (key.pageUp) { setDiffScrollOffset(o => Math.max(0, o - 10)); return }
+      if (key.pageDown) { setDiffScrollOffset(o => o + 10); return }
       return
     }
 
@@ -467,6 +511,16 @@ export function Dashboard({ searchTerm = '' }) {
 
     showHelp
       ? React.createElement(HelpScreen)
+      : (mode === 'diff' ? React.createElement(Box, { width: '100%', height: availableBodyHeight, overflow: 'hidden' },
+          React.createElement(GitDiffViewer, {
+            sessionId: activeAgentId,
+            width: columns,
+            height: availableBodyHeight,
+            isDimmed: false,
+            fileSel: diffFileSel,
+            scrollOffset: diffScrollOffset
+          })
+        )
       : React.createElement(Box, { flexDirection: 'row', height: availableBodyHeight, overflow: 'hidden', minWidth: 0, minHeight: 0 },
           showLeftPanel && React.createElement(Box, {
             flexDirection: 'column', width: leftPanelWidth, paddingRight: isWide ? 1 : 0, overflow: 'hidden', minWidth: 0, minHeight: 0
@@ -520,13 +574,13 @@ export function Dashboard({ searchTerm = '' }) {
           },
             React.createElement(ChatPanel, {
               messages, input: chatInput, onChange: setChatInput, onSubmit: handleSend, focused: mode === 'chat',
-              scrollOffset, width: rightPanelWidth, tab: chatTab, notes, setNotes, isRepoInputMode: repoInputMode,
+              scrollOffset, setScrollOffset, width: rightPanelWidth, tab: chatTab, notes, setNotes, isRepoInputMode: repoInputMode,
               repoName: currentRepoDisplay, agentTitle: activeAgentTitle, agentId: activeAgentId, chatTargetMode,
               visibleAgentsCount: VISIBLE_AGENTS, chatMenuOpen, chatMenuSel, chatVisibleRows: CHAT_VISIBLE_ROWS, latestProgress, promptPreview,
               expandedMessages, toggleMessageExpand, focusedMsgIdx, setFocusedMsgIdx
             })
           )
-        ),
+        )),
 
     React.createElement(Box, { width: '100%', height: 1, overflow: 'hidden', flexShrink: 0, minWidth: 0 },
       React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '━'.repeat(200))
@@ -538,7 +592,9 @@ export function Dashboard({ searchTerm = '' }) {
             React.createElement(Box, { flexGrow: 1, flexShrink: 1, overflow: 'hidden', flexDirection: 'row', minWidth: 0, justifyContent: 'space-between' },
               React.createElement(Box, { flexDirection: 'row', flexShrink: 1, minWidth: 0, overflow: 'hidden' },
                 React.createElement(Text, { color: 'whiteBright', bold: true, wrap: 'truncate' }, ' alt+g'),
-                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ' :graph '),
+                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ' :diff '),
+                React.createElement(Text, { color: 'whiteBright', bold: true, wrap: 'truncate' }, ' alt+a'),
+                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ' :patch '),
                 React.createElement(Text, { color: 'whiteBright', bold: true, wrap: 'truncate' }, ' alt+e'),
                 React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ' :chat '),
                 React.createElement(Text, { color: 'whiteBright', bold: true, wrap: 'truncate' }, ' alt+m'),
@@ -550,7 +606,7 @@ export function Dashboard({ searchTerm = '' }) {
                 React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, `agents:${AGENTS.length}`)
               ),
               React.createElement(Box, { flexShrink: 0, flexDirection: 'row' },
-                React.createElement(Text, { color: 'cyanBright', bold: true }, mode === 'graph' ? ' [GRP]' : mode === 'chat' ? ' [CHT]' : ' [TBL]')
+                React.createElement(Text, { color: 'cyanBright', bold: true }, mode === 'diff' ? ' [DIF]' : mode === 'graph' ? ' [GRP]' : mode === 'chat' ? ' [CHT]' : ' [TBL]')
               )
             )
           )
