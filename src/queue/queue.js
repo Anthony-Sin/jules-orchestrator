@@ -1,4 +1,4 @@
-import { getQueue, setQueue, checkFileLockConflicts, getSessions, unlockFiles } from '../state/store.js'
+import { getQueue, setQueue, checkFileLockConflicts, getSessions, unlockFiles, upsertSession } from '../state/store.js'
 
 export function enqueue(task) {
   if (!task || !task.type) {
@@ -12,6 +12,17 @@ export function enqueue(task) {
 
 export function dequeue(type) {
   const queue = getQueue()
+
+  // Dependency check logic: wake up any PAUSED agents if their target is COMPLETED
+  const allSessions = getSessions() || [];
+  for (const dep of allSessions) {
+    if (dep.state === 'PAUSED' && dep.waitingOn) {
+      const targetSession = allSessions.find(s => s.id === dep.waitingOn);
+      if (targetSession && targetSession.state === 'COMPLETED') {
+        upsertSession({ id: dep.id, state: 'QUEUED', waitingOn: null });
+      }
+    }
+  }
 
   // Find the highest priority task that matches the type and has no file lock conflicts
   const idx = queue.findIndex(t => {
