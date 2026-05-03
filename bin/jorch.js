@@ -23,11 +23,32 @@ export async function killSession(sessionId) {
 export async function pollAndUpdate() {
   await syncQuota()
   const active = getActiveSessions()
-  const updated = []
 
-  for (const session of active) {
+  const results = await Promise.all(active.map(async (session) => {
     try {
       const fresh = await getSession(session.id)
+      let activitiesRes = null
+
+      if (session.type === 'orchestrator' && !TERMINAL_STATES.includes(fresh.state || session.state)) {
+        try {
+          activitiesRes = await getAllActivities(session.id)
+        } catch (_) {
+          // Failure to fetch activities shouldn't block updating the session state
+        }
+      }
+
+      return { session, fresh, activitiesRes }
+    } catch (err) {
+      return { session, error: err }
+    }
+  }))
+
+  const updated = []
+
+  for (const { session, fresh, activitiesRes, error } of results) {
+    if (error || !fresh) continue
+
+    try {
       const newState = fresh.state || session.state
       const updates = { id: session.id, state: newState, lastUpdated: Date.now() }
       if (fresh.title) updates.title = fresh.title
@@ -61,10 +82,9 @@ export async function pollAndUpdate() {
       if (TERMINAL_STATES.includes(newState)) unlockFiles(session.id)
       updated.push({ id: session.id, state: newState, title: updates.title || session.title })
 
-      if (session.type === 'orchestrator' && !TERMINAL_STATES.includes(newState)) {
+      if (session.type === 'orchestrator' && !TERMINAL_STATES.includes(newState) && activitiesRes) {
         try {
-          const res = await getAllActivities(session.id);
-          const acts = res.activities || res || [];
+          const acts = activitiesRes.activities || activitiesRes || [];
           if (Array.isArray(acts) && acts.length > 0) {
             const sorted = acts.sort((a, b) => new Date(a.createTime || 0).getTime() - new Date(b.createTime || 0).getTime());
             const lastProcessedIdMap = store.get('lastProcessedActivityIds') || {};
