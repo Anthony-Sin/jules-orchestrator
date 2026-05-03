@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import nock from 'nock';
-import { store } from './store.js';
-import * as api from './jules-api.js';
+import { store } from '../../src/state/store.js';
+import * as api from '../../src/state/jules-api.js';
 import { DEFAULTS } from '../../config/defaults.js';
 
 test('jules-api', async (t) => {
