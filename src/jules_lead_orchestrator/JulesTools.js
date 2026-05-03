@@ -1,4 +1,5 @@
 import fs from 'fs'
+import fsPromises from 'fs/promises'
 import path from 'path'
 import fetch from 'node-fetch'
 import { getActiveSessions, upsertSession, getConfig, store, checkFileLockConflicts, lockFiles, unlockFiles } from '../state/store.js'
@@ -13,7 +14,12 @@ function getHeaders() {
 
 export async function handleOrchestratorToolCall(toolCall, orchestratorSessionId) {
   const { name, arguments: argsString } = toolCall.function;
-  const args = JSON.parse(argsString);
+  let args;
+  try {
+    args = JSON.parse(argsString);
+  } catch (err) {
+    return { status: 'error', message: `Failed to parse JSON arguments: ${err.message}` };
+  }
 
   const confirmToolCall = async (message) => {
     if (orchestratorSessionId) {
@@ -149,7 +155,7 @@ export async function handleOrchestratorToolCall(toolCall, orchestratorSessionId
 
       try {
         lockFiles('ORCHESTRATOR', [contractPath]);
-        fs.writeFileSync(contractPath, args.initial_content, 'utf8');
+        await fsPromises.writeFile(contractPath, args.initial_content, 'utf8');
       } finally {
         unlockFiles('ORCHESTRATOR');
       }
