@@ -1,0 +1,17 @@
+export const THEME = {
+  accent: 'redBright',
+  accentMuted: 'red',
+  accentBg: '#3b1414',
+  accentSoft: '#ff7575',
+  focusBg: '#5a1c1c',
+  panelBorder: 'red',
+  panelFocusBorder: 'redBright',
+  text: 'white',
+  subtleText: 'gray',
+  userLabel: '#87d6ff',
+  userText: '#b8e9ff',
+  separator: '#6f5454',
+  success: 'green',
+  warning: 'yellow',
+  error: 'redBright',
+}
