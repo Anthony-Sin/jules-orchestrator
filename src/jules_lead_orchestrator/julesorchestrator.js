@@ -15,7 +15,7 @@ const ORCHESTRATOR_SYSTEM_PROMPT = `### SYSTEM IDENTITY
 1. Breakdown complex tasks into substantial modules.
 2. Call \`generate_ink_terminal_diagram\` for planning.
 3. Use \`dispatch_sub_agent\` for each module.
-4. Manage agents via tools (\`kill_sub_agent\`, \`pause_sub_agent\`, \`set_agent_dependency\`, \`merge_branches\`).
+4. Manage agents via tools (\`kill_sub_agent\`, \`set_agent_dependency\`, \`merge_branches\`).
 5. Output tool calls as JSON. Wait for \`[TOOL_RESULT: ...]\` confirmations before proceeding.
 6. React to \`[AGENT_UPDATE: ...]\` messages to manage dependencies and auto-retry if needed.`;
 
@@ -81,21 +81,6 @@ const ORCHESTRATOR_TOOLS = [
         properties: {
           agent_id: { type: "string", description: "The ID of the agent to kill." },
           reason: { type: "string", description: "The reason for termination." }
-        },
-        required: ["agent_id", "reason"]
-      }
-    }
-  },
-  {
-    type: "function",
-    function: {
-      name: "pause_sub_agent",
-      description: "Pauses a currently running sub-agent.",
-      parameters: {
-        type: "object",
-        properties: {
-          agent_id: { type: "string", description: "The ID of the agent to pause." },
-          reason: { type: "string", description: "The reason for pausing." }
         },
         required: ["agent_id", "reason"]
       }

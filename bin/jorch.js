@@ -8,6 +8,7 @@ import { dispatchLeadOrchestrator } from '../src/jules_lead_orchestrator/julesor
 
 import { deleteSession, listSessions, getSession, parseSourceDisplay, sendMessage, getAllActivities } from '../src/state/jules-api.js'
 import { handleOrchestratorToolCall } from '../src/jules_lead_orchestrator/julesorchestrator.js'
+import { upsertSession, getSessions, getActiveSessions, store, unlockFiles, getQueue, setConfig, getConfig } from '../src/state/store.js'
 
 const TERMINAL_STATES = ['COMPLETED', 'FAILED', 'KILLED']
 

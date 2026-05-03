@@ -184,9 +184,10 @@ export async function handleOrchestratorToolCall(toolCall, orchestratorSessionId
            return { status: 'error', message: msg };
         }
 
+        const safeModuleName = (args.module_name || '').toLowerCase().replace(/[^a-z0-9-]/g, '-');
         const enforcedBranch = orchestratorSessionId
-          ? `jorch/${orchestratorSessionId}/${args.module_name}`
-          : `jorch/${Date.now()}/${args.module_name}`;
+          ? `jorch/${orchestratorSessionId}/${safeModuleName}`
+          : `jorch/${Date.now()}/${safeModuleName}`;
 
         const instructionsWithBranch = `[IMPORTANT BRANCH NAMING] You must push your changes to branch: ${enforcedBranch}\n\n${args.instructions}`;
 
@@ -233,11 +234,22 @@ export async function handleOrchestratorToolCall(toolCall, orchestratorSessionId
           return { status: 'error', message: msg };
         }
 
-        const matchPattern = orchestratorSessionId ? `jorch/${orchestratorSessionId}/*` : '*';
+        const matchPattern = orchestratorSessionId ? `jorch/${orchestratorSessionId}/` : '';
+
+        // Hard JS validation
+        for (const branch of branches_to_merge) {
+          if (branch === 'main' || (matchPattern && !branch.startsWith(matchPattern))) {
+            const msg = `Validation failed: Branch '${branch}' is not authorized. All branches must start with '${matchPattern}' and cannot be 'main'.`;
+            await confirmToolCall(msg);
+            return { status: 'error', message: msg };
+          }
+        }
+
+        const matchPatternWildcard = orchestratorSessionId ? `jorch/${orchestratorSessionId}/*` : '*';
 
         const mergeInstructions = `You are a Merge Agent. Your ONLY job is to merge branches into a temporary branch.
 1. Base branch: ${base_branch}
-2. Branches to merge: ${branches_to_merge.join(', ')} (these should match ${matchPattern})
+2. Branches to merge: ${branches_to_merge.join(', ')} (these should match ${matchPatternWildcard})
 3. Checkout a new temporary branch from ${base_branch}.
 4. Merge each specified branch. If there is a conflict, resolve it.
 5. Push the resulting temporary branch to origin.
