@@ -97,19 +97,23 @@ export async function pollAndUpdate() {
                      }
                   }
 
+                  const toolCallPromises = [];
                   for (const jsonStr of jsonStrs) {
                      try {
                         const toolCalls = JSON.parse(jsonStr);
                         if (Array.isArray(toolCalls)) {
                            for (const tc of toolCalls) {
                               if (tc && tc.function && tc.function.name) {
-                                 await handleOrchestratorToolCall(tc, session.id);
+                                 toolCallPromises.push(handleOrchestratorToolCall(tc, session.id));
                               }
                            }
                         }
                      } catch (err) {
                         // ignore JSON parse errors
                      }
+                  }
+                  if (toolCallPromises.length > 0) {
+                     await Promise.allSettled(toolCallPromises);
                   }
                 }
               }
