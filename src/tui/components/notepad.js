@@ -97,7 +97,7 @@ export function Notepad({ value = '', onChange, focused = true, height = 10, wid
           newLines[cursorLine] = combined.substring(maxCol);
           onChange(newLines.join('\n'));
           setCursorLine(prevLineIdx);
-          setCursorCol(prevLine.length);
+          setCursorCol(Math.min(prevLine.length, maxCol));
         } else {
           newLines[prevLineIdx] = combined;
           newLines.splice(cursorLine, 1);

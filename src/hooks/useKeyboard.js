@@ -4,6 +4,7 @@
 // the Ink useInput hook.
 
 import { useInput } from 'ink'
+import { useRef } from 'react'
 import { deleteSession } from '../../state/jules-api.js'
 import { removeSession } from '../../state/store.js'
 import { GRAPH_NODE_W } from '../components/graph.js'
@@ -12,6 +13,7 @@ import { GRAPH_NODE_W } from '../components/graph.js'
  * @param {object} p  — everything the keyboard handler needs to read or write
  */
 export function useKeyboard(p) {
+  const isApplyingDiff = useRef(false)
   const {
     // app
     exit,
@@ -155,6 +157,11 @@ export function useKeyboard(p) {
     }
 
     if (key.meta && input === 'a' && mode === 'diff' && selectedSessionId) {
+      if (isApplyingDiff.current) {
+        flash('Diff application already in progress...')
+        return
+      }
+      isApplyingDiff.current = true
       flash('Applying diff...')
       const id = selectedSessionId
       import('../components/gitdiff.js').then(({ applyDiff }) => {
@@ -176,11 +183,22 @@ export function useKeyboard(p) {
               applyDiff(diffStr)
                 .then(() => flash('✓ Diff applied successfully'))
                 .catch(err => flash(`✗ Failed to apply diff: ${err.message}`))
+                .finally(() => { isApplyingDiff.current = false })
             } else {
               flash('✗ No diff found to apply')
+              isApplyingDiff.current = false
             }
+          }).catch(err => {
+            flash(`✗ Failed to get activities: ${err.message}`)
+            isApplyingDiff.current = false
           })
+        }).catch(err => {
+          flash(`✗ Failed to load module: ${err.message}`)
+          isApplyingDiff.current = false
         })
+      }).catch(err => {
+        flash(`✗ Failed to load diff module: ${err.message}`)
+        isApplyingDiff.current = false
       })
       return
     }
