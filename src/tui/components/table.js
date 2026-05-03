@@ -201,7 +201,7 @@ export function buildRows(sessions, expandedIds) {
         rows.push({ type: 'empty', parentId: agent.id })
       } else {
         subAgents.forEach((sub, i) =>
-          rows.push({ type: 'sub', data: sub, isLast: i === subAgents.length - 1 })
+          rows.push({ type: 'sub', data: sub, isLast: i === subAgents.length - 1, parentId: agent.id })
         )
       }
     }
