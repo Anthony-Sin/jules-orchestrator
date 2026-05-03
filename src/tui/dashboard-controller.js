@@ -23,7 +23,13 @@ export function extractToolCallsFromMessage(msgText) {
       const start = msgText.indexOf('[{');
       const end = msgText.lastIndexOf('}]');
       if (start !== -1 && end !== -1 && end > start) {
-        jsonStr = msgText.substring(start, end + 2);
+        const potentialJson = msgText.substring(start, end + 2);
+        try {
+          JSON.parse(potentialJson);
+          jsonStr = potentialJson;
+        } catch (e) {
+          // not valid JSON, ignore
+        }
       }
     }
 
@@ -76,7 +82,7 @@ export function useDashboardController() {
   const [showGraph, setShowGraph]         = useState(false)
   const [graphViewMode, setGraphViewMode] = useState('live')
   const [planNodeSel, setPlanNodeSel]     = useState(0)
-  const savedDiagrams = store.get('architectureDiagrams') || []
+  const [savedDiagrams, setSavedDiagrams] = useState(() => store.get('architectureDiagrams') || [])
 
   // ── Layout mode: 'table' | 'graph' | 'chat' | 'diff' ─────────────────────
   const [mode, setMode] = useState('table')
@@ -138,7 +144,6 @@ export function useDashboardController() {
   const [lastActivityIds, setLastActivityIds]     = useState({})
   const lastActivityIdsRef = useRef(lastActivityIds)
   useEffect(() => { lastActivityIdsRef.current = lastActivityIds }, [lastActivityIds])
-
   const [queuedMessages, setQueuedMessages]       = useState({})
   const [queuedCycleIdx, setQueuedCycleIdx]       = useState(0)
   const [promptPreview, setPromptPreview]         = useState(null)
@@ -180,7 +185,7 @@ export function useDashboardController() {
         let changed = false
 
         for (const s of localSessions) {
-          if (!['QUEUED', 'AWAITING_PLAN_APPROVAL', 'AWAITING_USER_FEEDBACK'].includes(s.state) && !remoteIds.has(s.id)) {
+          if (!['QUEUED', 'AWAITING_PLAN_APPROVAL', 'AWAITING_USER_FEEDBACK', 'PAUSED'].includes(s.state) && !remoteIds.has(s.id)) {
             removeSession(s.id)
             changed = true
           }
@@ -418,6 +423,7 @@ export function useDashboardController() {
       const storeUpdate = store.get('diagramLastUpdated') || 0
       if (storeUpdate > lastGraphUpdateRef.current) {
         lastGraphUpdateRef.current = storeUpdate
+        setSavedDiagrams(store.get('architectureDiagrams') || [])
         setMessages(m => { if (!selectedSessionIdRef.current) return m; return [...m, { role: 'system', text: 'magenta:➦ Diagram updated → see [ PLANNED ARCHITECTURE ]' }] })
         if (showGraph) {
           setMode('graph')
@@ -523,7 +529,7 @@ export function useDashboardController() {
     })
   }, [resetExpandedMessages])
 
-  async function handleSend(val) {
+  const handleSend = useCallback(async (val) => {
     if (!val.trim()) return
     const source = getConfig().source
     if (!source || source === 'NOT SET') {
@@ -581,7 +587,7 @@ export function useDashboardController() {
     } catch (e) {
       setMessages(m => { if (selectedSessionIdRef.current !== targetAgent.id) return m; return [...m, { role: 'system', text: `Send error: ${e.message}` }] })
     }
-  }
+  }, [chatTargetMode, selectedSessionId, AGENTS])
 
   function handleRepoSubmit(val) {
     if (val.trim()) setConfig('source', val.trim())
