@@ -145,6 +145,8 @@ export function useDashboardController() {
   // This avoids overwriting the newly restored scroll position with stale
   // data due to React batched state updates.
   const lastSessionIdRef = useRef(selectedSessionId)
+  const selectedSessionIdRef = useRef(selectedSessionId)
+  useEffect(() => { selectedSessionIdRef.current = selectedSessionId }, [selectedSessionId])
 
   // Save scroll position whenever it changes, but skip the write that fires
   // immediately after openAgentChat sets the restored value.
@@ -391,7 +393,7 @@ export function useDashboardController() {
 
           if (newMessages.length > 0) {
             setLatestProgress(null);
-            setMessages(m => [...m, ...newMessages])
+            setMessages(m => { if (selectedSessionIdRef.current !== selectedSessionId) return m; return [...m, ...newMessages] })
             setLastActivityIds(prev => ({ ...prev, [selectedSessionId]: sorted[sorted.length - 1].name }))
           } else if (foundNew && sorted.length > 0) {
             setLastActivityIds(prev => ({ ...prev, [selectedSessionId]: sorted[sorted.length - 1].name }))
@@ -413,7 +415,7 @@ export function useDashboardController() {
       const storeUpdate = store.get('diagramLastUpdated') || 0
       if (storeUpdate > lastGraphUpdateRef.current) {
         lastGraphUpdateRef.current = storeUpdate
-        setMessages(m => [...m, { role: 'system', text: 'magenta:➦ Diagram updated → see [ PLANNED ARCHITECTURE ]' }])
+        setMessages(m => { if (!selectedSessionIdRef.current) return m; return [...m, { role: 'system', text: 'magenta:➦ Diagram updated → see [ PLANNED ARCHITECTURE ]' }] })
         if (showGraph) {
           setMode('graph')
           setGraphViewMode('plan')
@@ -428,18 +430,39 @@ export function useDashboardController() {
   const pendingSendsRef = useRef(new Set())
   const pendingTimeoutsRef = useRef(new Set())
 
+  useEffect(() => {
+    return () => {
+      for (const tId of pendingTimeoutsRef.current) clearTimeout(tId)
+    }
+  }, [])
+
+  const agentsRef = useRef(AGENTS)
+  useEffect(() => { agentsRef.current = AGENTS }, [AGENTS])
+
   // Drain queued messages
   useEffect(() => {
-    for (const [id, msg] of Object.entries(queuedMessages)) {
-      const agent = AGENTS.find(a => a.id === id)
+    for (const [id, msgs] of Object.entries(queuedMessages)) {
+      if (!msgs || msgs.length === 0) continue
+      const msg = msgs[0]
+
+      const agent = agentsRef.current.find(a => a.id === id)
       if (agent && agent.state !== 'IN_PROGRESS' && !pendingSendsRef.current.has(id)) {
         pendingSendsRef.current.add(id)
 
         const tId = setTimeout(() => {
           // Re-check just to be safe, though not strictly required
           sendMessage(id, msg).catch(() => {})
-          setMessages(m => [...m, { role: 'system', text: `[SYSTEM] Sent queued message to ${id}` }])
-          setQueuedMessages(prev => { const q = { ...prev }; delete q[id]; return q })
+          setMessages(m => { if (selectedSessionIdRef.current !== id) return m; return [...m, { role: 'system', text: `[SYSTEM] Sent queued message to ${id}` }] })
+          setQueuedMessages(prev => {
+            const nextQueue = { ...prev }
+            if (nextQueue[id]) {
+              const updated = [...nextQueue[id]]
+              updated.shift()
+              if (updated.length === 0) delete nextQueue[id]
+              else nextQueue[id] = updated
+            }
+            return nextQueue
+          })
           pendingSendsRef.current.delete(id)
           pendingTimeoutsRef.current.delete(tId)
         }, 5000)
@@ -447,12 +470,7 @@ export function useDashboardController() {
       }
     }
 
-    return () => {
-      // Clear any pending timeouts on unmount
-      for (const tId of pendingTimeoutsRef.current) {
-        clearTimeout(tId)
-      }
-    }
+
   }, [queuedMessages, AGENTS])
 
   const openAgentChat = useCallback((agent) => {
@@ -518,13 +536,12 @@ export function useDashboardController() {
         setSelectedSessionId(sessionId)
         setChatTargetMode('TALK_TO_SELECTED_AGENT')
       } catch (e) {
-        setMessages(m => [...m, { role: 'system', text: `Create task error: ${e.message}` }])
+        setMessages(m => { if (selectedSessionIdRef.current !== (selectedSessionId || null)) return m; return [...m, { role: 'system', text: `Create task error: ${e.message}` }] })
       }
       return
     }
 
-    if (chatTargetMode === 'CREATE_ORCHESTRATOR' || !AGENTS || AGENTS.length === 0 ||
-        (chatTargetMode === 'TALK_TO_SELECTED_AGENT' && !selectedSessionId)) {
+    if (chatTargetMode === 'CREATE_ORCHESTRATOR') {
       setChatInput(''); setScrollOffset(0)
       try {
         const { sessionId } = await dispatchLeadOrchestrator(val.trim(), 1, val.trim().substring(0, 30))
@@ -532,7 +549,7 @@ export function useDashboardController() {
         setSelectedSessionId(sessionId)
         setChatTargetMode('TALK_TO_SELECTED_AGENT')
       } catch (e) {
-        setMessages(m => [...m, { role: 'system', text: `Dispatch error: ${e.message}` }])
+        setMessages(m => { if (selectedSessionIdRef.current !== (selectedSessionId || null)) return m; return [...m, { role: 'system', text: `Dispatch error: ${e.message}` }] })
       }
       return
     }
@@ -544,7 +561,7 @@ export function useDashboardController() {
     }
 
     if (targetAgent.state === 'IN_PROGRESS') {
-      setQueuedMessages(prev => ({ ...prev, [targetAgent.id]: val.trim() }))
+      setQueuedMessages(prev => ({ ...prev, [targetAgent.id]: [...(prev[targetAgent.id] || []), val.trim()] }))
       setMessages(m => [...m, { role: 'system', text: `Message queued` }])
       setChatInput(''); setScrollOffset(0); return
     }
@@ -558,7 +575,7 @@ export function useDashboardController() {
         await sendMessage(targetAgent.id, val.trim())
       }
     } catch (e) {
-      setMessages(m => [...m, { role: 'system', text: `Send error: ${e.message}` }])
+      setMessages(m => { if (selectedSessionIdRef.current !== targetAgent.id) return m; return [...m, { role: 'system', text: `Send error: ${e.message}` }] })
     }
   }
 

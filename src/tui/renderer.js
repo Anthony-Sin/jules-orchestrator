@@ -28,6 +28,9 @@ const pkg       = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
 export const version = pkg.version
 
 export function Dashboard({ searchTerm = '' }) {
+  const promptPreviewTimeoutRef = React.useRef(null)
+  React.useEffect(() => { return () => clearTimeout(promptPreviewTimeoutRef.current) }, [])
+
   const { exit } = useApp()
   const { columns, rows } = useTerminalSize()
 
@@ -153,7 +156,8 @@ export function Dashboard({ searchTerm = '' }) {
         let nextIdx = queuedCycleIdx + 1
         if (nextIdx >= entries.length) nextIdx = 0
         setQueuedCycleIdx(nextIdx)
-        const [id, msg] = entries[nextIdx]
+        const [id, msgs] = entries[nextIdx]
+        const msg = msgs && msgs.length > 0 ? msgs[msgs.length - 1] : ''
         setChatInput(msg)
       }
       return
@@ -183,7 +187,8 @@ export function Dashboard({ searchTerm = '' }) {
         const finalPrompt = promptText.trim();
         setChatInput(finalPrompt);
         setPromptPreview(`Prompt ${promptNum}: ${finalPrompt.split('\n')[0].substring(0, 50)}...`);
-        setTimeout(() => setPromptPreview(null), 3000);
+        clearTimeout(promptPreviewTimeoutRef.current);
+        promptPreviewTimeoutRef.current = setTimeout(() => setPromptPreview(null), 3000);
       } else {
         flash(`Prompt ${promptNum} not found in notes.`);
       }
@@ -465,9 +470,9 @@ export function Dashboard({ searchTerm = '' }) {
         statusFlash ? React.createElement(Text, { color: 'green', wrap: 'truncate' }, `│ ${statusFlash}`) : null
       ),
       React.createElement(Box, { flexShrink: 0, flexDirection: 'row', minWidth: 0 },
-        queuedEntries.length > 0 && React.createElement(React.Fragment, null,
+        queuedEntries.reduce((acc, [_, msgs]) => acc + (msgs?.length || 0), 0) > 0 && React.createElement(React.Fragment, null,
           React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '│ '),
-          React.createElement(Text, { color: 'magentaBright', wrap: 'truncate' }, `⧖ ${queuedEntries.length} queued (Alt+/) `)
+          React.createElement(Text, { color: 'magentaBright', wrap: 'truncate' }, `⧖ ${queuedEntries.reduce((acc, [_, msgs]) => acc + (msgs?.length || 0), 0)} queued (Alt+q) `)
         ),
         React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '│ '),
         React.createElement(Text, { color: 'greenBright', wrap: 'truncate' },
