@@ -169,6 +169,6 @@ export function setConfig(key, value) {
 }
 
 // --- Architecture Diagram ---
-export function getArchitectureDiagram() {
-  return store.get('architectureDiagram', null)
+export function getArchitectureDiagrams() {
+  return store.get('architectureDiagrams', [])
 }

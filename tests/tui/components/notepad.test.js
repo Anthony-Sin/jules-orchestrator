@@ -2,7 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert';
 import { render } from 'ink-testing-library';
 import React, { useState } from 'react';
-import { Notepad } from './notepad.js';
+import { Notepad } from '../../../src/tui/components/notepad.js';
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
