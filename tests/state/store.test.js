@@ -2,10 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert';
 import {
   store,
-  getQuotaLimit,
-  setQuotaLimit,
-  getQuotaUsed,
-  quotaRemaining,
   getSessions,
   upsertSession,
   removeSession,
@@ -18,57 +14,8 @@ import {
   setQueue,
   getConfig,
   setConfig,
-  getArchitectureDiagram,
-  syncQuota
-} from './store.js';
-
-test('Quota functions', async (t) => {
-  const mockData = new Map();
-
-  // Mock store.get and store.set
-  t.mock.method(store, 'get', (key, defaultValue) => {
-    return mockData.has(key) ? mockData.get(key) : defaultValue;
-  });
-
-  t.mock.method(store, 'set', (key, value) => {
-    mockData.set(key, value);
-  });
-
-  await t.test('getQuotaLimit returns null by default', () => {
-    mockData.clear();
-    assert.strictEqual(getQuotaLimit(), null);
-  });
-
-  await t.test('setQuotaLimit and getQuotaLimit', () => {
-    mockData.clear();
-    setQuotaLimit(50);
-    assert.strictEqual(getQuotaLimit(), 50);
-  });
-
-  await t.test('getQuotaUsed returns 0 if not set', () => {
-    mockData.clear();
-    assert.strictEqual(getQuotaUsed(), 0);
-  });
-
-  await t.test('getQuotaUsed returns used value from quota object', () => {
-    mockData.clear();
-    mockData.set('quota', { used: 10 });
-    assert.strictEqual(getQuotaUsed(), 10);
-  });
-
-  await t.test('quotaRemaining returns null if no limit', () => {
-    mockData.clear();
-    mockData.set('quota', { used: 10 });
-    assert.strictEqual(quotaRemaining(), null);
-  });
-
-  await t.test('quotaRemaining returns difference if limit is set', () => {
-    mockData.clear();
-    mockData.set('quotaLimit', 100);
-    mockData.set('quota', { used: 30 });
-    assert.strictEqual(quotaRemaining(), 70);
-  });
-});
+  getArchitectureDiagrams
+} from '../../src/state/store.js';
 
 test('Session functions', async (t) => {
   const mockData = new Map();
@@ -264,45 +211,15 @@ test('General State functions', async (t) => {
     assert.deepStrictEqual(getConfig(), { apiKey: 'test-key', autoPr: true });
   });
 
-  await t.test('getArchitectureDiagram returns null by default', () => {
+  await t.test('getArchitectureDiagrams returns empty array by default', () => {
     mockData.clear();
-    assert.strictEqual(getArchitectureDiagram(), null);
+    assert.deepStrictEqual(getArchitectureDiagrams(), []);
   });
 
-  await t.test('getArchitectureDiagram returns stored value', () => {
+  await t.test('getArchitectureDiagrams returns stored value', () => {
     mockData.clear();
-    mockData.set('architectureDiagram', 'graph TD;');
-    assert.strictEqual(getArchitectureDiagram(), 'graph TD;');
+    mockData.set('architectureDiagrams', ['graph TD;']);
+    assert.deepStrictEqual(getArchitectureDiagrams(), ['graph TD;']);
   });
 });
 
-test('syncQuota function', async (t) => {
-  const mockData = new Map();
-
-  t.mock.method(store, 'get', (key, defaultValue) => {
-    return mockData.has(key) ? mockData.get(key) : defaultValue;
-  });
-
-  t.mock.method(store, 'set', (key, value) => {
-    mockData.set(key, value);
-  });
-
-  await t.test('syncQuota handles successful api response', async () => {
-    mockData.clear();
-    const today = new Date().toISOString().split('T')[0];
-
-    // We mock the ES module dynamic import by defining it in module cache,
-    // but since we can't easily mock dynamic imports in node test runner cleanly,
-    // we just use simple execution and check error handling if it fails (it will in this env)
-
-    try {
-      await syncQuota();
-    } catch (e) {
-      // It's expected to potentially fail if it can't find jules-api.js or if it's not mocked correctly,
-      // but in store.js `catch (err)` silently continues
-    }
-
-    // As long as it doesn't crash the test, it passes the minimum requirement
-    assert.ok(true);
-  });
-});

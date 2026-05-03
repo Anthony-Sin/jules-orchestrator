@@ -378,13 +378,15 @@ function buildCodeblockLines(seg, i, focused, wrapLimit) {
     // Skip trailing empty line at end of block
     if (ci === codeLines.length - 1 && codeLines[ci].trim() === '') continue
     const wrapped = wrapText(codeLines[ci] || ' ', Math.max(5, wrapLimit - 4))
+    let wi = 0
     for (const wl of wrapped) {
       lines.push({
         type: 'codeblock-line',
-        key: `cb_${i}_${ci}`,
+        key: `cb_${i}_${ci}_${wi}`,
         text: wl,
         focused
       })
+      wi++
     }
   }
 

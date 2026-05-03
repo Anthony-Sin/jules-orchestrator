@@ -7,9 +7,8 @@ test('dispatchLeadOrchestrator suite', async (t) => {
   let currentConfig = { source: 'sources/github-owner-repo' };
 
   // Use the new t.mock.module capability
-  t.mock.module('../state/store.js', {
+  t.mock.module('../../src/state/store.js', {
     namedExports: {
-      syncQuota: async () => {},
       getConfig: () => currentConfig,
       upsertSession: (data) => { upsertSessionPayload = data; },
       checkFileLockConflicts: () => [],
@@ -21,17 +20,13 @@ test('dispatchLeadOrchestrator suite', async (t) => {
       getActiveSessions: () => [],
       getSessions: () => [],
       removeSession: () => {},
-      getQuotaUsed: () => 0,
-      getQuotaLimit: () => null,
-      setQuotaLimit: () => {},
-      quotaRemaining: () => null,
-      getArchitectureDiagram: () => null,
+      getArchitectureDiagrams: () => [],
       store: {},
       setConfig: () => {}
     }
   });
 
-  t.mock.module('../state/jules-api.js', {
+  t.mock.module('../../src/state/jules-api.js', {
     namedExports: {
       createSession: async (payload) => {
         createSessionPayload = payload;
@@ -40,7 +35,7 @@ test('dispatchLeadOrchestrator suite', async (t) => {
     }
   });
 
-  const { dispatchLeadOrchestrator, handleOrchestratorToolCall } = await import('./julesorchestrator.js');
+  const { dispatchLeadOrchestrator, handleOrchestratorToolCall } = await import('../../src/jules_lead_orchestrator/julesorchestrator.js');
 
   t.afterEach(() => {
     createSessionPayload = null;

@@ -160,7 +160,7 @@ export function parseSourceDisplay(source) {
   const match = source.match(/^sources\/github[-/](.*)/)
   if (!match) return source
 
-  return match[1]
+  return match[1].includes('/') ? match[1] : match[1].replace('-', '/')
 }
 
 export async function listSources() {
