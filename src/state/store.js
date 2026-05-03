@@ -105,6 +105,8 @@ export function checkFileLockConflicts(files) {
 
   if (lockKeys.length === 0 || files.length === 0) return conflicts
 
+  const uniqueFiles = Array.from(new Set(files))
+
   const exactLocks = new Map()
   const pathLocks = []
 
@@ -122,8 +124,8 @@ export function checkFileLockConflicts(files) {
     }
   }
 
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i]
+  for (let i = 0; i < uniqueFiles.length; i++) {
+    const file = uniqueFiles[i]
     if (file.startsWith('DOMAIN:')) {
       if (exactLocks.has(file)) {
         conflicts.push({ file, lockedBy: exactLocks.get(file) })
