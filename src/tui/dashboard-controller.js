@@ -136,6 +136,9 @@ export function useDashboardController() {
   // ── Session tracking ─────────────────────────────────────────────
   const [selectedSessionId, setSelectedSessionId] = useState(null)
   const [lastActivityIds, setLastActivityIds]     = useState({})
+  const lastActivityIdsRef = useRef(lastActivityIds)
+  useEffect(() => { lastActivityIdsRef.current = lastActivityIds }, [lastActivityIds])
+
   const [queuedMessages, setQueuedMessages]       = useState({})
   const [queuedCycleIdx, setQueuedCycleIdx]       = useState(0)
   const [promptPreview, setPromptPreview]         = useState(null)
@@ -177,7 +180,7 @@ export function useDashboardController() {
         let changed = false
 
         for (const s of localSessions) {
-          if (s.state !== 'QUEUED' && !remoteIds.has(s.id)) {
+          if (!['QUEUED', 'AWAITING_PLAN_APPROVAL', 'AWAITING_USER_FEEDBACK'].includes(s.state) && !remoteIds.has(s.id)) {
             removeSession(s.id)
             changed = true
           }
@@ -344,7 +347,7 @@ export function useDashboardController() {
         return
       }
       try {
-        const lastId = lastActivityIds[selectedSessionId]
+        const lastId = lastActivityIdsRef.current[selectedSessionId]
 
         const res  = await getAllActivities(selectedSessionId)
         const acts = res.activities || res || []
@@ -406,7 +409,7 @@ export function useDashboardController() {
 
     poll()
     return () => { active = false; clearTimeout(p) }
-  }, [mode, selectedSessionId, lastActivityIds])
+  }, [mode, selectedSessionId])
 
   // Poll for new architecture diagrams
   const lastGraphUpdateRef = useRef(store.get('diagramLastUpdated') || 0)
@@ -531,7 +534,8 @@ export function useDashboardController() {
     if (chatTargetMode === 'CREATE_TASK') {
       setChatInput(''); setScrollOffset(0)
       try {
-        const { name: sessionId } = await createSession({ prompt: val.trim(), source })
+        const { name } = await createSession({ prompt: val.trim(), source })
+        const sessionId = name.split('/').pop()
         setMessages(m => [...m, { role: 'system', text: `Created task session: ${sessionId}` }])
         setSelectedSessionId(sessionId)
         setChatTargetMode('TALK_TO_SELECTED_AGENT')
