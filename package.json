@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "node bin/jorch.js",
-    "test": "node --experimental-test-module-mocks --test"
+    "test": "node --experimental-test-module-mocks --loader ./tests/test-loader.mjs --test \"tests/**/*.test.js\""
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -25,7 +25,7 @@
     "react-dom": "^19.2.5"
   },
   "devDependencies": {
-    "nock": "^14.0.14",
-    "ink-testing-library": "^4.0.0"
+    "ink-testing-library": "^4.0.0",
+    "nock": "^14.0.14"
   }
 }
