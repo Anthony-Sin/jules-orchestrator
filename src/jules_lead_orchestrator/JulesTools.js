@@ -1,7 +1,6 @@
 import fs from 'fs'
 import path from 'path'
 import fetch from 'node-fetch'
-import { execSync } from 'child_process'
 import { getActiveSessions, upsertSession, getConfig, store, checkFileLockConflicts, lockFiles, unlockFiles } from '../state/store.js'
 import { createSession } from '../state/jules-api.js'
 import { DEFAULTS } from '../../config/defaults.js'
