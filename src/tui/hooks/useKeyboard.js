@@ -266,14 +266,6 @@ export function useKeyboard(p) {
         return
       }
 
-      if (startDialogOpen) {
-        if (key.upArrow || key.downArrow) {
-          const next = startDialogMode === 'CREATE_TASK' ? 'CREATE_ORCHESTRATOR' : 'CREATE_TASK'
-          setStartDialogMode(next)
-          setChatTargetMode(next)
-          return
-        }
-      }
 
       if (key.shift && (key.leftArrow || key.rightArrow)) { setChatTab(t => t === 'chat' ? 'notes' : 'chat'); return }
       if (key.pageUp) { setScrollOffset(o => o + 5); return }

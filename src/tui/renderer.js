@@ -154,8 +154,17 @@ export function Dashboard({ searchTerm = '' }) {
     ? sourcesList.filter(s => ('/' + (s.displayName || s.name)).toLowerCase().includes(repoInput.toLowerCase()))
     : []
 
-  const dropdownOffset = sourceSel >= 5 ? sourceSel - 4 : 0
-  const visibleDropdownSources = filteredSources.slice(dropdownOffset, dropdownOffset + 5)
+  const [repoDropdownOffset, setRepoDropdownOffset] = React.useState(0)
+
+  React.useEffect(() => {
+    setRepoDropdownOffset(prev => {
+      if (sourceSel < prev) return sourceSel
+      if (sourceSel >= prev + 5) return sourceSel - 4
+      return prev
+    })
+  }, [sourceSel])
+
+  const visibleDropdownSources = filteredSources.slice(repoDropdownOffset, repoDropdownOffset + 5)
 
   const allRows = React.useMemo(() => buildRows(AGENTS, expandedIds), [AGENTS, expandedIds])
   const queuedEntries = Object.entries(queuedMessages)
@@ -186,11 +195,6 @@ export function Dashboard({ searchTerm = '' }) {
       React.createElement(Text, { color: THEME.warning }, `Current size: ${columns}x${rows}`)
     )
   }
-
-  const leftTopTokens = [
-    `Current Repo: ${currentRepoDisplay}`,
-    statusFlash ? statusFlash : null,
-  ].filter(Boolean)
 
   const activeCount = AGENTS.filter(a => ['IN_PROGRESS', 'PLANNING', 'AWAITING_USER_FEEDBACK', 'AWAITING_PLAN_APPROVAL'].includes(a.state)).length
 
@@ -241,7 +245,9 @@ export function Dashboard({ searchTerm = '' }) {
       overflow: 'hidden',
       flexShrink: 0,
     },
-      React.createElement(Text, { color: THEME.text, bold: true, wrap: 'truncate' }, leftTopTokens.join(' | ')),
+      React.createElement(Text, { color: THEME.text, bold: true, wrap: 'truncate' }, 'Current Repo: '),
+      React.createElement(Text, { color: 'blueBright', bold: true, wrap: 'truncate' }, currentRepoDisplay),
+      statusFlash && React.createElement(Text, { color: THEME.text, bold: true, wrap: 'truncate' }, ` | ${statusFlash}`),
       React.createElement(Spacer),
       queuedEntries.length > 0 && React.createElement(Text, { color: THEME.accentSoft, wrap: 'truncate' }, `${queuedEntries.length} queued`),
       queuedEntries.length > 0 && React.createElement(Text, { color: THEME.subtleText }, ' | '),
@@ -280,9 +286,9 @@ export function Dashboard({ searchTerm = '' }) {
           : visibleDropdownSources.map((s, idx) =>
               React.createElement(Text, {
                 key: s.name,
-                color: dropdownOffset + idx === sourceSel ? THEME.accent : THEME.subtleText,
+                color: repoDropdownOffset + idx === sourceSel ? THEME.accent : THEME.subtleText,
                 wrap: 'truncate',
-              }, dropdownOffset + idx === sourceSel ? '> ' + (s.displayName || s.name) : '  ' + (s.displayName || s.name))
+              }, repoDropdownOffset + idx === sourceSel ? '> ' + (s.displayName || s.name) : '  ' + (s.displayName || s.name))
             )
       )
     ),
@@ -437,11 +443,15 @@ function _renderLeftPanel({
 
   return React.createElement(Box, { flexDirection: 'column', flexGrow: 1, overflow: 'hidden' },
     React.createElement(Box, { height: 1, justifyContent: 'center' },
+      React.createElement(Text, { color: mode === 'table' ? THEME.accentMuted : THEME.subtleText, bold: mode === 'table' },
+        `AGENT LIST [`),
       React.createElement(Text, { color: mode === 'table' ? THEME.accent : THEME.subtleText, bold: mode === 'table' },
-        `AGENT LIST [${AGENTS.length > 0 ? sel + 1 : 0}/${AGENTS.length}]`)
+        `${AGENTS.length > 0 ? sel + 1 : 0}/${AGENTS.length}`),
+      React.createElement(Text, { color: mode === 'table' ? THEME.accentMuted : THEME.subtleText, bold: mode === 'table' },
+        `]`)
     ),
     React.createElement(Box, { height: 1, overflow: 'hidden' },
-      React.createElement(Text, { color: THEME.subtleText, dimColor: true }, '-'.repeat(100))
+      React.createElement(Text, { color: mode === 'table' ? THEME.accent : THEME.subtleText, dimColor: true }, '-'.repeat(100))
     ),
     AGENTS.length === 0
       ? React.createElement(Box, { flexGrow: 1, alignItems: 'center', justifyContent: 'center' },

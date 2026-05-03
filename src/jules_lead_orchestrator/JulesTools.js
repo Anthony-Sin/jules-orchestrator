@@ -224,7 +224,11 @@ export async function handleOrchestratorToolCall(toolCall, orchestratorSessionId
     }
 
     case 'merge_branches': {
-      const { base_branch, branches_to_merge } = args;
+      let { base_branch, branches_to_merge } = args;
+
+      if (typeof branches_to_merge === 'string') {
+        branches_to_merge = [branches_to_merge];
+      }
 
       if (!Array.isArray(branches_to_merge)) {
         const msg = `Validation failed: 'branches_to_merge' must be an array of branch names.`;

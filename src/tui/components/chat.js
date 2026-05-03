@@ -201,21 +201,25 @@ export function ChatPanel({
         isNewSession
           ? (tab === 'chat'
               ? React.createElement(React.Fragment, null,
-                  React.createElement(Text, { color: THEME.accent, bold: true, wrap: 'truncate' }, 'NEW SESSION | '),
+                  React.createElement(Text, { color: focused ? THEME.accent : THEME.subtleText, bold: true, wrap: 'truncate' }, 'NEW SESSION'),
+                  React.createElement(Text, { color: focused ? THEME.accentMuted : THEME.subtleText, bold: true, wrap: 'truncate' }, ' | '),
                   React.createElement(Text, { color: THEME.subtleText, bold: true, wrap: 'truncate' }, 'NOTES')
                 )
               : React.createElement(React.Fragment, null,
-                  React.createElement(Text, { color: THEME.accent, bold: true, wrap: 'truncate' }, 'NEW SESSION | '),
-                  React.createElement(Text, { color: THEME.subtleText, bold: true, wrap: 'truncate' }, 'CHAT')
+                  React.createElement(Text, { color: THEME.subtleText, bold: true, wrap: 'truncate' }, 'NEW SESSION'),
+                  React.createElement(Text, { color: THEME.subtleText, bold: true, wrap: 'truncate' }, ' | '),
+                  React.createElement(Text, { color: focused ? THEME.accent : THEME.subtleText, bold: true, wrap: 'truncate' }, 'NOTES')
                 ))
           : (tab === 'chat'
               ? React.createElement(React.Fragment, null,
-                  React.createElement(Text, { color: focused ? THEME.accent : THEME.subtleText, bold: true, wrap: 'truncate' }, `CHAT: ${shortTitle} | `),
+                  React.createElement(Text, { color: focused ? THEME.accent : THEME.subtleText, bold: true, wrap: 'truncate' }, `CHAT: ${shortTitle}`),
+                  React.createElement(Text, { color: focused ? THEME.accentMuted : THEME.subtleText, bold: true, wrap: 'truncate' }, ' | '),
                   React.createElement(Text, { color: THEME.subtleText, bold: true, wrap: 'truncate' }, 'NOTES')
                 )
               : React.createElement(React.Fragment, null,
-                  React.createElement(Text, { color: focused ? THEME.accent : THEME.subtleText, bold: true, wrap: 'truncate' }, `NOTES: ${shortTitle} | `),
-                  React.createElement(Text, { color: THEME.subtleText, bold: true, wrap: 'truncate' }, 'CHAT')
+                  React.createElement(Text, { color: THEME.subtleText, bold: true, wrap: 'truncate' }, `CHAT: ${shortTitle}`),
+                  React.createElement(Text, { color: THEME.subtleText, bold: true, wrap: 'truncate' }, ' | '),
+                  React.createElement(Text, { color: focused ? THEME.accent : THEME.subtleText, bold: true, wrap: 'truncate' }, `NOTES`)
                 ))
       ),
       React.createElement(Box, { flexDirection: 'row', flexShrink: 0, minWidth: 0 },
@@ -228,8 +232,8 @@ export function ChatPanel({
 
     React.createElement(Box, { overflow: 'hidden', flexShrink: 0, height: 1, minWidth: 0 },
       React.createElement(Text, {
-        color: isNewSession ? THEME.accentMuted : THEME.subtleText,
-        dimColor: !isNewSession,
+        color: focused ? THEME.accent : THEME.subtleText,
+        dimColor: true,
         wrap: 'truncate',
       }, '-'.repeat(100))
     ),
@@ -262,8 +266,8 @@ export function ChatPanel({
               React.createElement(Text, { color: focused ? THEME.text : THEME.subtleText, dimColor: !focused }, 'Your message will spawn a'),
               React.createElement(Text, { color: focused ? THEME.text : THEME.subtleText, dimColor: !focused }, 'fresh orchestrator agent.'),
               React.createElement(Box, { height: 1 }),
-              React.createElement(Text, { color: focused ? THEME.accentSoft : THEME.subtleText, dimColor: !focused },
-                repoName === 'NOT SET' ? 'no repo selected - press Alt+M' : `repo: ${repoName}`)
+              React.createElement(Text, { color: focused ? (repoName === 'NOT SET' ? THEME.accentSoft : 'blueBright') : THEME.subtleText, dimColor: !focused },
+                repoName === 'NOT SET' ? 'no repo selected - press Alt+M' : `Current Repo: ${repoName}`)
             )
           )
         : tab === 'notes'
@@ -525,7 +529,7 @@ export function ChatPanel({
       overflow: 'hidden',
     },
       React.createElement(Text, { color: THEME.accent, bold: true, wrap: 'truncate' }, 'START'),
-      React.createElement(Text, { color: THEME.text, wrap: 'truncate' }, `Mode: ${startDialogMode === 'CREATE_TASK' ? 'Task' : 'Orchestrator'} (up/down to toggle)`),
+      React.createElement(Text, { color: THEME.text, wrap: 'truncate' }, `Mode: ${startDialogMode === 'CREATE_TASK' ? 'Task' : 'Orchestrator'}`),
       React.createElement(Text, { color: THEME.subtleText, wrap: 'truncate' }, 'Type prompt and press Enter. /task /orchestrator /cancel also work.')
     ),
 

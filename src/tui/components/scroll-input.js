@@ -95,6 +95,8 @@ export function ScrollInput({
     if (nextValue !== value) onChange?.(nextValue)
   }, { isActive: focus })
 
+  const [scrollOffset, setScrollOffset] = useState(0)
+
   const width = Math.max(8, visibleWidth)
   const rows = Math.max(1, maxRows)
 
@@ -121,18 +123,28 @@ export function ScrollInput({
 
   const wrapped = buildWrappedLines(value, width)
   const cursor = getCursorPos(value, cursorOffset, width)
-  const start = Math.max(0, cursor.line - rows + 1)
+
+  useEffect(() => {
+    setScrollOffset(prev => {
+      let newOffset = prev
+      if (cursor.line < newOffset) {
+        newOffset = cursor.line
+      } else if (cursor.line >= newOffset + rows) {
+        newOffset = cursor.line - rows + 1
+      }
+      return newOffset
+    })
+  }, [cursor.line, rows])
+
+  const start = Math.max(0, Math.min(scrollOffset, wrapped.length - 1))
   const end = Math.min(wrapped.length, start + rows)
   const visibleLines = wrapped.slice(start, end)
-  const hasTopOverflow = start > 0
-  const hasBottomOverflow = end < wrapped.length
 
   return React.createElement(Box, {
     minWidth: 0,
     overflow: 'hidden',
     flexDirection: 'column',
   },
-  hasTopOverflow && React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '...'),
   ...visibleLines.map((line, idx) => {
     const absoluteLine = start + idx
     const isCursorLine = absoluteLine === cursor.line
@@ -157,7 +169,6 @@ export function ScrollInput({
       }, at),
       React.createElement(Text, { color: focus ? 'white' : 'gray', wrap: 'truncate' }, after)
     )
-  }),
-  hasBottomOverflow && React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, '...')
+  })
   )
 }

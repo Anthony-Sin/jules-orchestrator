@@ -29,9 +29,9 @@ export const STATUS_SHORT = {
 }
 
 const COLUMN_LAYOUT = {
-  tight: { id: 6, title: 18, status: 5, progress: 9, time: 3, repoMin: 8 },
-  compact: { id: 6, title: 20, status: 5, progress: 10, time: 3, repoMin: 10 },
-  full: { id: 6, title: 25, status: 5, progress: 11, time: 3, repoMin: 10 },
+  tight: { id: 6, title: 22, status: 5, progress: 2, time: 3, repoMin: 11 },
+  compact: { id: 6, title: 24, status: 5, progress: 2, time: 3, repoMin: 14 },
+  full: { id: 6, title: 30, status: 5, progress: 2, time: 3, repoMin: 14 },
 }
 
 export function ago(ms) {
@@ -96,19 +96,13 @@ function Gap() {
   )
 }
 
-export function FillBar({ tick = 0, width = 6, isDimmed, state }) {
+export function FillBar({ tick = 0, width = 2, isDimmed, state }) {
   const color = isDimmed ? 'gray' : (STATUS_COLOR[state] || THEME.subtleText)
-  
-  let pctText = ' 0%'
-  if (state === 'COMPLETED') pctText = '100%'
-  else if (state === 'IN_PROGRESS' || state === 'PLANNING') pctText = '...'
 
   return React.createElement(Text, null,
     React.createElement(Text, { color },
-      React.createElement(Spinner, { type: 'dots' })
-    ),
-    React.createElement(Text, { color: 'gray', dimColor: true }),
-    React.createElement(Text, { color: isDimmed ? 'gray' : THEME.text, dimColor: isDimmed }, ` ${pctText}`)
+      state === 'COMPLETED' ? '::' : React.createElement(Spinner, { type: 'dots' })
+    )
   )
 }
 
@@ -173,10 +167,10 @@ export function AgentRow({ agent, selected, tick, isDimmed, expanded }) {
   ),
   React.createElement(Gap),
   React.createElement(Cell, { width: layout.progress },
-    React.createElement(FillBar, { tick, width: profile === 'tight' ? 4 : 6, isDimmed, state })
+    React.createElement(FillBar, { tick, width: layout.progress, isDimmed, state })
   ),
   layout.time > 0 && React.createElement(Cell, { width: layout.time },
-    React.createElement(Text, { color: tint(THEME.subtleText), dimColor: true, wrap: 'truncate' }, ageStr)
+    React.createElement(Text, { color: ageStr === 'now' ? tint('whiteBright') : tint(THEME.subtleText), dimColor: ageStr !== 'now', wrap: 'truncate' }, ageStr)
   ))
 }
 
@@ -191,6 +185,7 @@ export function SubAgentRow({ agent, tick, isLast }) {
   const title = trimCell(agent.title || agent.role || 'agent', layout.title - 3)
   const repoStr = extractRepoName(agent.repoDisplay || agent.repo || '')
   const connector = isLast ? '`- ' : '|- '
+  const ageStr = ago(agent.lastUpdated || agent.createdAt)
 
   return React.createElement(Box, {
     paddingX: 0,
@@ -220,10 +215,10 @@ export function SubAgentRow({ agent, tick, isLast }) {
   ),
   React.createElement(Gap),
   React.createElement(Cell, { width: layout.progress },
-    React.createElement(FillBar, { tick, width: profile === 'tight' ? 4 : 6, isDimmed: false, state })
+    React.createElement(FillBar, { tick, width: layout.progress, isDimmed: false, state })
   ),
   layout.time > 0 && React.createElement(Cell, { width: layout.time },
-    React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ago(agent.lastUpdated || agent.createdAt))
+    React.createElement(Text, { color: ageStr === 'now' ? 'whiteBright' : 'gray', dimColor: ageStr !== 'now', wrap: 'truncate' }, ageStr)
   ))
 }
 
