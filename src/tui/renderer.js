@@ -126,13 +126,6 @@ export function Dashboard({ searchTerm = '' }) {
     saveToDrive,
   })
 
-  // ── Table scroll: keep selected row in view ───────────────────────
-  useEffect(() => {
-    if (VISIBLE_AGENTS <= 0) return
-    if (sel < tableOffset) setTableOffset(sel)
-    else if (sel >= tableOffset + VISIBLE_AGENTS) setTableOffset(sel - VISIBLE_AGENTS + 1)
-  }, [sel, VISIBLE_AGENTS, tableOffset, setTableOffset])
-
   // ── Derived display values ────────────────────────────────────────
   const currentSource      = getConfig().source
   const currentRepoDisplay = currentSource ? parseSourceDisplay(currentSource) : 'NOT SET'
@@ -147,6 +140,22 @@ export function Dashboard({ searchTerm = '' }) {
 
   const allRows       = React.useMemo(() => buildRows(AGENTS, expandedIds), [AGENTS, expandedIds])
   const queuedEntries = Object.entries(queuedMessages)
+
+  // ── Table scroll: keep selected row in view ───────────────────────
+  useEffect(() => {
+    if (VISIBLE_AGENTS <= 0 || AGENTS.length === 0) return
+
+    // Find the row index of the currently selected agent
+    const selectedAgentId = AGENTS[sel]?.id
+    const selRowIdx = allRows.findIndex(r => r.type === 'session' && r.data.id === selectedAgentId)
+    if (selRowIdx < 0) return
+
+    if (selRowIdx < tableOffset) {
+      setTableOffset(selRowIdx)
+    } else if (selRowIdx >= tableOffset + VISIBLE_AGENTS) {
+      setTableOffset(selRowIdx - VISIBLE_AGENTS + 1)
+    }
+  }, [sel, VISIBLE_AGENTS, tableOffset, setTableOffset, allRows, AGENTS])
 
   // ── Too-small guard ───────────────────────────────────────────────
   if (columns < 80 || rows < 10) {

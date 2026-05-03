@@ -63,6 +63,7 @@ export function Notepad({ value = '', onChange, focused = true, height = 10, wid
 
     if (key.return) {
       const currentLine = lines[cursorLine];
+      if (currentLine === undefined) return;
       const before = currentLine.substring(0, cursorCol);
       const after = currentLine.substring(cursorCol);
 

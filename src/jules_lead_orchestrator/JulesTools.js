@@ -240,10 +240,15 @@ export async function handleOrchestratorToolCall(toolCall, orchestratorSessionId
           return { status: 'error', message: msg };
         }
 
-        const requiredPrefix = orchestratorSessionId ? `jorch/${orchestratorSessionId}/` : 'jorch/';
+        const requiredPrefix = orchestratorSessionId ? `jorch/${orchestratorSessionId}/` : 'jorch/SYSTEM/';
 
         // Hard JS validation
         for (const branch of branches_to_merge) {
+          if (typeof branch !== 'string') {
+            const msg = `Validation failed: Expected branch name to be a string.`;
+            await confirmToolCall(msg);
+            return { status: 'error', message: msg };
+          }
           if (branch === 'main' || branch === 'master' || branch === 'develop' || branch.startsWith('release/') || !branch.startsWith(requiredPrefix)) {
             const msg = `Validation failed: Branch '${branch}' is not authorized. All branches must start with '${requiredPrefix}' and cannot be protected branches like 'main', 'master', 'develop', or 'release/*'.`;
             await confirmToolCall(msg);

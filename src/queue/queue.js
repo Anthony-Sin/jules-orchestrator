@@ -36,19 +36,21 @@ export function dequeue(type) {
       // Check if any of the conflicting sessions are dead
       const sessions = getSessions() || [];
       const deadStates = ['FAILED', 'KILLED', 'COMPLETED'];
-      let clearedAny = false;
+      const deadSessionIds = new Set();
 
       for (const conflict of conflicts) {
         const lockingSession = sessions.find(s => s.id === conflict.lockedBy);
         // If the session doesn't exist, or it is in a dead state, it's an orphaned lock
         if (!lockingSession || deadStates.includes(lockingSession.state)) {
-          unlockFiles(conflict.lockedBy);
-          clearedAny = true;
+          deadSessionIds.add(conflict.lockedBy);
         }
       }
 
-      // If we cleared any dead locks, re-evaluate conflicts
-      if (clearedAny) {
+      if (deadSessionIds.size > 0) {
+        for (const deadId of deadSessionIds) {
+          unlockFiles(deadId);
+        }
+        // If we cleared any dead locks, re-evaluate conflicts
         conflicts = checkFileLockConflicts(estimatedFiles);
       }
     }
