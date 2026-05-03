@@ -234,12 +234,12 @@ export async function handleOrchestratorToolCall(toolCall, orchestratorSessionId
           return { status: 'error', message: msg };
         }
 
-        const matchPattern = orchestratorSessionId ? `jorch/${orchestratorSessionId}/` : '';
+        const requiredPrefix = orchestratorSessionId ? `jorch/${orchestratorSessionId}/` : 'jorch/';
 
         // Hard JS validation
         for (const branch of branches_to_merge) {
-          if (branch === 'main' || (matchPattern && !branch.startsWith(matchPattern))) {
-            const msg = `Validation failed: Branch '${branch}' is not authorized. All branches must start with '${matchPattern}' and cannot be 'main'.`;
+          if (branch === 'main' || branch === 'master' || branch === 'develop' || branch.startsWith('release/') || !branch.startsWith(requiredPrefix)) {
+            const msg = `Validation failed: Branch '${branch}' is not authorized. All branches must start with '${requiredPrefix}' and cannot be protected branches like 'main', 'master', 'develop', or 'release/*'.`;
             await confirmToolCall(msg);
             return { status: 'error', message: msg };
           }
