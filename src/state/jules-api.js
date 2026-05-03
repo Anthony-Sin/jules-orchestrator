@@ -27,12 +27,16 @@ async function fetchWithTimeout(url, options = {}) {
   }
 }
 
-export async function createSession({ prompt, source, startingBranch, requirePlanApproval = false }) {
+export async function createSession({ prompt, source, startingBranch, requirePlanApproval = false, tools }) {
   const payload = {
     prompt,
     sourceContext: { source },
     requirePlanApproval,
     automationMode: getConfig().autoPr !== false ? "AUTO_CREATE_PR" : undefined,
+  }
+
+  if (tools) {
+    payload.tools = tools;
   }
 
   // Only add githubRepoContext with startingBranch if it's explicitly provided.
@@ -156,12 +160,7 @@ export function parseSourceDisplay(source) {
   const match = source.match(/^sources\/github[-/](.*)/)
   if (!match) return source
 
-  let stripped = match[1]
-  if (!stripped.includes('/') && stripped.includes('-')) {
-    const firstDashIdx = stripped.indexOf('-')
-    stripped = stripped.slice(0, firstDashIdx) + '/' + stripped.slice(firstDashIdx + 1)
-  }
-  return stripped
+  return match[1]
 }
 
 export async function listSources() {
