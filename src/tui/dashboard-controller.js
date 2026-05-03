@@ -410,14 +410,23 @@ export function useDashboardController() {
     return () => clearInterval(interval)
   }, [showGraph])
 
+  // Keep track of which timeouts have been started
+  const pendingSendsRef = useRef(new Set())
+
   // Drain queued messages
   useEffect(() => {
     for (const [id, msg] of Object.entries(queuedMessages)) {
       const agent = AGENTS.find(a => a.id === id)
-      if (agent && agent.state !== 'IN_PROGRESS') {
-        sendMessage(id, msg).catch(() => {})
-        setMessages(m => [...m, { role: 'system', text: `[SYSTEM] Sent queued message to ${id}` }])
-        setQueuedMessages(prev => { const q = { ...prev }; delete q[id]; return q })
+      if (agent && agent.state !== 'IN_PROGRESS' && !pendingSendsRef.current.has(id)) {
+        pendingSendsRef.current.add(id)
+
+        setTimeout(() => {
+          // Re-check just to be safe, though not strictly required
+          sendMessage(id, msg).catch(() => {})
+          setMessages(m => [...m, { role: 'system', text: `[SYSTEM] Sent queued message to ${id}` }])
+          setQueuedMessages(prev => { const q = { ...prev }; delete q[id]; return q })
+          pendingSendsRef.current.delete(id)
+        }, 5000)
       }
     }
   }, [queuedMessages, AGENTS])

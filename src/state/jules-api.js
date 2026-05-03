@@ -27,16 +27,24 @@ async function fetchWithTimeout(url, options = {}) {
   }
 }
 
-export async function createSession({ prompt, source, startingBranch = 'main', requirePlanApproval = false }) {
+export async function createSession({ prompt, source, startingBranch, requirePlanApproval = false }) {
+  const payload = {
+    prompt,
+    sourceContext: { source },
+    requirePlanApproval,
+    automationMode: getConfig().autoPr !== false ? "AUTO_CREATE_PR" : undefined,
+  }
+
+  // Only add githubRepoContext with startingBranch if it's explicitly provided.
+  // Otherwise, omit it so Jules defaults to the repository's default branch.
+  if (startingBranch) {
+    payload.sourceContext.githubRepoContext = { startingBranch };
+  }
+
   const res = await fetchWithTimeout(`${DEFAULTS.JULES_API_BASE}/sessions`, {
     method: 'POST',
     headers: headers(),
-    body: JSON.stringify({
-      prompt,
-      sourceContext: { source, githubRepoContext: { startingBranch } },
-      requirePlanApproval,
-      automationMode: getConfig().autoPr !== false ? "AUTO_CREATE_PR" : undefined,
-    }),
+    body: JSON.stringify(payload),
   })
   if (!res.ok) throw new Error(`Jules API error ${res.status}: ${await res.text()}`)
   return res.json()
