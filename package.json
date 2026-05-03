@@ -6,7 +6,8 @@
     "jorch": "./bin/jorch.js"
   },
   "scripts": {
-    "dev": "node bin/jorch.js"
+    "dev": "node bin/jorch.js",
+    "test": "node --experimental-test-module-mocks --test"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
