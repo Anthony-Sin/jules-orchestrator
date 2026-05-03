@@ -90,14 +90,24 @@ export function Notepad({ value = '', onChange, focused = true, height = 10, wid
         const prevLineIdx = cursorLine - 1;
         const prevLine = lines[prevLineIdx];
         const currentLine = lines[cursorLine];
+        const maxCol = width > 2 ? width - 2 : 10;
 
         const newLines = [...lines];
-        newLines[prevLineIdx] = prevLine + currentLine;
-        newLines.splice(cursorLine, 1);
+        const combined = prevLine + currentLine;
 
-        onChange(newLines.join('\n'));
-        setCursorLine(prevLineIdx);
-        setCursorCol(prevLine.length);
+        if (combined.length > maxCol) {
+          newLines[prevLineIdx] = combined.substring(0, maxCol);
+          newLines[cursorLine] = combined.substring(maxCol);
+          onChange(newLines.join('\n'));
+          setCursorLine(prevLineIdx);
+          setCursorCol(prevLine.length);
+        } else {
+          newLines[prevLineIdx] = combined;
+          newLines.splice(cursorLine, 1);
+          onChange(newLines.join('\n'));
+          setCursorLine(prevLineIdx);
+          setCursorCol(prevLine.length);
+        }
       }
       return;
     }

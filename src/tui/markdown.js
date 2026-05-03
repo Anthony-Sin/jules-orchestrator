@@ -5,6 +5,7 @@ const markdownCache = new Map()
 // Exports: parseMarkdown, buildMarkdownLines, wrapText
 
 import { store } from '../state/store.js'
+import crypto from 'crypto'
 
 // ── Palette ───────────────────────────────────────────────────────
 // A cohesive professional dark-terminal palette:
@@ -487,7 +488,8 @@ function buildStandardLines(seg, i, focused, wrapLimit) {
 }
 
 export function buildMarkdownLines(text, wrapLimit, focused) {
-  const cacheKey = `${text}|${wrapLimit}|${focused}`;
+  const textHash = crypto.createHash('sha256').update(String(text)).digest('hex');
+  const cacheKey = `${textHash}|${wrapLimit}|${focused}`;
   if (markdownCache.has(cacheKey)) {
     return markdownCache.get(cacheKey);
   }
