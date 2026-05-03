@@ -1,20 +1,5 @@
-// ── hooks/useLayout.js ────────────────────────────────────────────
-// Derives all panel dimensions and visibility flags from terminal size
-// and current UI state. Keeps renderer.js free of layout arithmetic.
-
 import { useTerminalSize } from '../hooks.js'
 
-/**
- * @param {object} params
- * @param {string}  params.mode           - 'table' | 'graph' | 'chat' | 'diff'
- * @param {boolean} params.showGraph
- * @param {boolean} params.repoInputMode
- * @param {boolean} params.chatMenuOpen
- * @param {string}  params.chatTab        - 'chat' | 'notes'
- * @param {string}  params.chatInput
- * @param {boolean} params.hasLatestProgress
- * @param {boolean} params.hasPromptPreview
- */
 export function useLayout({
   mode,
   showGraph,
@@ -24,50 +9,70 @@ export function useLayout({
   chatInput,
   hasLatestProgress,
   hasPromptPreview,
+  hasStartDialog,
+  hasApproveHint,
 }) {
   const { columns, rows } = useTerminalSize()
 
-  // ── Terminal bounds ──────────────────────────────────────────────
   const TERMINAL_ROWS = Math.max(10, rows - 1)
-  const isWide        = columns >= 80
+  const isWide = columns >= 100
+  const isCompact = columns < 110
+  const isTight = columns < 92
 
-  // ── Panel widths ─────────────────────────────────────────────────
-  const rightPanelWidth = isWide ? Math.floor(columns * 0.38) : columns
-  const leftPanelWidth  = isWide ? columns - rightPanelWidth  : columns
+  const rightPanelWidth = isWide ? Math.max(34, Math.floor(columns * 0.42)) : columns
+  const leftPanelWidth = isWide ? columns - rightPanelWidth : columns
 
-  // ── Panel visibility ─────────────────────────────────────────────
-  const showLeftPanel  = isWide || mode !== 'chat'
+  const showLeftPanel = isWide || mode !== 'chat'
   const showRightPanel = isWide || mode === 'chat'
 
-  // ── Vertical budget ──────────────────────────────────────────────
-  const repoInputHeight     = repoInputMode ? 5 : 0
-  const availableBodyHeight = TERMINAL_ROWS - (5 + repoInputHeight)
+  const repoInputHeight = repoInputMode ? 5 : 0
+  const fixedChromeRows = 5
+  const availableBodyHeight = Math.max(1, TERMINAL_ROWS - (fixedChromeRows + repoInputHeight))
 
-  // ── Graph ────────────────────────────────────────────────────────
-  const canShowGraph = showGraph && columns >= 100 && rows >= 15
+  const canShowGraph = showGraph && columns >= 95 && rows >= 14
   const graphVisible = canShowGraph
-  const graphHeight  = graphVisible ? availableBodyHeight : 0
+  const graphHeight = graphVisible ? availableBodyHeight : 0
 
-  // ── Table ────────────────────────────────────────────────────────
-  const VISIBLE_AGENTS = Math.max(1, availableBodyHeight - 3)
+  const VISIBLE_AGENTS = Math.max(1, availableBodyHeight - 2)
 
-  // ── Chat ─────────────────────────────────────────────────────────
-  const chatWrapLimit    = Math.max(10, rightPanelWidth - 6)
-  const inputLines       = (mode === 'chat' && chatTab === 'chat')
-    ? Math.max(1, Math.ceil((chatInput || '').length / chatWrapLimit))
+  const chatWrapLimit = Math.max(10, rightPanelWidth - 6)
+  const inputRows = (mode === 'chat' && chatTab === 'chat')
+    ? Math.max(
+        1,
+        (chatInput || '')
+          .split('\n')
+          .reduce((count, line) => {
+            const safeLen = Math.max(1, line.length)
+            return count + Math.max(1, Math.ceil(safeLen / chatWrapLimit))
+          }, 0)
+      )
     : 1
-  const inputExtraHeight  = Math.min(3, inputLines - 1)
-  const chatFixedHeights  = 4
-  const chatMenuHeight    = chatMenuOpen && chatTab === 'chat' ? 5 : 0
-  const progressHeight    = (hasLatestProgress || hasPromptPreview) && chatTab === 'chat' ? 3 : 0
+
+  const inputExtraHeight = Math.min(3, inputRows - 1)
+  const chatFixedHeights = 4
+  const chatMenuHeight = chatMenuOpen && chatTab === 'chat' ? 5 : 0
+  const progressHeight = (hasLatestProgress || hasPromptPreview) && chatTab === 'chat' ? 3 : 0
+  const startDialogHeight = hasStartDialog && chatTab === 'chat' ? 4 : 0
+  const approveHintHeight = hasApproveHint && chatTab === 'chat' ? 2 : 0
+
   const CHAT_VISIBLE_ROWS = Math.max(1,
-    availableBodyHeight - (chatFixedHeights + chatMenuHeight + inputExtraHeight + progressHeight))
+    availableBodyHeight - (
+      chatFixedHeights +
+      chatMenuHeight +
+      inputExtraHeight +
+      progressHeight +
+      startDialogHeight +
+      approveHintHeight
+    )
+  )
 
   return {
     columns,
     rows,
     TERMINAL_ROWS,
     isWide,
+    isCompact,
+    isTight,
     rightPanelWidth,
     leftPanelWidth,
     showLeftPanel,

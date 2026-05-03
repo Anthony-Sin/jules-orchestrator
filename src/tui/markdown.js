@@ -10,12 +10,12 @@ import crypto from 'crypto'
 // ── Palette ───────────────────────────────────────────────────────
 // A cohesive professional dark-terminal palette:
 //   Primary text:  white (focused) / #666 dim (unfocused)
-//   Headings:      #FFB347 amber (h1), #94C8E8 steel-blue (h2), #7EC8A4 sage (h3)
-//   Code:          #6EAFD6 cool-blue
-//   Accent/bullet: #A78BFA soft-violet
-//   Tool hints:    #4ADE80 green
+//   Headings:      #FF6B6B crimson (h1), #FF8A8A rose (h2), #FF4F4F sage (h3)
+//   Code:          #FF9A9A rose
+//   Accent/bullet: #FF6868 ruby
+//   Tool hints:    #FF7A7A green
 //   Blockquote:    gray italic
-//   Plan steps:    #FFB347 amber numbers, white titles
+//   Plan steps:    #FF6B6B crimson numbers, white titles
 //   Dim/border:    gray dimColor
 
 // ── Text wrapping ─────────────────────────────────────────────────
@@ -197,13 +197,13 @@ function buildInlineTokens(text, baseColor, focused, forceBold, forceItalic) {
       continue
     }
 
-    // Italic: *text* or _text_ — warm amber instead of clashing cyan
+    // Italic: *text* or _text_ — warm crimson for clear emphasis
     const italicMatch = remaining.match(/^(\*|_)(.+?)\1/)
     if (italicMatch) {
       tokens.push({
         type: 'inline',
         key: `it_${ti++}`,
-        color: focused ? '#FFB347' : 'gray',
+        color: focused ? '#FF6B6B' : 'gray',
         italic: true,
         dimColor: !focused,
         text: italicMatch[2]
@@ -212,13 +212,13 @@ function buildInlineTokens(text, baseColor, focused, forceBold, forceItalic) {
       continue
     }
 
-    // Inline code: `text` — steel blue, clean bracket style
+    // Inline code: `text` — rose, clean bracket style
     const codeMatch = remaining.match(/^`([^`]+)`/)
     if (codeMatch) {
       tokens.push({
         type: 'inline',
         key: `it_${ti++}`,
-        color: focused ? '#6EAFD6' : 'gray',
+        color: focused ? '#FF9A9A' : 'gray',
         dimColor: !focused,
         text: '`' + codeMatch[1] + '`'
       })
@@ -417,17 +417,17 @@ function buildStandardLines(seg, i, focused, wrapLimit) {
     case 'h1':
       prefix = '  '
       textContent = (seg.text || '').toUpperCase()
-      textColor = focused ? '#FFB347' : 'gray'   // warm amber
+      textColor = focused ? '#FF6B6B' : 'gray'   // warm crimson
       bold = true
       break
     case 'h2':
       prefix = '── '
-      textColor = focused ? '#94C8E8' : 'gray'   // steel blue
+      textColor = focused ? '#FF8A8A' : 'gray'   // rose
       bold = true
       break
     case 'h3':
       prefix = '  ▸ '
-      textColor = focused ? '#7EC8A4' : 'gray'   // sage green
+      textColor = focused ? '#FF4F4F' : 'gray'   // sage green
       bold = true
       break
     case 'blockquote':
@@ -440,14 +440,14 @@ function buildStandardLines(seg, i, focused, wrapLimit) {
       const ind = '  '.repeat(seg.indent || 0)
       const bul = (seg.indent || 0) > 0 ? '◦' : '·'
       prefix = ind + bul + ' '
-      prefixColor = focused ? '#A78BFA' : 'gray'  // soft violet
+      prefixColor = focused ? '#FF6868' : 'gray'  // soft violet
       textColor = focused ? 'white' : 'gray'
       break
     }
     case 'ordered': {
       const ind = '  '.repeat(seg.indent || 0)
       prefix = ind + seg.index + '. '
-      prefixColor = focused ? '#A78BFA' : 'gray'  // soft violet
+      prefixColor = focused ? '#FF6868' : 'gray'  // soft violet
       textColor = focused ? 'white' : 'gray'
       break
     }
@@ -475,7 +475,7 @@ function buildStandardLines(seg, i, focused, wrapLimit) {
       inlineTokens
     })
 
-    // H1 underline — amber rule
+    // H1 underline — crimson rule
     if (seg.type === 'h1' && wi === wrappedLines.length - 1) {
       lines.push({
         type: 'h1-underline',
@@ -547,3 +547,5 @@ export function buildMarkdownLines(text, wrapLimit, focused) {
   markdownCache.set(cacheKey, lines);
   return lines
 }
+
+

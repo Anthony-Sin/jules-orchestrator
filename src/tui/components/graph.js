@@ -1,7 +1,7 @@
 // ── components/graph.js ──────────────────────────────────────────
 // MiniGraph, GraphNode, PlannedGraphViewer, PlannedNode
 //
-// ⚠️  HIDDEN FOR NOW — graph UI is intentionally not rendered.
+// ️  HIDDEN FOR NOW — graph UI is intentionally not rendered.
 // All components are defined and exported so imports in renderer.js
 // stay valid, but every public component returns null.
 // Un-hide by replacing the null returns with the real JSX below.
