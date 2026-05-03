@@ -1,7 +1,7 @@
 import React from 'react'
 import { Box, Text } from 'ink'
 import { parseSourceDisplay } from '../../state/jules-api.js'
-import { InkSpinner } from './ink-spinner.js'
+import Spinner from 'ink-spinner'
 import { THEME } from '../theme.js'
 
 export const STATUS_COLOR = {
@@ -31,7 +31,7 @@ export const STATUS_SHORT = {
 const COLUMN_LAYOUT = {
   tight: { id: 6, title: 18, status: 5, progress: 9, time: 3, repoMin: 8 },
   compact: { id: 6, title: 20, status: 5, progress: 10, time: 3, repoMin: 10 },
-  full: { id: 6, title: 22, status: 5, progress: 11, time: 3, repoMin: 12 },
+  full: { id: 6, title: 25, status: 5, progress: 11, time: 3, repoMin: 10 },
 }
 
 export function ago(ms) {
@@ -98,22 +98,17 @@ function Gap() {
 
 export function FillBar({ tick = 0, width = 6, isDimmed, state }) {
   const color = isDimmed ? 'gray' : (STATUS_COLOR[state] || THEME.subtleText)
-  const isActive = state === 'IN_PROGRESS' || state === 'PLANNING'
-
-  if (isActive) {
-    return React.createElement(Text, null,
-      React.createElement(InkSpinner, { tick, color, dimColor: isDimmed, type: 'dots' }),
-      React.createElement(Text, { color: isDimmed ? 'gray' : THEME.text, dimColor: isDimmed }, '..')
-    )
-  }
-
-  const filled = state === 'COMPLETED' ? width : 0
-  const pct = state === 'COMPLETED' ? '100%' : '0%'
+  
+  let pctText = ' 0%'
+  if (state === 'COMPLETED') pctText = '100%'
+  else if (state === 'IN_PROGRESS' || state === 'PLANNING') pctText = '...'
 
   return React.createElement(Text, null,
-    React.createElement(Text, { color, dimColor: isDimmed }, '='.repeat(filled)),
-    React.createElement(Text, { color: 'gray', dimColor: true }, '.'.repeat(width - filled)),
-    React.createElement(Text, { color: isDimmed ? 'gray' : THEME.text, dimColor: isDimmed }, pct)
+    React.createElement(Text, { color },
+      React.createElement(Spinner, { type: 'dots' })
+    ),
+    React.createElement(Text, { color: 'gray', dimColor: true }),
+    React.createElement(Text, { color: isDimmed ? 'gray' : THEME.text, dimColor: isDimmed }, ` ${pctText}`)
   )
 }
 

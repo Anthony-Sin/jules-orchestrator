@@ -188,9 +188,7 @@ export function Dashboard({ searchTerm = '' }) {
   }
 
   const leftTopTokens = [
-    'JULES COLONY',
-    `repo ${currentRepoName}`,
-    !isTight ? 'red theme' : null,
+    `Current Repo: ${currentRepoDisplay}`,
     statusFlash ? statusFlash : null,
   ].filter(Boolean)
 
@@ -247,7 +245,7 @@ export function Dashboard({ searchTerm = '' }) {
       React.createElement(Spacer),
       queuedEntries.length > 0 && React.createElement(Text, { color: THEME.accentSoft, wrap: 'truncate' }, `${queuedEntries.length} queued`),
       queuedEntries.length > 0 && React.createElement(Text, { color: THEME.subtleText }, ' | '),
-      React.createElement(Text, { color: THEME.accent, bold: true, wrap: 'truncate' }, `[${activeCount} active]`)
+      React.createElement(Text, { color: THEME.accent, bold: true, wrap: 'truncate' }, `[Active Agents: ${activeCount}]`)
     ),
 
     React.createElement(Box, { width: '100%', height: 1, overflow: 'hidden', flexShrink: 0, minWidth: 0 },
