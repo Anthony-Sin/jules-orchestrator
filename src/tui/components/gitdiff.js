@@ -54,15 +54,17 @@ export function GitDiffViewer({ sessionId, width, height, isDimmed, fileSel = 0,
   const diffStr = useMemo(() => {
     if (!activities || activities.length === 0) return null
     const sorted = [...activities].sort((a, b) => new Date(a.createTime || 0) - new Date(b.createTime || 0))
-    for (let i = sorted.length - 1; i >= 0; i--) {
-      const act = sorted[i]
+    const patches = []
+    for (const act of sorted) {
       if (act.artifacts?.length > 0) {
         for (const art of act.artifacts) {
-          if (art.changeSet?.gitPatch?.unidiffPatch) return art.changeSet.gitPatch.unidiffPatch
+          if (art.changeSet?.gitPatch?.unidiffPatch) {
+            patches.push(art.changeSet.gitPatch.unidiffPatch)
+          }
         }
       }
     }
-    return null
+    return patches.length > 0 ? patches.join('\n') : null
   }, [activities])
 
   const parsedDiff = useMemo(() => {
@@ -88,7 +90,7 @@ export function GitDiffViewer({ sessionId, width, height, isDimmed, fileSel = 0,
 
   // ── Layout ──────────────────────────────────────────────────────────
   const total          = parsedDiff.length
-  const safeSelIdx     = Math.min(fileSel, total - 1)
+  const safeSelIdx     = Math.max(0, Math.min(fileSel, total - 1))
   const selectedFile   = parsedDiff[safeSelIdx]
   const isFilesFocused = diffFocus === 'files'
   const filesPanelH    = 4
@@ -238,6 +240,6 @@ export function applyDiff(diffStr) {
       })
       child.stdin.write(diffStr)
       child.stdin.end()
-    })
+    }).catch(reject)
   })
 }
