@@ -3,26 +3,6 @@ import { DEFAULTS } from '../../config/defaults.js'
 
 export const store = new Conf({ projectName: 'jules-orchestrator' })
 
-// --- Quota ---
-export function getQuotaUsed() {
-  const record = store.get('quota', {})
-  return record.used || 0
-}
-
-export function getQuotaLimit() {
-  return store.get('quotaLimit', null)
-}
-
-export function setQuotaLimit(n) {
-  store.set('quotaLimit', n)
-}
-
-export function quotaRemaining() {
-  const limit = getQuotaLimit()
-  if (limit === null) return null
-  return limit - getQuotaUsed()
-}
-
 // --- Sessions ---
 export function getSessions() {
   return store.get('sessions', [])
@@ -186,28 +166,6 @@ export function setConfig(key, value) {
   const config = getConfig()
   config[key] = value
   store.set('config', config)
-}
-
-export async function syncQuota() {
-  const { listSessions } = await import('./jules-api.js');
-  try {
-    const data = await listSessions();
-    const sessions = Array.isArray(data) ? data : (data.sessions || []);
-
-    const today = new Date().toISOString().split('T')[0];
-    let count = 0;
-
-    for (const session of sessions) {
-      const ts = session.createTime || session.createdAt || session.lastUpdated;
-      if (ts && new Date(ts).toISOString().split('T')[0] === today) {
-        count++;
-      }
-    }
-
-    store.set('quota', { date: today, used: count });
-  } catch (err) {
-    // Silently continue if syncing fails
-  }
 }
 
 // --- Architecture Diagram ---
