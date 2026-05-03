@@ -147,7 +147,7 @@ export function Dashboard({ searchTerm = '' }) {
       return
     }
 
-    if (key.meta && input === '/') {
+    if (key.meta && input === 'q') {
       const entries = Object.entries(queuedMessages)
       if (entries.length > 0) {
         let nextIdx = queuedCycleIdx + 1
@@ -596,6 +596,8 @@ export function Dashboard({ searchTerm = '' }) {
         ? React.createElement(React.Fragment, null,
             React.createElement(Box, { flexGrow: 1, flexShrink: 1, overflow: 'hidden', flexDirection: 'row', minWidth: 0, justifyContent: 'space-between' },
               React.createElement(Box, { flexDirection: 'row', flexShrink: 1, minWidth: 0, overflow: 'hidden' },
+                React.createElement(Text, { color: 'whiteBright', bold: true, wrap: 'truncate' }, ' alt+q'),
+                React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ' :qmsg '),
                 React.createElement(Text, { color: 'whiteBright', bold: true, wrap: 'truncate' }, ' alt+g'),
                 React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate' }, ' :diff '),
                 React.createElement(Text, { color: 'whiteBright', bold: true, wrap: 'truncate' }, ' alt+a'),
