@@ -586,8 +586,12 @@ export function buildMarkdownLines(text, wrapLimit, focused) {
   }
 
   if (markdownCache.size > 1000) {
-    const firstKey = markdownCache.keys().next().value;
-    markdownCache.delete(firstKey);
+    // Evict oldest 10% (100 items) to avoid O(N) deletion penalty per insertion
+    let count = 0;
+    for (const key of markdownCache.keys()) {
+      markdownCache.delete(key);
+      if (++count >= 100) break;
+    }
   }
   markdownCache.set(cacheKey, lines);
   return lines
