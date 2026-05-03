@@ -131,16 +131,18 @@ export function ChatPanel({
 
   useEffect(() => {
     if (focused && tab === 'chat' && total > 0 && setScrollOffset) {
-      // Only auto-scroll when the user actively moves the cursor via keyboard
-      if (lastAnimatedCursor.current !== chatCursorLine) {
-        lastAnimatedCursor.current = chatCursorLine
-        const idealStart = Math.max(0, targetLineIndex - Math.floor(MESSAGE_ROWS / 2))
-        const maxStart = Math.max(0, total - MESSAGE_ROWS)
-        const clampedStart = Math.min(idealStart, maxStart)
+      // Always auto-scroll to keep the selected item in bounds when total changes
+      const minVisibleIndex = total - MESSAGE_ROWS - scrollOffset
+      const maxVisibleIndex = total - 1 - scrollOffset
 
-        const idealOffset = Math.max(0, total - MESSAGE_ROWS - clampedStart)
-        setScrollOffset(idealOffset)
+      if (targetLineIndex < minVisibleIndex) {
+        setScrollOffset(total - MESSAGE_ROWS - targetLineIndex)
+      } else if (targetLineIndex > maxVisibleIndex) {
+        setScrollOffset(total - 1 - targetLineIndex)
       }
+
+      // We still update the ref so other things know it changed
+      lastAnimatedCursor.current = chatCursorLine
     }
   }, [chatCursorLine, targetLineIndex, total, MESSAGE_ROWS, focused, tab, setScrollOffset])
 
@@ -414,8 +416,7 @@ export function ChatPanel({
         React.createElement(Box, {
           flexShrink: 1,
           minWidth: 0,
-          marginTop: Math.ceil((input || '').length / wrapLimit) > 4
-            ? -(Math.ceil((input || '').length / wrapLimit) - 4) : 0
+          marginTop: 0
         },
           React.createElement(TextInput, {
             value:       input,
