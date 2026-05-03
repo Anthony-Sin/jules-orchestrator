@@ -141,15 +141,16 @@ export function useDashboardController() {
   const [promptPreview, setPromptPreview]         = useState(null)
   const [latestProgress, setLatestProgress]       = useState(null)
 
-  // Tracks whether we're mid-session-switch so the save effect doesn't
-  // overwrite the just-restored scroll position on the same render cycle.
-  const switchingSessionRef = useRef(false)
+  // Tracks the last session ID to determine if we just switched sessions.
+  // This avoids overwriting the newly restored scroll position with stale
+  // data due to React batched state updates.
+  const lastSessionIdRef = useRef(selectedSessionId)
 
   // Save scroll position whenever it changes, but skip the write that fires
   // immediately after openAgentChat sets the restored value.
   useEffect(() => {
-    if (switchingSessionRef.current) {
-      switchingSessionRef.current = false
+    if (lastSessionIdRef.current !== selectedSessionId) {
+      lastSessionIdRef.current = selectedSessionId
       return
     }
     const id = selectedSessionId
@@ -157,7 +158,7 @@ export function useDashboardController() {
       sessionScrollRef.current[id] = scrollOffset
       sessionCursorRef.current[id] = chatCursorLine
     }
-  }, [scrollOffset, chatCursorLine]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [scrollOffset, chatCursorLine, selectedSessionId])
 
   // Sync remote sessions with local store periodically
   useEffect(() => {
@@ -168,7 +169,7 @@ export function useDashboardController() {
       try {
         const res = await listAllSessions()
         const remoteSessions = res.sessions || []
-        const remoteIds = new Set(remoteSessions.map(s => s.name))
+        const remoteIds = new Set(remoteSessions.map(s => s.name.split('/').pop()))
         const localSessions = getSessions() || []
 
         let changed = false
@@ -181,10 +182,11 @@ export function useDashboardController() {
         }
 
         for (const rs of remoteSessions) {
-          const local = localSessions.find(ls => ls.id === rs.name)
+          const shortId = rs.name.split('/').pop()
+          const local = localSessions.find(ls => ls.id === shortId)
           if (!local || local.state !== rs.state || local.lastUpdated !== rs.updateTime) {
             upsertSession({
-              id: rs.name,
+              id: shortId,
               state: rs.state,
               lastUpdated: rs.updateTime || rs.createTime,
               createdAt: rs.createTime,
@@ -334,7 +336,8 @@ export function useDashboardController() {
     let active = true
     let p = null
     const poll = async () => {
-      if (!active || mode !== 'chat' || !selectedSessionId) {
+      if (!active) return
+      if (mode !== 'chat' || !selectedSessionId) {
         p = setTimeout(poll, 5000)
         return
       }
@@ -423,6 +426,7 @@ export function useDashboardController() {
 
   // Keep track of which timeouts have been started
   const pendingSendsRef = useRef(new Set())
+  const pendingTimeoutsRef = useRef(new Set())
 
   // Drain queued messages
   useEffect(() => {
@@ -431,13 +435,22 @@ export function useDashboardController() {
       if (agent && agent.state !== 'IN_PROGRESS' && !pendingSendsRef.current.has(id)) {
         pendingSendsRef.current.add(id)
 
-        setTimeout(() => {
+        const tId = setTimeout(() => {
           // Re-check just to be safe, though not strictly required
           sendMessage(id, msg).catch(() => {})
           setMessages(m => [...m, { role: 'system', text: `[SYSTEM] Sent queued message to ${id}` }])
           setQueuedMessages(prev => { const q = { ...prev }; delete q[id]; return q })
           pendingSendsRef.current.delete(id)
+          pendingTimeoutsRef.current.delete(tId)
         }, 5000)
+        pendingTimeoutsRef.current.add(tId)
+      }
+    }
+
+    return () => {
+      // Clear any pending timeouts on unmount
+      for (const tId of pendingTimeoutsRef.current) {
+        clearTimeout(tId)
       }
     }
   }, [queuedMessages, AGENTS])
@@ -447,7 +460,6 @@ export function useDashboardController() {
     setSelectedSessionId(agent.id)
     setChatTargetMode('TALK_TO_SELECTED_AGENT')
     setMode('chat')
-    switchingSessionRef.current = true  // prevent save effect from overwriting the restore
     setScrollOffset(sessionScrollRef.current[agent.id] ?? 0)  // restore saved, default 0 (bottom) for new
     setChatCursorLine(sessionCursorRef.current[agent.id] ?? 0)
     resetExpandedMessages()

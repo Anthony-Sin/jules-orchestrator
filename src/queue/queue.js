@@ -1,4 +1,4 @@
-import { getQueue, setQueue, checkFileLockConflicts } from '../state/store.js'
+import { getQueue, setQueue, checkFileLockConflicts, getSessions, unlockFiles } from '../state/store.js'
 
 export function enqueue(task) {
   if (!task || !task.type) {
@@ -19,9 +19,30 @@ export function dequeue(type) {
 
     // Check if the task has overlapping files with currently running sessions
     const estimatedFiles = t.estimatedFiles || [];
-    const conflicts = checkFileLockConflicts(estimatedFiles);
+    let conflicts = checkFileLockConflicts(estimatedFiles);
 
-    // If there are conflicts, skip it and check the next one
+    if (conflicts.length > 0) {
+      // Check if any of the conflicting sessions are dead
+      const sessions = getSessions() || [];
+      const deadStates = ['FAILED', 'KILLED', 'COMPLETED'];
+      let clearedAny = false;
+
+      for (const conflict of conflicts) {
+        const lockingSession = sessions.find(s => s.id === conflict.lockedBy);
+        // If the session doesn't exist, or it is in a dead state, it's an orphaned lock
+        if (!lockingSession || deadStates.includes(lockingSession.state)) {
+          unlockFiles(conflict.lockedBy);
+          clearedAny = true;
+        }
+      }
+
+      // If we cleared any dead locks, re-evaluate conflicts
+      if (clearedAny) {
+        conflicts = checkFileLockConflicts(estimatedFiles);
+      }
+    }
+
+    // If there are still conflicts, skip it and check the next one
     return conflicts.length === 0;
   });
 
