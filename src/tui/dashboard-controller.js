@@ -10,6 +10,50 @@ import { dispatchLeadOrchestrator } from '../jules_lead_orchestrator/julesorches
 // ── Google Drive stubs ────────────────────────────────────────────
 export async function saveToDrive(_content) { return false }
 
+export function extractToolCallsFromMessage(msgText) {
+  try {
+    if (!msgText.includes('"function"')) return msgText;
+
+    let jsonStr = '';
+    const codeBlockRegex = /```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/;
+    const match = codeBlockRegex.exec(msgText);
+    if (match) {
+      jsonStr = match[1];
+    } else {
+      const start = msgText.indexOf('[{');
+      const end = msgText.lastIndexOf('}]');
+      if (start !== -1 && end !== -1 && end > start) {
+        jsonStr = msgText.substring(start, end + 2);
+      }
+    }
+
+    if (jsonStr) {
+      const parsedArr = JSON.parse(jsonStr);
+      if (Array.isArray(parsedArr)) {
+        let toolNames = [];
+        for (const tc of parsedArr) {
+          if (tc && tc.function && tc.function.name) {
+            let name = tc.function.name;
+            if (name === 'dispatch_sub_agent') {
+              try {
+                const args = JSON.parse(tc.function.arguments);
+                name = `dispatch_sub_agent (${args.module_name})`;
+              } catch(e) {}
+            }
+            toolNames.push(name);
+          }
+        }
+        if (toolNames.length > 0) {
+          msgText = msgText.replace(jsonStr, `\n\n⚙️ [TOOL CALLS: ${toolNames.join(', ')}]\n\n`).trim();
+        }
+      }
+    }
+  } catch (e) {}
+
+  return msgText;
+}
+
+
 export function useDashboardController() {
   const [tick, setTick] = useState(0)
 
@@ -310,44 +354,7 @@ export function useDashboardController() {
             if (act.userMessaged?.userMessage?.trim()) {
               newMessages.push({ role: 'user', text: act.userMessaged.userMessage })
             } else if (act.agentMessaged?.agentMessage?.trim()) {
-              let msgText = act.agentMessaged.agentMessage;
-              try {
-                if (msgText.includes('"function"')) {
-                  let jsonStr = '';
-                  const codeBlockRegex = /```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/;
-                  const match = codeBlockRegex.exec(msgText);
-                  if (match) {
-                    jsonStr = match[1];
-                  } else {
-                    const start = msgText.indexOf('[{');
-                    const end = msgText.lastIndexOf('}]');
-                    if (start !== -1 && end !== -1 && end > start) {
-                      jsonStr = msgText.substring(start, end + 2);
-                    }
-                  }
-                  if (jsonStr) {
-                    const parsedArr = JSON.parse(jsonStr);
-                    if (Array.isArray(parsedArr)) {
-                      let toolNames = [];
-                      for (const tc of parsedArr) {
-                        if (tc && tc.function && tc.function.name) {
-                          let name = tc.function.name;
-                          if (name === 'dispatch_sub_agent') {
-                            try {
-                              const args = JSON.parse(tc.function.arguments);
-                              name = `dispatch_sub_agent (${args.module_name})`;
-                            } catch(e) {}
-                          }
-                          toolNames.push(name);
-                        }
-                      }
-                      if (toolNames.length > 0) {
-                        msgText = msgText.replace(jsonStr, `\n\n⚙️ [TOOL CALLS: ${toolNames.join(', ')}]\n\n`).trim();
-                      }
-                    }
-                  }
-                }
-              } catch (e) {}
+              let msgText = extractToolCallsFromMessage(act.agentMessaged.agentMessage);
               newMessages.push({ role: 'agent', text: msgText })
             } else if (act.originator === 'agent' || act.originator === 'system') {
               let text = act.description || ''
@@ -450,44 +457,7 @@ export function useDashboardController() {
           if (act.userMessaged?.userMessage?.trim()) {
             history.push({ role: 'user', text: act.userMessaged.userMessage })
           } else if (act.agentMessaged?.agentMessage?.trim()) {
-            let msgText = act.agentMessaged.agentMessage;
-            try {
-              if (msgText.includes('"function"')) {
-                let jsonStr = '';
-                const codeBlockRegex = /```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/;
-                const match = codeBlockRegex.exec(msgText);
-                if (match) {
-                  jsonStr = match[1];
-                } else {
-                  const start = msgText.indexOf('[{');
-                  const end = msgText.lastIndexOf('}]');
-                  if (start !== -1 && end !== -1 && end > start) {
-                    jsonStr = msgText.substring(start, end + 2);
-                  }
-                }
-                if (jsonStr) {
-                  const parsedArr = JSON.parse(jsonStr);
-                  if (Array.isArray(parsedArr)) {
-                    let toolNames = [];
-                    for (const tc of parsedArr) {
-                      if (tc && tc.function && tc.function.name) {
-                        let name = tc.function.name;
-                        if (name === 'dispatch_sub_agent') {
-                          try {
-                            const args = JSON.parse(tc.function.arguments);
-                            name = `dispatch_sub_agent (${args.module_name})`;
-                          } catch(e) {}
-                        }
-                        toolNames.push(name);
-                      }
-                    }
-                    if (toolNames.length > 0) {
-                      msgText = msgText.replace(jsonStr, `\n\n⚙️ [TOOL CALLS: ${toolNames.join(', ')}]\n\n`).trim();
-                    }
-                  }
-                }
-              }
-            } catch (e) {}
+            let msgText = extractToolCallsFromMessage(act.agentMessaged.agentMessage);
             history.push({ role: 'agent', text: msgText })
           } else if (act.originator === 'agent' || act.originator === 'system') {
             let text = act.description || ''
