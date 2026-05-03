@@ -7,7 +7,6 @@ import { render, useInput } from 'ink'
 import { dispatchLeadOrchestrator } from '../src/jules_lead_orchestrator/julesorchestrator.js'
 
 import { deleteSession, listSessions, getSession, parseSourceDisplay, sendMessage, getAllActivities } from '../src/state/jules-api.js'
-import { getSessions, getQueue, getConfig, setConfig, quotaRemaining, getActiveSessions, syncQuota, setQuotaLimit, upsertSession, unlockFiles, store } from '../src/state/store.js'
 import { handleOrchestratorToolCall } from '../src/jules_lead_orchestrator/julesorchestrator.js'
 
 const TERMINAL_STATES = ['COMPLETED', 'FAILED', 'KILLED']
@@ -21,7 +20,6 @@ export async function killSession(sessionId) {
 }
 
 export async function pollAndUpdate() {
-  await syncQuota()
   const active = getActiveSessions()
 
   const results = await Promise.all(active.map(async (session) => {
@@ -152,7 +150,6 @@ export async function pollAndUpdate() {
 }
 
 export async function syncSessions() {
-  await syncQuota()
   try {
     const data = await listSessions()
     const sessions = Array.isArray(data) ? data : (data.sessions || [])
@@ -197,10 +194,6 @@ program
   .action(async (rawPrompt) => {
     console.log(chalk.dim('\n  Dispatching Lead Orchestrator…'))
 
-    await syncQuota()
-    if (quotaRemaining() <= 5) {
-      console.log(chalk.yellow(`  Warning: only ${quotaRemaining()} sessions remaining today.\n`))
-    }
 
     try {
       const result = await dispatchLeadOrchestrator(rawPrompt, 1, "Orchestrator Session")
@@ -224,7 +217,6 @@ function StatusApp() {
   const [lastUpdate, setLastUpdate] = useState(Date.now())
 
   useEffect(() => {
-    syncQuota()
     syncSessions().then(() => setLastUpdate(Date.now()))
     const interval = setInterval(async () => {
       await pollAndUpdate()
@@ -428,7 +420,6 @@ configCmd
       console.log(chalk.red('\n  ✗ Quota limit must be a positive integer.\n'))
       return
     }
-    setQuotaLimit(num)
     console.log(chalk.green(`\n  ✓ Quota limit set to: ${num}\n`))
   })
 
