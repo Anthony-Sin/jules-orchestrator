@@ -133,15 +133,6 @@ export function Dashboard({ searchTerm = '' }) {
     else if (sel >= tableOffset + VISIBLE_AGENTS) setTableOffset(sel - VISIBLE_AGENTS + 1)
   }, [sel, VISIBLE_AGENTS, tableOffset, setTableOffset])
 
-  // ── Too-small guard ───────────────────────────────────────────────
-  if (columns < 80 || rows < 10) {
-    return React.createElement(Box, { padding: 1, flexDirection: 'column', borderStyle: 'double', borderColor: 'red' },
-      React.createElement(Text, { color: 'red',    bold: true }, '⚠ TERMINAL TOO SMALL'),
-      React.createElement(Text, { color: 'gray'              }, 'Need at least 80×10 for Table View (100×15 for Graph View)'),
-      React.createElement(Text, { color: 'yellow'            }, `Currently: ${columns}×${rows} — Please stretch your window horizontally.`)
-    )
-  }
-
   // ── Derived display values ────────────────────────────────────────
   const currentSource      = getConfig().source
   const currentRepoDisplay = currentSource ? parseSourceDisplay(currentSource) : 'NOT SET'
@@ -156,6 +147,15 @@ export function Dashboard({ searchTerm = '' }) {
 
   const allRows       = React.useMemo(() => buildRows(AGENTS, expandedIds), [AGENTS, expandedIds])
   const queuedEntries = Object.entries(queuedMessages)
+
+  // ── Too-small guard ───────────────────────────────────────────────
+  if (columns < 80 || rows < 10) {
+    return React.createElement(Box, { padding: 1, flexDirection: 'column', borderStyle: 'double', borderColor: 'red' },
+      React.createElement(Text, { color: 'red',    bold: true }, '⚠ TERMINAL TOO SMALL'),
+      React.createElement(Text, { color: 'gray'              }, 'Need at least 80×10 for Table View (100×15 for Graph View)'),
+      React.createElement(Text, { color: 'yellow'            }, `Currently: ${columns}×${rows} — Please stretch your window horizontally.`)
+    )
+  }
 
   // ── Render ────────────────────────────────────────────────────────
   return React.createElement(Box, {
