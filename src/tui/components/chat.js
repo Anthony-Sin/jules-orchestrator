@@ -1,6 +1,6 @@
 // ── components/chat.js ───────────────────────────────────────────
 // ChatPanel — the right-side chat + notes panel.
-// Agent messages are collapsible dropdowns. Press Space (in chat mode,
+// Agent messages are collapsible dropdowns. Press Alt+A (in chat mode,
 // while hovering a message with ↑/↓) to toggle expand/collapse.
 
 import React, { useMemo, useEffect } from 'react'
