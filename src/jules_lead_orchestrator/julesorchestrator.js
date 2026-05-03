@@ -184,7 +184,7 @@ export async function dispatchLeadOrchestrator(userInput, taskValue = 1, title =
   }
 
   // Inject user input and Task Value into the final payload
-  const fullPrompt = `${ORCHESTRATOR_SYSTEM_PROMPT}\n\n[ORCHESTRATOR TOOLSET]\nYou have access to the following specialized tools to manage sub-agents:\n${JSON.stringify(ORCHESTRATOR_TOOLS, null, 2)}\n\n[USER INPUT]\nTask Value: ${taskValue}\nPrompt: ${userInput}`;
+  const fullPrompt = `${ORCHESTRATOR_SYSTEM_PROMPT}\n\n[ORCHESTRATOR TOOLSET]\nUse the provided tools to manage sub-agents.\n\n[USER INPUT]\nTask Value: ${taskValue}\nPrompt: ${userInput}`;
   // Create Jules session configured as the Hybrid Orchestrator
   const julesSession = await createSession({
     prompt: fullPrompt,

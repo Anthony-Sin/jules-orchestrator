@@ -10,17 +10,6 @@ export function Notepad({ value = '', onChange, focused = true, height = 10, wid
   const lines = value.split('\n');
   if (lines.length === 0) lines.push('');
 
-  // Keep cursor within bounds
-  useEffect(() => {
-    let newL = Math.max(0, Math.min(cursorLine, lines.length - 1));
-    let newC = Math.max(0, Math.min(cursorCol, lines[newL].length));
-
-    if (newL !== cursorLine || newC !== cursorCol) {
-      setCursorLine(newL);
-      setCursorCol(newC);
-    }
-  }, [value, cursorLine, cursorCol, lines]);
-
   // Adjust scroll offset based on cursor position
   useEffect(() => {
     if (cursorLine < scrollOffset) {
@@ -34,11 +23,19 @@ export function Notepad({ value = '', onChange, focused = true, height = 10, wid
     if (!focused) return;
 
     if (key.upArrow) {
-      setCursorLine(l => Math.max(0, l - 1));
+      setCursorLine(l => {
+        const nextL = Math.max(0, l - 1);
+        setCursorCol(c => Math.max(0, Math.min(c, lines[nextL]?.length || 0)));
+        return nextL;
+      });
       return;
     }
     if (key.downArrow) {
-      setCursorLine(l => Math.min(lines.length - 1, l + 1));
+      setCursorLine(l => {
+        const nextL = Math.min(lines.length - 1, l + 1);
+        setCursorCol(c => Math.max(0, Math.min(c, lines[nextL]?.length || 0)));
+        return nextL;
+      });
       return;
     }
     if (key.leftArrow) {
