@@ -6,7 +6,8 @@
     "jorch": "./bin/jorch.js"
   },
   "scripts": {
-    "dev": "node bin/jorch.js"
+    "dev": "node bin/jorch.js",
+    "test": "node --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"./test-loader.mjs\", pathToFileURL(\"./\"));' --test"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
