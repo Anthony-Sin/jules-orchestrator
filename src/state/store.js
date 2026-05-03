@@ -121,11 +121,47 @@ export function unlockFiles(sessionId) {
 export function checkFileLockConflicts(files) {
   const locks = getFileLocks()
   const conflicts = []
+  const lockKeys = Object.keys(locks)
 
-  for (const file of files) {
-    for (const lockedFile of Object.keys(locks)) {
-      if (isConflict(lockedFile, file)) {
-        conflicts.push({ file, lockedBy: locks[lockedFile] })
+  if (lockKeys.length === 0 || files.length === 0) return conflicts
+
+  const exactLocks = new Map()
+  const pathLocks = []
+
+  for (let i = 0; i < lockKeys.length; i++) {
+    const k = lockKeys[i]
+    if (k.startsWith('DOMAIN:')) {
+      exactLocks.set(k, locks[k])
+    } else {
+      const norm = normalizePath(k)
+      pathLocks.push({
+        val: locks[k],
+        norm,
+        normPrefix: norm + '/'
+      })
+    }
+  }
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]
+    if (file.startsWith('DOMAIN:')) {
+      if (exactLocks.has(file)) {
+        conflicts.push({ file, lockedBy: exactLocks.get(file) })
+      }
+      continue
+    }
+
+    const reqNorm = normalizePath(file)
+    const reqNormPrefix = reqNorm + '/'
+
+    for (let j = 0; j < pathLocks.length; j++) {
+      const pLock = pathLocks[j]
+      if (
+        pLock.norm === reqNorm ||
+        reqNorm.startsWith(pLock.normPrefix) ||
+        pLock.norm.startsWith(reqNormPrefix)
+      ) {
+        conflicts.push({ file, lockedBy: pLock.val })
         break // Avoid duplicate conflicts for the same requested file
       }
     }
