@@ -221,25 +221,31 @@ export function GitDiffViewer({ sessionId, width, height, isDimmed, fileSel = 0,
 export function applyDiff(diffStr) {
   return new Promise((resolve, reject) => {
     import('child_process').then(({ spawn }) => {
-      const child = spawn('git', ['apply', '--cached'])
-      let errorOut = ''
-      child.stderr.on('data', data => errorOut += data.toString())
-      child.on('close', code => {
-        if (code === 0) resolve(true)
-        else {
-          const fallback = spawn('git', ['apply'])
-          let fallErr = ''
-          fallback.stderr.on('data', data => fallErr += data.toString())
-          fallback.on('close', c => {
-            if (c === 0) resolve(true)
-            else reject(new Error(fallErr || errorOut || 'Git apply failed'))
+      const runApply = (args) => {
+        return new Promise((res, rej) => {
+          const child = spawn('git', args, { shell: true })
+          let errorOut = ''
+          child.stderr.on('data', data => errorOut += data.toString())
+          child.stdin.on('error', err => rej(new Error(`stdin error: ${err.message}`)))
+          child.on('close', code => {
+            if (code === 0) res(true)
+            else rej(new Error(errorOut || 'Git apply failed'))
           })
-          fallback.stdin.write(diffStr)
-          fallback.stdin.end()
-        }
+
+          const canWrite = child.stdin.write(diffStr)
+          if (!canWrite) {
+            child.stdin.once('drain', () => child.stdin.end())
+          } else {
+            child.stdin.end()
+          }
+        })
+      }
+
+      runApply(['apply', '--cached']).then(resolve).catch(err1 => {
+        runApply(['apply']).then(resolve).catch(err2 => {
+          reject(new Error(`${err2.message} (Fallback after: ${err1.message})`))
+        })
       })
-      child.stdin.write(diffStr)
-      child.stdin.end()
     }).catch(reject)
   })
 }
