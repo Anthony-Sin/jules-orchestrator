@@ -1,4 +1,4 @@
-import { syncQuota, getConfig, upsertSession } from '../state/store.js'
+import { getConfig, upsertSession } from '../state/store.js'
 import { createSession } from '../state/jules-api.js'
 import { handleOrchestratorToolCall } from './JulesTools.js'
 
@@ -192,7 +192,6 @@ export { handleOrchestratorToolCall };
 // 3. CORE DISPATCH LOGIC
 // ------------------------------------------------------------------
 export async function dispatchLeadOrchestrator(userInput, taskValue = 1, title = "Orchestrator Session") {
-  await syncQuota();
   const config = getConfig();
 
   if (!config.source) {

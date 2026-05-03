@@ -1,9 +1,12 @@
 import { getQueue, setQueue, checkFileLockConflicts } from '../state/store.js'
 
 export function enqueue(task) {
+  if (!task || !task.type) {
+    throw new Error('Task must have a type');
+  }
   const queue = getQueue()
   queue.push({ ...task, queuedAt: Date.now() })
-  queue.sort((a, b) => b.priority - a.priority)
+  queue.sort((a, b) => (b.priority || 0) - (a.priority || 0))
   setQueue(queue)
 }
 
