@@ -2,7 +2,7 @@
 // Extracts all complex state management, data polling, and API sync
 // logic out of the main renderer file.
 
-import { getAllActivities, sendMessage, listSources, listAllSessions } from '../state/jules-api.js'
+import { getAllActivities, sendMessage, listSources, listAllSessions, approvePlan } from '../state/jules-api.js'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { getSessions, getConfig, setConfig, store, removeSession, upsertSession } from '../state/store.js'
 import { dispatchLeadOrchestrator } from '../jules_lead_orchestrator/julesorchestrator.js'
@@ -511,7 +511,7 @@ export function useDashboardController() {
     if (!val.trim()) return
     const source = getConfig().source
     if (!source || source === 'NOT SET') {
-      setMessages(m => [...m, { role: 'user', text: val.trim() }, { role: 'system', text: 'Error: No repo selected. Press Alt+M.' }])
+      setMessages(m => [...m, { role: 'system', text: 'Error: No repo selected. Press Alt+M.' }])
       setChatInput(''); setScrollOffset(0); return
     }
 
@@ -520,11 +520,11 @@ export function useDashboardController() {
       setChatInput(''); setScrollOffset(0)
       try {
         const { sessionId } = await dispatchLeadOrchestrator(val.trim(), 1, val.trim().substring(0, 30))
-        setMessages(m => [...m, { role: 'user', text: val.trim() }, { role: 'system', text: `Dispatched orchestrator: ${sessionId}` }])
+        setMessages(m => [...m, { role: 'system', text: `Dispatched orchestrator: ${sessionId}` }])
         setSelectedSessionId(sessionId)
         setChatTargetMode('TALK_TO_SELECTED_AGENT')
       } catch (e) {
-        setMessages(m => [...m, { role: 'user', text: val.trim() }, { role: 'system', text: `Dispatch error: ${e.message}` }])
+        setMessages(m => [...m, { role: 'system', text: `Dispatch error: ${e.message}` }])
       }
       return
     }
@@ -535,18 +535,20 @@ export function useDashboardController() {
       setMessages(m => [...m, { role: 'system', text: 'Error: No agent found.' }]); return
     }
 
-    const actualMessage = val.trim() === '/approve' ? 'Approve' : val.trim()
-
     if (targetAgent.state === 'IN_PROGRESS') {
-      setQueuedMessages(prev => ({ ...prev, [targetAgent.id]: actualMessage }))
-      setMessages(m => [...m, { role: 'user', text: actualMessage }, { role: 'system', text: `Message queued` }])
+      setQueuedMessages(prev => ({ ...prev, [targetAgent.id]: val.trim() }))
+      setMessages(m => [...m, { role: 'system', text: `Message queued` }])
       setChatInput(''); setScrollOffset(0); return
     }
 
-    setMessages(m => [...m, { role: 'user', text: actualMessage }, { role: 'system', text: 'Sending…' }])
+    setMessages(m => [...m, { role: 'system', text: 'Sending…' }])
     setChatInput(''); setScrollOffset(0)
     try {
-      await sendMessage(targetAgent.id, actualMessage)
+      if (val.trim() === '/approve') {
+        await approvePlan(targetAgent.id)
+      } else {
+        await sendMessage(targetAgent.id, val.trim())
+      }
     } catch (e) {
       setMessages(m => [...m, { role: 'system', text: `Send error: ${e.message}` }])
     }

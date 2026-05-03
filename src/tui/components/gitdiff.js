@@ -192,7 +192,7 @@ export function GitDiffViewer({ sessionId, width, height, isDimmed, fileSel = 0,
           React.createElement(Text, {
             color: isDimmed ? 'gray' : l.leftColor,
             dimColor: l.leftDim,
-            wrap: 'wrap',
+            wrap: 'truncate',
           }, (l.leftText || '').padEnd(halfWidth))),
         React.createElement(Box, { width: 1, flexShrink: 0 },
           React.createElement(Text, { color: 'gray' }, '│')),
@@ -204,7 +204,7 @@ export function GitDiffViewer({ sessionId, width, height, isDimmed, fileSel = 0,
           React.createElement(Text, {
             color: isDimmed ? 'gray' : l.rightColor,
             dimColor: l.rightDim,
-            wrap: 'wrap',
+            wrap: 'truncate',
           }, (l.rightText || '').padEnd(halfWidth)))
       )
     })
