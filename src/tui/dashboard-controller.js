@@ -2,7 +2,7 @@
 // Extracts all complex state management, data polling, and API sync
 // logic out of the main renderer file.
 
-import { getAllActivities, sendMessage, listSources, listAllSessions, approvePlan } from '../state/jules-api.js'
+import { getAllActivities, sendMessage, listSources, listAllSessions, approvePlan, createSession } from '../state/jules-api.js'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { getSessions, getConfig, setConfig, store, removeSession, upsertSession } from '../state/store.js'
 import { dispatchLeadOrchestrator } from '../jules_lead_orchestrator/julesorchestrator.js'
@@ -129,6 +129,10 @@ export function useDashboardController() {
 
   const [notes, setNotes] = useState(() => store.get('tuiNotes', ''))
 
+  useEffect(() => {
+    store.set('tuiNotes', notes)
+  }, [notes])
+
   // ── Session tracking ─────────────────────────────────────────────
   const [selectedSessionId, setSelectedSessionId] = useState(null)
   const [lastActivityIds, setLastActivityIds]     = useState({})
@@ -164,7 +168,7 @@ export function useDashboardController() {
       try {
         const res = await listAllSessions()
         const remoteSessions = res.sessions || []
-        const remoteIds = new Set(remoteSessions.map(s => s.id))
+        const remoteIds = new Set(remoteSessions.map(s => s.name))
         const localSessions = getSessions() || []
 
         let changed = false
@@ -177,10 +181,10 @@ export function useDashboardController() {
         }
 
         for (const rs of remoteSessions) {
-          const local = localSessions.find(ls => ls.id === rs.id)
+          const local = localSessions.find(ls => ls.id === rs.name)
           if (!local || local.state !== rs.state || local.lastUpdated !== rs.updateTime) {
             upsertSession({
-              id: rs.id,
+              id: rs.name,
               state: rs.state,
               lastUpdated: rs.updateTime || rs.createTime,
               createdAt: rs.createTime,
@@ -492,6 +496,19 @@ export function useDashboardController() {
     if (!source || source === 'NOT SET') {
       setMessages(m => [...m, { role: 'system', text: 'Error: No repo selected. Press Alt+M.' }])
       setChatInput(''); setScrollOffset(0); return
+    }
+
+    if (chatTargetMode === 'CREATE_TASK') {
+      setChatInput(''); setScrollOffset(0)
+      try {
+        const { name: sessionId } = await createSession({ prompt: val.trim(), source })
+        setMessages(m => [...m, { role: 'system', text: `Created task session: ${sessionId}` }])
+        setSelectedSessionId(sessionId)
+        setChatTargetMode('TALK_TO_SELECTED_AGENT')
+      } catch (e) {
+        setMessages(m => [...m, { role: 'system', text: `Create task error: ${e.message}` }])
+      }
+      return
     }
 
     if (chatTargetMode === 'CREATE_ORCHESTRATOR' || !AGENTS || AGENTS.length === 0 ||

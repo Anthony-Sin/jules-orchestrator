@@ -197,11 +197,12 @@ export function Dashboard({ searchTerm = '' }) {
       else { setMode('table') }
       return
     }
-    if (key.meta && input === 'a' && mode === 'diff' && activeAgentId) {
+    if (key.meta && input === 'a' && mode === 'diff' && (selectedSessionId || 'NEW TASK')) {
       flash('Applying diff...')
+      const currActiveAgentId = selectedSessionId || 'NEW TASK'
       import('./components/gitdiff.js').then(({ applyDiff }) => {
         import('../state/jules-api.js').then(({ getAllActivities }) => {
-          getAllActivities(activeAgentId).then(res => {
+          getAllActivities(currActiveAgentId).then(res => {
             const acts = res.activities || res || []
             const sorted = [...acts].sort((a, b) => new Date(a.createTime || 0) - new Date(b.createTime || 0))
             let diffStr = null
@@ -282,7 +283,7 @@ export function Dashboard({ searchTerm = '' }) {
             handleSend('/approve')
             return
           }
-          const opts = ['CREATE_ORCHESTRATOR', 'CREATE_ORCHESTRATOR']
+          const opts = ['CREATE_TASK', 'CREATE_ORCHESTRATOR']
           setChatTargetMode(opts[chatMenuSel])
           setChatMenuOpen(false)
           setChatInput('')
