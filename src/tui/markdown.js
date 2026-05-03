@@ -255,6 +255,319 @@ function buildInlineTokens(text, baseColor, focused, forceBold, forceItalic) {
 }
 
 // ── Block renderer ────────────────────────────────────────────────
+
+function buildToolCallLines(seg, i, focused) {
+  const lines = []
+  const { toolName, args } = seg
+
+  if (toolName === 'generate_ink_terminal_diagram') {
+    try {
+      const currentDiagrams = store.get('architectureDiagrams') || [];
+      const newDiagStr = JSON.stringify(args);
+      const alreadyExists = currentDiagrams.some(d => JSON.stringify(d) === newDiagStr);
+
+      if (!alreadyExists && args && args.title) {
+        currentDiagrams.unshift(args);
+        store.set('architectureDiagrams', currentDiagrams.slice(0, 10));
+        store.set('diagramLastUpdated', Date.now());
+      }
+    } catch (_) {}
+
+    lines.push({ type: 'gap' })
+    lines.push({ type: 'jsx', element: React.createElement(
+      Box,
+      { key: `tc_diag_hint_${i}`, minWidth: 0, overflow: 'hidden', flexDirection: 'row' },
+      React.createElement(Text, {
+        color: focused ? '#4ADE80' : 'gray',
+        bold: focused,
+        dimColor: !focused,
+        wrap: 'truncate'
+      }, '◈  Diagram updated → '),
+      React.createElement(Text, {
+        color: focused ? '#94C8E8' : 'gray',
+        bold: true,
+        dimColor: !focused,
+        wrap: 'truncate'
+      }, '[ ARCHITECTURE GRAPH ]')
+    )})
+    lines.push({ type: 'gap' })
+  }
+
+  return lines
+}
+
+function buildPlanLines(seg, i, focused, wrapLimit) {
+  const lines = []
+  const steps = seg.plan.steps || []
+  const totalSteps = steps.length
+
+  // Header
+  lines.push({ type: 'gap' })
+  lines.push({ type: 'jsx', element: React.createElement(
+    Box,
+    { key: `plan_hdr_${i}`, flexDirection: 'row', minWidth: 0 },
+    React.createElement(Text, {
+      color: focused ? '#FFB347' : 'gray',
+      bold: true
+    }, '▸ PLAN  '),
+    React.createElement(Text, {
+      color: 'gray',
+      dimColor: true
+    }, `${totalSteps} step${totalSteps !== 1 ? 's' : ''}`)
+  )})
+
+  // Divider under header
+  lines.push({ type: 'jsx', element: React.createElement(
+    Box,
+    { key: `plan_div_${i}`, minWidth: 0, overflow: 'hidden' },
+    React.createElement(Text, {
+      color: 'gray',
+      dimColor: true,
+      wrap: 'truncate'
+    }, '─'.repeat(Math.min(wrapLimit, 40)))
+  )})
+
+  for (let sIdx = 0; sIdx < steps.length; sIdx++) {
+    const step = steps[sIdx]
+    const stepNum = String(sIdx + 1).padStart(2, ' ')
+    const isLast = sIdx === steps.length - 1
+
+    // Step title row
+    const titleWrapped = wrapText(step.title || 'Step', Math.max(5, wrapLimit - 7))
+    for (let wi = 0; wi < titleWrapped.length; wi++) {
+      if (wi === 0) {
+        lines.push({ type: 'jsx', element: React.createElement(
+          Box,
+          { key: `p_${i}_s${sIdx}_t${wi}`, flexDirection: 'row', minWidth: 0 },
+          // Step badge
+          React.createElement(Text, {
+            color: focused ? '#FFB347' : 'gray',
+            bold: true,
+            dimColor: !focused
+          }, `${stepNum}. `),
+          React.createElement(Text, {
+            color: focused ? 'white' : 'gray',
+            bold: true,
+            dimColor: !focused
+          }, titleWrapped[wi])
+        )})
+      } else {
+        lines.push({ type: 'jsx', element: React.createElement(
+          Box,
+          { key: `p_${i}_s${sIdx}_t${wi}`, flexDirection: 'row', minWidth: 0 },
+          React.createElement(Text, { color: 'gray', dimColor: true }, '    '),
+          React.createElement(Text, {
+            color: focused ? 'white' : 'gray',
+            bold: true,
+            dimColor: !focused
+          }, titleWrapped[wi])
+        )})
+      }
+    }
+
+    // Step description — indented with gutter bar
+    if (step.description) {
+      const descWrapped = wrapText(step.description, Math.max(5, wrapLimit - 7))
+      for (let wi = 0; wi < descWrapped.length; wi++) {
+        lines.push({ type: 'jsx', element: React.createElement(
+          Box,
+          { key: `p_${i}_s${sIdx}_d${wi}`, flexDirection: 'row', minWidth: 0 },
+          React.createElement(Text, {
+            color: focused ? '#4a4a6a' : 'gray',
+            dimColor: true
+          }, '    ╎ '),
+          React.createElement(Text, {
+            color: focused ? '#94C8E8' : 'gray',
+            dimColor: !focused
+          }, descWrapped[wi])
+        )})
+      }
+    }
+
+    // Separator between steps (not after last)
+    if (!isLast) {
+      lines.push({ type: 'jsx', element: React.createElement(
+        Box,
+        { key: `p_${i}_s${sIdx}_sep`, minWidth: 0 },
+        React.createElement(Text, { color: 'gray', dimColor: true }, '    ╎')
+      )})
+    }
+  }
+
+  // Footer divider
+  lines.push({ type: 'jsx', element: React.createElement(
+    Box,
+    { key: `plan_ftr_${i}`, minWidth: 0, overflow: 'hidden' },
+    React.createElement(Text, {
+      color: 'gray',
+      dimColor: true,
+      wrap: 'truncate'
+    }, '─'.repeat(Math.min(wrapLimit, 40)))
+  )})
+  lines.push({ type: 'gap' })
+
+  return lines
+}
+
+function buildCodeblockLines(seg, i, focused, wrapLimit) {
+  const lines = []
+  const lang = seg.lang || ''
+  const codeLines = (seg.text || '').split('\n')
+  const langTag = lang ? ` ${lang} ` : ''
+
+  // Header bar: ╭── lang ──────────
+  const headerFill = '─'.repeat(Math.max(0, Math.min(wrapLimit - langTag.length - 4, 20)))
+  lines.push({ type: 'jsx', element: React.createElement(
+    Box,
+    { key: `cb_hdr_${i}`, minWidth: 0, overflow: 'hidden' },
+    React.createElement(Text, {
+      color: focused ? '#6EAFD6' : 'gray',
+      dimColor: !focused,
+      wrap: 'truncate'
+    }, `╭──${langTag}${headerFill}`)
+  )})
+
+  for (let ci = 0; ci < codeLines.length; ci++) {
+    // Skip trailing empty line at end of block
+    if (ci === codeLines.length - 1 && codeLines[ci].trim() === '') continue
+    const wrapped = wrapText(codeLines[ci] || ' ', Math.max(5, wrapLimit - 4))
+    for (const wl of wrapped) {
+      lines.push({ type: 'jsx', element: React.createElement(
+        Box,
+        { key: `cb_${i}_${ci}`, minWidth: 0, overflow: 'hidden', flexDirection: 'row' },
+        React.createElement(Text, {
+          color: focused ? '#6EAFD6' : 'gray',
+          dimColor: !focused
+        }, '│ '),
+        React.createElement(Text, {
+          color: focused ? '#E2E8F0' : 'gray',
+          dimColor: !focused,
+          wrap: 'truncate'
+        }, wl)
+      )})
+    }
+  }
+
+  lines.push({ type: 'jsx', element: React.createElement(
+    Box,
+    { key: `cb_ftr_${i}`, minWidth: 0, overflow: 'hidden' },
+    React.createElement(Text, {
+      color: focused ? '#6EAFD6' : 'gray',
+      dimColor: !focused,
+      wrap: 'truncate'
+    }, '╰' + '─'.repeat(Math.min(wrapLimit - 1, 24)))
+  )})
+
+  return lines
+}
+
+function buildHrLines(i, wrapLimit) {
+  return [{ type: 'jsx', element: React.createElement(
+    Box,
+    { key: `hr_${i}`, minWidth: 0, overflow: 'hidden' },
+    React.createElement(Text, {
+      color: 'gray',
+      dimColor: true,
+      wrap: 'truncate'
+    }, '┄'.repeat(wrapLimit))
+  )}]
+}
+
+function buildStandardLines(seg, i, focused, wrapLimit) {
+  const lines = []
+  let prefix = ''
+  let prefixColor = 'gray'
+  let textContent = seg.text || ''
+  let textColor = focused ? 'white' : 'gray'
+  let bold = false
+  let italic = false
+
+  switch (seg.type) {
+    case 'h1':
+      prefix = '  '
+      textContent = (seg.text || '').toUpperCase()
+      textColor = focused ? '#FFB347' : 'gray'   // warm amber
+      bold = true
+      break
+    case 'h2':
+      prefix = '── '
+      textColor = focused ? '#94C8E8' : 'gray'   // steel blue
+      bold = true
+      break
+    case 'h3':
+      prefix = '  ▸ '
+      textColor = focused ? '#7EC8A4' : 'gray'   // sage green
+      bold = true
+      break
+    case 'blockquote':
+      prefix = '  ▎ '
+      prefixColor = 'gray'
+      textColor = 'gray'
+      italic = true
+      break
+    case 'bullet': {
+      const ind = '  '.repeat(seg.indent || 0)
+      const bul = (seg.indent || 0) > 0 ? '◦' : '·'
+      prefix = ind + bul + ' '
+      prefixColor = focused ? '#A78BFA' : 'gray'  // soft violet
+      textColor = focused ? 'white' : 'gray'
+      break
+    }
+    case 'ordered': {
+      const ind = '  '.repeat(seg.indent || 0)
+      prefix = ind + seg.index + '. '
+      prefixColor = focused ? '#A78BFA' : 'gray'  // soft violet
+      textColor = focused ? 'white' : 'gray'
+      break
+    }
+    default:
+      textColor = focused ? 'white' : 'gray'
+      break
+  }
+
+  const effectiveWidth = Math.max(5, wrapLimit - prefix.length)
+  const wrappedLines = wrapText(textContent, effectiveWidth)
+
+  for (let wi = 0; wi < wrappedLines.length; wi++) {
+    const wl = wrappedLines[wi]
+    const linePrefix = wi === 0 ? prefix : ' '.repeat(prefix.length)
+    const linePrefixColor = wi === 0 ? prefixColor : 'gray'
+    const inlineTokens = buildInlineTokens(wl, textColor, focused, bold, italic)
+
+    lines.push({ type: 'jsx', element: React.createElement(
+      Box,
+      { key: `seg_${i}_w${wi}`, minWidth: 0, overflow: 'hidden', flexDirection: 'row' },
+      linePrefix
+        ? React.createElement(Text, {
+            color: linePrefixColor,
+            dimColor: !focused,
+            bold: wi === 0 && bold
+          }, linePrefix)
+        : null,
+      React.createElement(
+        Box,
+        { flexGrow: 1, minWidth: 0, overflow: 'hidden', flexDirection: 'row' },
+        ...inlineTokens
+      )
+    )})
+
+    // H1 underline — amber rule
+    if (seg.type === 'h1' && wi === wrappedLines.length - 1) {
+      lines.push({ type: 'jsx', element: React.createElement(
+        Box,
+        { key: `h1ul_${i}`, minWidth: 0, overflow: 'hidden' },
+        React.createElement(Text, {
+          color: focused ? '#FFB347' : 'gray',
+          dimColor: !focused,
+          wrap: 'truncate'
+        }, '═'.repeat(Math.min(wrapLimit, (textContent.length || 10) + 2)))
+      )})
+    }
+  }
+
+  return lines
+}
+
 export function buildMarkdownLines(text, wrapLimit, focused) {
   const cacheKey = `${text}|${wrapLimit}|${focused}`;
   if (markdownCache.has(cacheKey)) {
@@ -277,317 +590,37 @@ export function buildMarkdownLines(text, wrapLimit, focused) {
       continue
     }
 
-    // ── tool call ─────────────────────────────────────────────────
     if (seg.type === 'toolcall') {
-      const { toolName, args } = seg
-
-      if (toolName === 'generate_ink_terminal_diagram') {
-        try {
-          const currentDiagrams = store.get('architectureDiagrams') || [];
-          const newDiagStr = JSON.stringify(args);
-          const alreadyExists = currentDiagrams.some(d => JSON.stringify(d) === newDiagStr);
-
-          if (!alreadyExists && args && args.title) {
-            currentDiagrams.unshift(args);
-            store.set('architectureDiagrams', currentDiagrams.slice(0, 10));
-            store.set('diagramLastUpdated', Date.now());
-          }
-        } catch (_) {}
-
-        lines.push({ type: 'gap' })
-        lines.push({ type: 'jsx', element: React.createElement(
-          Box,
-          { key: `tc_diag_hint_${i}`, minWidth: 0, overflow: 'hidden', flexDirection: 'row' },
-          React.createElement(Text, {
-            color: focused ? '#4ADE80' : 'gray',
-            bold: focused,
-            dimColor: !focused,
-            wrap: 'truncate'
-          }, '◈  Diagram updated → '),
-          React.createElement(Text, {
-            color: focused ? '#94C8E8' : 'gray',
-            bold: true,
-            dimColor: !focused,
-            wrap: 'truncate'
-          }, '[ ARCHITECTURE GRAPH ]')
-        )})
-        lines.push({ type: 'gap' })
-        continue
-      }
+      lines.push(...buildToolCallLines(seg, i, focused))
+      continue
     }
 
-    // ── execution plan ────────────────────────────────────────────
     if (seg.type === 'plan') {
-      const steps = seg.plan.steps || []
-      const totalSteps = steps.length
-
-      // Header
-      lines.push({ type: 'gap' })
-      lines.push({ type: 'jsx', element: React.createElement(
-        Box,
-        { key: `plan_hdr_${i}`, flexDirection: 'row', minWidth: 0 },
-        React.createElement(Text, {
-          color: focused ? '#FFB347' : 'gray',
-          bold: true
-        }, '▸ PLAN  '),
-        React.createElement(Text, {
-          color: 'gray',
-          dimColor: true
-        }, `${totalSteps} step${totalSteps !== 1 ? 's' : ''}`)
-      )})
-
-      // Divider under header
-      lines.push({ type: 'jsx', element: React.createElement(
-        Box,
-        { key: `plan_div_${i}`, minWidth: 0, overflow: 'hidden' },
-        React.createElement(Text, {
-          color: 'gray',
-          dimColor: true,
-          wrap: 'truncate'
-        }, '─'.repeat(Math.min(wrapLimit, 40)))
-      )})
-
-      for (let sIdx = 0; sIdx < steps.length; sIdx++) {
-        const step = steps[sIdx]
-        const stepNum = String(sIdx + 1).padStart(2, ' ')
-        const isLast = sIdx === steps.length - 1
-
-        // Step title row
-        const titleWrapped = wrapText(step.title || 'Step', Math.max(5, wrapLimit - 7))
-        for (let wi = 0; wi < titleWrapped.length; wi++) {
-          if (wi === 0) {
-            lines.push({ type: 'jsx', element: React.createElement(
-              Box,
-              { key: `p_${i}_s${sIdx}_t${wi}`, flexDirection: 'row', minWidth: 0 },
-              // Step badge
-              React.createElement(Text, {
-                color: focused ? '#FFB347' : 'gray',
-                bold: true,
-                dimColor: !focused
-              }, `${stepNum}. `),
-              React.createElement(Text, {
-                color: focused ? 'white' : 'gray',
-                bold: true,
-                dimColor: !focused
-              }, titleWrapped[wi])
-            )})
-          } else {
-            lines.push({ type: 'jsx', element: React.createElement(
-              Box,
-              { key: `p_${i}_s${sIdx}_t${wi}`, flexDirection: 'row', minWidth: 0 },
-              React.createElement(Text, { color: 'gray', dimColor: true }, '    '),
-              React.createElement(Text, {
-                color: focused ? 'white' : 'gray',
-                bold: true,
-                dimColor: !focused
-              }, titleWrapped[wi])
-            )})
-          }
-        }
-
-        // Step description — indented with gutter bar
-        if (step.description) {
-          const descWrapped = wrapText(step.description, Math.max(5, wrapLimit - 7))
-          for (let wi = 0; wi < descWrapped.length; wi++) {
-            lines.push({ type: 'jsx', element: React.createElement(
-              Box,
-              { key: `p_${i}_s${sIdx}_d${wi}`, flexDirection: 'row', minWidth: 0 },
-              React.createElement(Text, {
-                color: focused ? '#4a4a6a' : 'gray',
-                dimColor: true
-              }, '    ╎ '),
-              React.createElement(Text, {
-                color: focused ? '#94C8E8' : 'gray',
-                dimColor: !focused
-              }, descWrapped[wi])
-            )})
-          }
-        }
-
-        // Separator between steps (not after last)
-        if (!isLast) {
-          lines.push({ type: 'jsx', element: React.createElement(
-            Box,
-            { key: `p_${i}_s${sIdx}_sep`, minWidth: 0 },
-            React.createElement(Text, { color: 'gray', dimColor: true }, '    ╎')
-          )})
-        }
-      }
-
-      // Footer divider
-      lines.push({ type: 'jsx', element: React.createElement(
-        Box,
-        { key: `plan_ftr_${i}`, minWidth: 0, overflow: 'hidden' },
-        React.createElement(Text, {
-          color: 'gray',
-          dimColor: true,
-          wrap: 'truncate'
-        }, '─'.repeat(Math.min(wrapLimit, 40)))
-      )})
-      lines.push({ type: 'gap' })
+      lines.push(...buildPlanLines(seg, i, focused, wrapLimit))
       continue
     }
 
-    // ── fenced code block ─────────────────────────────────────────
     if (seg.type === 'codeblock') {
-      const lang = seg.lang || ''
-      const codeLines = (seg.text || '').split('\n')
-      const langTag = lang ? ` ${lang} ` : ''
-
-      // Header bar: ╭── lang ──────────
-      const headerFill = '─'.repeat(Math.max(0, Math.min(wrapLimit - langTag.length - 4, 20)))
-      lines.push({ type: 'jsx', element: React.createElement(
-        Box,
-        { key: `cb_hdr_${i}`, minWidth: 0, overflow: 'hidden' },
-        React.createElement(Text, {
-          color: focused ? '#6EAFD6' : 'gray',
-          dimColor: !focused,
-          wrap: 'truncate'
-        }, `╭──${langTag}${headerFill}`)
-      )})
-
-      for (let ci = 0; ci < codeLines.length; ci++) {
-        // Skip trailing empty line at end of block
-        if (ci === codeLines.length - 1 && codeLines[ci].trim() === '') continue
-        const wrapped = wrapText(codeLines[ci] || ' ', Math.max(5, wrapLimit - 4))
-        for (const wl of wrapped) {
-          lines.push({ type: 'jsx', element: React.createElement(
-            Box,
-            { key: `cb_${i}_${ci}`, minWidth: 0, overflow: 'hidden', flexDirection: 'row' },
-            React.createElement(Text, {
-              color: focused ? '#6EAFD6' : 'gray',
-              dimColor: !focused
-            }, '│ '),
-            React.createElement(Text, {
-              color: focused ? '#E2E8F0' : 'gray',
-              dimColor: !focused,
-              wrap: 'truncate'
-            }, wl)
-          )})
-        }
-      }
-
-      lines.push({ type: 'jsx', element: React.createElement(
-        Box,
-        { key: `cb_ftr_${i}`, minWidth: 0, overflow: 'hidden' },
-        React.createElement(Text, {
-          color: focused ? '#6EAFD6' : 'gray',
-          dimColor: !focused,
-          wrap: 'truncate'
-        }, '╰' + '─'.repeat(Math.min(wrapLimit - 1, 24)))
-      )})
+      lines.push(...buildCodeblockLines(seg, i, focused, wrapLimit))
       continue
     }
 
-    // ── hr ────────────────────────────────────────────────────────
     if (seg.type === 'hr') {
-      lines.push({ type: 'jsx', element: React.createElement(
-        Box,
-        { key: `hr_${i}`, minWidth: 0, overflow: 'hidden' },
-        React.createElement(Text, {
-          color: 'gray',
-          dimColor: true,
-          wrap: 'truncate'
-        }, '┄'.repeat(wrapLimit))
-      )})
+      lines.push(...buildHrLines(i, wrapLimit))
       continue
     }
 
     // ── all other block types ─────────────────────────────────────
-    let prefix = ''
-    let prefixColor = 'gray'
-    let textContent = seg.text || ''
-    let textColor = focused ? 'white' : 'gray'
-    let bold = false
-    let italic = false
-
-    switch (seg.type) {
-      case 'h1':
-        prefix = '  '
-        textContent = (seg.text || '').toUpperCase()
-        textColor = focused ? '#FFB347' : 'gray'   // warm amber
-        bold = true
-        break
-      case 'h2':
-        prefix = '── '
-        textColor = focused ? '#94C8E8' : 'gray'   // steel blue
-        bold = true
-        break
-      case 'h3':
-        prefix = '  ▸ '
-        textColor = focused ? '#7EC8A4' : 'gray'   // sage green
-        bold = true
-        break
-      case 'blockquote':
-        prefix = '  ▎ '
-        prefixColor = 'gray'
-        textColor = 'gray'
-        italic = true
-        break
-      case 'bullet': {
-        const ind = '  '.repeat(seg.indent || 0)
-        const bul = (seg.indent || 0) > 0 ? '◦' : '·'
-        prefix = ind + bul + ' '
-        prefixColor = focused ? '#A78BFA' : 'gray'  // soft violet
-        textColor = focused ? 'white' : 'gray'
-        break
-      }
-      case 'ordered': {
-        const ind = '  '.repeat(seg.indent || 0)
-        prefix = ind + seg.index + '. '
-        prefixColor = focused ? '#A78BFA' : 'gray'  // soft violet
-        textColor = focused ? 'white' : 'gray'
-        break
-      }
-      default:
-        textColor = focused ? 'white' : 'gray'
-        break
-    }
-
-    const effectiveWidth = Math.max(5, wrapLimit - prefix.length)
-    const wrappedLines = wrapText(textContent, effectiveWidth)
-
-    for (let wi = 0; wi < wrappedLines.length; wi++) {
-      const wl = wrappedLines[wi]
-      const linePrefix = wi === 0 ? prefix : ' '.repeat(prefix.length)
-      const linePrefixColor = wi === 0 ? prefixColor : 'gray'
-      const inlineTokens = buildInlineTokens(wl, textColor, focused, bold, italic)
-
-      lines.push({ type: 'jsx', element: React.createElement(
-        Box,
-        { key: `seg_${i}_w${wi}`, minWidth: 0, overflow: 'hidden', flexDirection: 'row' },
-        linePrefix
-          ? React.createElement(Text, {
-              color: linePrefixColor,
-              dimColor: !focused,
-              bold: wi === 0 && bold
-            }, linePrefix)
-          : null,
-        React.createElement(
-          Box,
-          { flexGrow: 1, minWidth: 0, overflow: 'hidden', flexDirection: 'row' },
-          ...inlineTokens
-        )
-      )})
-
-      // H1 underline — amber rule
-      if (seg.type === 'h1' && wi === wrappedLines.length - 1) {
-        lines.push({ type: 'jsx', element: React.createElement(
-          Box,
-          { key: `h1ul_${i}`, minWidth: 0, overflow: 'hidden' },
-          React.createElement(Text, {
-            color: focused ? '#FFB347' : 'gray',
-            dimColor: !focused,
-            wrap: 'truncate'
-          }, '═'.repeat(Math.min(wrapLimit, (textContent.length || 10) + 2)))
-        )})
-      }
-    }
+    lines.push(...buildStandardLines(seg, i, focused, wrapLimit))
   }
 
   if (markdownCache.size > 1000) {
-    const firstKey = markdownCache.keys().next().value;
-    markdownCache.delete(firstKey);
+    // Evict oldest 10% (100 items) to avoid O(N) deletion penalty per insertion
+    let count = 0;
+    for (const key of markdownCache.keys()) {
+      markdownCache.delete(key);
+      if (++count >= 100) break;
+    }
   }
   markdownCache.set(cacheKey, lines);
   return lines

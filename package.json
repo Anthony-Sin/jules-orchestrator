@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "node bin/jorch.js",
     "test": "node --experimental-test-module-mocks --test"
+    "test": "node --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"./test-loader.mjs\", pathToFileURL(\"./\"));' --test"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -23,5 +24,9 @@
     "node-fetch": "^3.3.2",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
+  },
+  "devDependencies": {
+    "nock": "^14.0.14"
+    "ink-testing-library": "^4.0.0"
   }
 }
