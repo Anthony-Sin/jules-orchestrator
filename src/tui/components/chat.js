@@ -77,7 +77,7 @@ export function ChatPanel({
           } else {
             // Show a brief preview (first PREVIEW_LINES of plain text)
             const previewLines = mdLines
-              .filter(l => l.type === 'text' || (l.type === 'jsx'))
+              .filter(l => l.type !== 'gap')
               .slice(0, PREVIEW_LINES)
             for (const pl of previewLines) {
               lines.push({ ...pl, _isPreview: true, msgIdx })
@@ -342,6 +342,195 @@ export function ChatPanel({
               }, 
                 prefixElt, 
                 l.element
+              )
+            }
+            if (l.type === 'toolcall-diagram') {
+              return React.createElement(Box, {
+                key: i, height: 1, minWidth: 0, overflow: 'hidden', flexDirection: 'row',
+                opacity: l._isPreview ? 0.6 : 1
+              },
+                prefixElt,
+                React.createElement(Text, {
+                  color: l.focused ? '#4ADE80' : 'gray',
+                  bold: l.focused,
+                  dimColor: !l.focused,
+                  wrap: 'truncate'
+                }, '◈  Diagram updated → '),
+                React.createElement(Text, {
+                  color: l.focused ? '#94C8E8' : 'gray',
+                  bold: true,
+                  dimColor: !l.focused,
+                  wrap: 'truncate'
+                }, '[ ARCHITECTURE GRAPH ]')
+              )
+            }
+            if (l.type === 'plan-header') {
+              return React.createElement(Box, {
+                key: i, height: 1, flexDirection: 'row', minWidth: 0,
+                opacity: l._isPreview ? 0.6 : 1
+              },
+                prefixElt,
+                React.createElement(Text, {
+                  color: l.focused ? '#FFB347' : 'gray',
+                  bold: true
+                }, '▸ PLAN  '),
+                React.createElement(Text, {
+                  color: 'gray',
+                  dimColor: true
+                }, `${l.totalSteps} step${l.totalSteps !== 1 ? 's' : ''}`)
+              )
+            }
+            if (l.type === 'plan-divider') {
+              return React.createElement(Box, {
+                key: i, height: 1, minWidth: 0, overflow: 'hidden',
+                opacity: l._isPreview ? 0.6 : 1
+              },
+                prefixElt,
+                React.createElement(Text, {
+                  color: 'gray',
+                  dimColor: true,
+                  wrap: 'truncate'
+                }, '─'.repeat(l.width))
+              )
+            }
+            if (l.type === 'plan-step-title') {
+              return React.createElement(Box, {
+                key: i, height: 1, flexDirection: 'row', minWidth: 0,
+                opacity: l._isPreview ? 0.6 : 1
+              },
+                prefixElt,
+                l.isFirst
+                  ? React.createElement(Text, {
+                      color: l.focused ? '#FFB347' : 'gray',
+                      bold: true,
+                      dimColor: !l.focused
+                    }, `${l.stepNum}. `)
+                  : React.createElement(Text, { color: 'gray', dimColor: true }, '    '),
+                React.createElement(Text, {
+                  color: l.focused ? 'white' : 'gray',
+                  bold: true,
+                  dimColor: !l.focused
+                }, l.text)
+              )
+            }
+            if (l.type === 'plan-step-desc') {
+              return React.createElement(Box, {
+                key: i, height: 1, flexDirection: 'row', minWidth: 0,
+                opacity: l._isPreview ? 0.6 : 1
+              },
+                prefixElt,
+                React.createElement(Text, {
+                  color: l.focused ? '#4a4a6a' : 'gray',
+                  dimColor: true
+                }, '    ╎ '),
+                React.createElement(Text, {
+                  color: l.focused ? '#94C8E8' : 'gray',
+                  dimColor: !l.focused
+                }, l.text)
+              )
+            }
+            if (l.type === 'plan-step-sep') {
+              return React.createElement(Box, {
+                key: i, height: 1, minWidth: 0,
+                opacity: l._isPreview ? 0.6 : 1
+              },
+                prefixElt,
+                React.createElement(Text, { color: 'gray', dimColor: true }, '    ╎')
+              )
+            }
+            if (l.type === 'codeblock-header') {
+              return React.createElement(Box, {
+                key: i, height: 1, minWidth: 0, overflow: 'hidden',
+                opacity: l._isPreview ? 0.6 : 1
+              },
+                prefixElt,
+                React.createElement(Text, {
+                  color: l.focused ? '#6EAFD6' : 'gray',
+                  dimColor: !l.focused,
+                  wrap: 'truncate'
+                }, l.text)
+              )
+            }
+            if (l.type === 'codeblock-line') {
+              return React.createElement(Box, {
+                key: i, height: 1, minWidth: 0, overflow: 'hidden', flexDirection: 'row',
+                opacity: l._isPreview ? 0.6 : 1
+              },
+                prefixElt,
+                React.createElement(Text, {
+                  color: l.focused ? '#6EAFD6' : 'gray',
+                  dimColor: !l.focused
+                }, '│ '),
+                React.createElement(Text, {
+                  color: l.focused ? '#E2E8F0' : 'gray',
+                  dimColor: !l.focused,
+                  wrap: 'truncate'
+                }, l.text)
+              )
+            }
+            if (l.type === 'codeblock-footer') {
+              return React.createElement(Box, {
+                key: i, height: 1, minWidth: 0, overflow: 'hidden',
+                opacity: l._isPreview ? 0.6 : 1
+              },
+                prefixElt,
+                React.createElement(Text, {
+                  color: l.focused ? '#6EAFD6' : 'gray',
+                  dimColor: !l.focused,
+                  wrap: 'truncate'
+                }, l.text)
+              )
+            }
+            if (l.type === 'hr-line') {
+              return React.createElement(Box, {
+                key: i, height: 1, minWidth: 0, overflow: 'hidden',
+                opacity: l._isPreview ? 0.6 : 1
+              },
+                prefixElt,
+                React.createElement(Text, {
+                  color: 'gray',
+                  dimColor: true,
+                  wrap: 'truncate'
+                }, '┄'.repeat(l.width))
+              )
+            }
+            if (l.type === 'h1-underline') {
+              return React.createElement(Box, {
+                key: i, height: 1, minWidth: 0, overflow: 'hidden',
+                opacity: l._isPreview ? 0.6 : 1
+              },
+                prefixElt,
+                React.createElement(Text, {
+                  color: l.focused ? '#FFB347' : 'gray',
+                  dimColor: !l.focused,
+                  wrap: 'truncate'
+                }, l.text)
+              )
+            }
+            if (l.type === 'standard-line') {
+              return React.createElement(Box, {
+                key: i, height: 1, minWidth: 0, overflow: 'hidden', flexDirection: 'row',
+                opacity: l._isPreview ? 0.6 : 1
+              },
+                prefixElt,
+                l.linePrefix
+                  ? React.createElement(Text, {
+                      color: l.linePrefixColor,
+                      dimColor: !l.focused,
+                      bold: l.bold
+                    }, l.linePrefix)
+                  : null,
+                React.createElement(
+                  Box,
+                  { flexGrow: 1, minWidth: 0, overflow: 'hidden', flexDirection: 'row' },
+                  ...(l.inlineTokens || []).map(t => React.createElement(Text, {
+                    key: t.key,
+                    color: t.color,
+                    bold: t.bold,
+                    italic: t.italic,
+                    dimColor: t.dimColor
+                  }, t.text))
+                )
               )
             }
             if (l.type === 'gap') {

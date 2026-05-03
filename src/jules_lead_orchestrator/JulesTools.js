@@ -60,13 +60,6 @@ export async function handleOrchestratorToolCall(toolCall, orchestratorSessionId
       }
     }
 
-    case 'pause_sub_agent': {
-      upsertSession({ id: args.agent_id, state: 'PAUSED' });
-      const msg = `Agent ${args.agent_id} paused. Reason: ${args.reason}`;
-      await confirmToolCall(msg);
-      return { status: 'success', message: msg };
-    }
-
     case 'reassign_module': {
       try {
         const controller = new AbortController();
@@ -153,11 +146,13 @@ export async function handleOrchestratorToolCall(toolCall, orchestratorSessionId
         return { status: 'error', message: msg };
       }
 
+      const operationLockId = `${orchestratorSessionId || 'SYSTEM'}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
       try {
-        lockFiles('ORCHESTRATOR', [contractPath]);
+        lockFiles(operationLockId, [contractPath]);
         await fsPromises.writeFile(contractPath, args.initial_content, 'utf8');
       } finally {
-        unlockFiles('ORCHESTRATOR');
+        unlockFiles(operationLockId);
       }
 
       const msg = `Shared contract ${args.contract_name} created at ${contractPath}. Allowed agents: ${args.allowed_agent_ids.join(', ')}`;
