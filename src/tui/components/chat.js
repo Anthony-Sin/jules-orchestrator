@@ -35,8 +35,9 @@ export function ChatPanel({
   const _expanded = expandedMessages instanceof Set ? expandedMessages : new Set();
 
   // ── Build flat line list with dropdown awareness ──────────────────
-  const allLines = useMemo(() => {
+  const { lines: allLines, collapsedCount: computedCollapsedCount } = useMemo(() => {
     const lines = []
+    let cCount = 0
 
     if (tab === 'chat') {
       if (repoName === 'NOT SET') {
@@ -44,7 +45,7 @@ export function ChatPanel({
         for (const l of wrapText('Select a repository (Alt+M) to start.', wrapLimit))
           lines.push({ type: 'text', text: l, color: 'yellow', msgIdx: -1 })
         lines.push({ type: 'gap', msgIdx: -1 })
-        return lines
+        return { lines, collapsedCount: cCount }
       }
 
       for (let msgIdx = 0; msgIdx < messages.length; msgIdx++) {
@@ -55,6 +56,7 @@ export function ChatPanel({
           const mdLines = buildMarkdownLines(m.text, wrapLimit, focused)
           const isLong  = mdLines.length > COLLAPSE_THRESHOLD
           const isOpen  = !isLong || _expanded.has(msgIdx)
+          if (isLong && !isOpen) cCount++
 
           // ── Dropdown header row ──
           // Shows: ▸ AGENT  [▼ expanded | ▶ collapsed]  (N lines)
@@ -117,7 +119,7 @@ export function ChatPanel({
       }
     }
 
-    return lines
+    return { lines, collapsedCount: cCount }
   }, [messages, wrapLimit, tab, repoName, focused, _expanded])
 
   const MESSAGE_ROWS = Math.max(2, chatVisibleRows)
@@ -189,11 +191,7 @@ export function ChatPanel({
 
   // Count expandable messages for the hint in header
   const agentMsgCount = messages.filter(m => m.role === 'agent').length
-  const collapsedCount = messages.filter((m, i) =>
-    m.role === 'agent' &&
-    buildMarkdownLines(m.text, wrapLimit, focused).length > COLLAPSE_THRESHOLD &&
-    !_expanded.has(i)
-  ).length
+  const collapsedCount = computedCollapsedCount
 
   return React.createElement(Box, {
     flexDirection: 'column', width,
