@@ -128,9 +128,6 @@ export function ChatPanel({
   // Calculate scrolling to keep cursor in view
   const targetLineIndex = Math.max(0, total - 1 - (chatCursorLine || 0))
 
-  // Track the last chatCursorLine we animated to avoid jumping when total lines change
-  const lastAnimatedCursor = React.useRef(chatCursorLine)
-
   useEffect(() => {
     if (focused && tab === 'chat' && total > 0 && setScrollOffset) {
       // Always auto-scroll to keep the selected item in bounds when total changes
@@ -142,11 +139,8 @@ export function ChatPanel({
       } else if (targetLineIndex > maxVisibleIndex) {
         setScrollOffset(total - 1 - targetLineIndex)
       }
-
-      // We still update the ref so other things know it changed
-      lastAnimatedCursor.current = chatCursorLine
     }
-  }, [chatCursorLine, targetLineIndex, total, MESSAGE_ROWS, focused, tab, setScrollOffset])
+  }, [chatCursorLine, targetLineIndex, total, MESSAGE_ROWS, focused, tab, setScrollOffset, scrollOffset])
 
   const start   = Math.max(0, total - MESSAGE_ROWS - scrollOffset)
   const visible = allLines.slice(start, start + MESSAGE_ROWS)
