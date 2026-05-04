@@ -4,7 +4,7 @@ import { wrapText, buildMarkdownLines } from '../markdown.js'
 import { Notepad } from './notepad.js'
 import { ScrollInput } from './scroll-input.js'
 import { THEME } from '../theme.js'
-
+import Spinner from 'ink-spinner'
 const COLLAPSE_THRESHOLD = 4
 const PREVIEW_LINES = 2
 
@@ -154,6 +154,7 @@ export function ChatPanel({
 
   useInput((inputKey, key) => {
     if (!focused || tab !== 'chat') return
+    if (chatMenuOpen) return
 
     if (key.upArrow) {
       setChatCursorLine?.(c => Math.min(total - 1, (c || 0) + 1))
@@ -169,7 +170,7 @@ export function ChatPanel({
     }
   })
 
-  const isNewSession = chatTargetMode === 'CREATE_ORCHESTRATOR' || (!chatTargetMode && agentId === 'NEW TASK')
+  const isNewSession = chatTargetMode === 'CREATE_ORCHESTRATOR' || chatTargetMode === 'CREATE_TASK' || (!chatTargetMode && agentId === 'NEW TASK')
   const hasMessages = messages && messages.length > 0
 
   const maxTitleLen = 16
@@ -244,10 +245,19 @@ export function ChatPanel({
       flexShrink: 0,
       minHeight: 0,
       overflow: 'hidden',
-      justifyContent: (isNewSession && !hasMessages) ? 'center' : 'flex-end',
+      justifyContent: (startDialogOpen || (isNewSession && !hasMessages)) ? 'center' : 'flex-end',
     },
-      (isNewSession && !hasMessages && tab === 'chat')
-        ? React.createElement(Box, {
+      (startDialogOpen && tab === 'chat')
+        ? React.createElement(Box, { flexDirection: 'column', alignItems: 'center', paddingX: 2, paddingY: 1 },
+            React.createElement(Box, { borderStyle: 'round', borderColor: THEME.accent, paddingX: 3, paddingY: 1, flexDirection: 'column', alignItems: 'center' },
+              React.createElement(Text, { color: THEME.accent, bold: true }, `✦ START NEW ${startDialogMode === 'CREATE_TASK' ? 'TASK' : 'ORCHESTRATOR'}`),
+              React.createElement(Box, { height: 1 }),
+              React.createElement(Text, { color: THEME.text }, 'Type your instructions and press Enter.'),
+              React.createElement(Box, { height: 1 }),
+            )
+          )
+        : (isNewSession && !hasMessages && tab === 'chat')
+          ? React.createElement(Box, {
             flexDirection: 'column',
             alignItems: 'center',
             paddingX: 2,
@@ -519,20 +529,6 @@ export function ChatPanel({
       )
     ),
 
-    startDialogOpen && tab === 'chat' && React.createElement(Box, {
-      flexDirection: 'column',
-      borderStyle: 'round',
-      borderColor: THEME.panelFocusBorder,
-      paddingX: 1,
-      flexShrink: 0,
-      minWidth: 0,
-      overflow: 'hidden',
-    },
-      React.createElement(Text, { color: THEME.accent, bold: true, wrap: 'truncate' }, 'START'),
-      React.createElement(Text, { color: THEME.text, wrap: 'truncate' }, `Mode: ${startDialogMode === 'CREATE_TASK' ? 'Task' : 'Orchestrator'}`),
-      React.createElement(Text, { color: THEME.subtleText, wrap: 'truncate' }, 'Type prompt and press Enter. /task /orchestrator /cancel also work.')
-    ),
-
     showApproveHint && tab === 'chat' && React.createElement(Box, {
       flexDirection: 'row',
       borderStyle: 'round',
@@ -549,7 +545,8 @@ export function ChatPanel({
       React.createElement(Text, { color: THEME.separator, dimColor: true, wrap: 'truncate' }, '-'.repeat(100))
     ),
 
-    (latestProgress || promptPreview) && tab === 'chat' && React.createElement(Box, {
+    // ── Active Progress / Thinking Indicator ──
+    (latestProgress || promptPreview) && tab === 'chat' && !startDialogOpen && React.createElement(Box, {
       flexDirection: 'row',
       borderStyle: 'round',
       borderColor: THEME.panelBorder,
@@ -558,7 +555,14 @@ export function ChatPanel({
       minWidth: 0,
       overflow: 'hidden',
     },
-      React.createElement(Text, { color: promptPreview ? THEME.accentSoft : THEME.accent, wrap: 'truncate' }, promptPreview || latestProgress)
+      // Only show the animated spinner if it's an agent progress update (not a prompt preview)
+      !promptPreview && React.createElement(Box, { paddingRight: 1, flexShrink: 0 }, 
+        React.createElement(Text, { color: THEME.accent }, React.createElement(Spinner, { type: 'dots' }))
+      ),
+      React.createElement(Text, { 
+        color: promptPreview ? THEME.accentSoft : THEME.accent, 
+        wrap: 'truncate' 
+      }, promptPreview || latestProgress)
     ),
 
     tab === 'chat' && React.createElement(Box, {
@@ -571,7 +575,7 @@ export function ChatPanel({
     },
       React.createElement(Box, { flexShrink: 0, minWidth: 0 },
         React.createElement(Text, { color: focused ? THEME.accent : THEME.subtleText, bold: focused, wrap: 'truncate' },
-          (focused && !chatMenuOpen) ? '> ' : '- ')
+          focused ? '> ' : '- ')
       ),
       React.createElement(Box, { flexGrow: 1, flexShrink: 1, minWidth: 0, overflow: 'hidden' },
         React.createElement(ScrollInput, {

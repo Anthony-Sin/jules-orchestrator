@@ -39,7 +39,7 @@ export function useLayout({
   const inputRows = (mode === 'chat' && chatTab === 'chat')
     ? Math.max(
         1,
-        (chatInput || '')
+        String(chatInput || '') // <-- FIX: Wrap in String() to prevent crashes
           .split('\n')
           .reduce((count, line) => {
             const safeLen = Math.max(1, line.length)
@@ -52,7 +52,7 @@ export function useLayout({
   const chatFixedHeights = 4
   const chatMenuHeight = chatMenuOpen && chatTab === 'chat' ? 5 : 0
   const progressHeight = (hasLatestProgress || hasPromptPreview) && chatTab === 'chat' ? 3 : 0
-  const startDialogHeight = hasStartDialog && chatTab === 'chat' ? 4 : 0
+  const startDialogHeight = 0
   const approveHintHeight = hasApproveHint && chatTab === 'chat' ? 2 : 0
 
   const CHAT_VISIBLE_ROWS = Math.max(1,

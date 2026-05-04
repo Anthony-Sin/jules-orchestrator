@@ -102,7 +102,8 @@ export function useKeyboard(p) {
         if (nextIdx >= entries.length) nextIdx = 0
         setQueuedCycleIdx(nextIdx)
         const [, msg] = entries[nextIdx]
-        setChatInput(msg)
+        const textToRestore = Array.isArray(msg) ? (msg[0] || '') : (msg || '')
+        setChatInput(textToRestore)
       }
       return
     }

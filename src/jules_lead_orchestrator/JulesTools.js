@@ -13,12 +13,17 @@ function getHeaders() {
 }
 
 export async function handleOrchestratorToolCall(toolCall, orchestratorSessionId) {
-  const { name, arguments: argsString } = toolCall.function;
+  const fn = toolCall.function;
+  const { name } = fn;
+
+  // Jules sometimes outputs "parameters" instead of "arguments", and sometimes
+  // passes the args as a plain object instead of a JSON string. Handle all cases.
+  const rawArgs = fn.arguments ?? fn.parameters ?? fn.args ?? {};
   let args;
   try {
-    args = JSON.parse(argsString);
+    args = typeof rawArgs === 'string' ? JSON.parse(rawArgs) : rawArgs;
   } catch (err) {
-    return { status: 'error', message: `Failed to parse JSON arguments: ${err.message}` };
+    return { status: 'error', message: `Failed to parse tool arguments for ${name}: ${err.message}` };
   }
 
   const confirmToolCall = async (message) => {
@@ -124,6 +129,7 @@ export async function handleOrchestratorToolCall(toolCall, orchestratorSessionId
       await confirmToolCall(msg);
       return { status: 'success', message: msg };
     }
+
     case 'set_agent_dependency': {
       upsertSession({
         id: args.dependent_agent_id,
@@ -189,7 +195,24 @@ export async function handleOrchestratorToolCall(toolCall, orchestratorSessionId
           ? `jorch/${orchestratorSessionId}/${safeModuleName}`
           : `jorch/${Date.now()}/${safeModuleName}`;
 
-        const instructionsWithBranch = `[IMPORTANT BRANCH NAMING] You must push your changes to branch: ${enforcedBranch}\n\n${args.instructions}`;
+        const instructionsWithBranch = `### AGENT IDENTITY
+        You are the ${args.module_name} for an orchestrated multi-agent project.
+        Your branch: ${enforcedBranch}
+        You MUST push all changes to this branch only.
+
+        ### YOUR MISSION
+        ${args.instructions}
+
+        ### EXECUTION STANDARDS
+        - Write production-quality code, not scaffolding or placeholders.
+        - Include error handling, input validation, and inline comments.
+        - Structure your files cleanly with logical directory layout.
+        - After completing each major component, commit with a descriptive message.
+        - When fully done, push to ${enforcedBranch} and confirm completion.
+
+        ### CONSTRAINTS
+        - Do NOT touch main or any branch outside your assigned branch.
+        - Do NOT wait for other agents — implement your module to be integration-ready.`
 
         const julesSession = await createSession({
           prompt: instructionsWithBranch,
@@ -200,15 +223,21 @@ export async function handleOrchestratorToolCall(toolCall, orchestratorSessionId
 
         const sessionId = julesSession.name?.split('/').pop() || julesSession.id;
 
+        // ── FIX #1 (sub-agent side): Use module_name as the title ────────
+        // Previously this was already set to args.module_name, which is correct.
+        // The problem was the sync loop in useSessionManager was overwriting it
+        // with Jules' raw prompt title. That's now fixed in useSessionManager.
+        // We also mark parentOrchestratorId here so dashboard-controller can
+        // group this session under its orchestrator in the AGENTS hierarchy.
         const sessionData = {
           id: sessionId,
-          title: args.module_name,
+          title: args.module_name,          // Clean human-readable name
           type: 'sub_agent',
           state: julesSession.state || 'QUEUED',
           createdAt: Date.now(),
           lastUpdated: Date.now(),
           repo: config.source,
-          parentOrchestratorId: orchestratorSessionId,
+          parentOrchestratorId: orchestratorSessionId,  // Links to parent for hierarchy
         };
 
         upsertSession(sessionData);
@@ -246,7 +275,7 @@ export async function handleOrchestratorToolCall(toolCall, orchestratorSessionId
 
         const requiredPrefix = orchestratorSessionId ? `jorch/${orchestratorSessionId}/` : 'jorch/SYSTEM/';
 
-        // Hard JS validation
+        // Hard JS validation — prevent merging protected branches
         for (const branch of branches_to_merge) {
           if (typeof branch !== 'string') {
             const msg = `Validation failed: Expected branch name to be a string.`;

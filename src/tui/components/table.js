@@ -5,15 +5,15 @@ import Spinner from 'ink-spinner'
 import { THEME } from '../theme.js'
 
 export const STATUS_COLOR = {
-  IN_PROGRESS: THEME.accent,
+  IN_PROGRESS: 'cyanBright',
   COMPLETED: 'greenBright',
-  AWAITING_PLAN_APPROVAL: THEME.accentSoft,
-  AWAITING_USER_FEEDBACK: THEME.accentSoft,
-  FAILED: THEME.error,
-  QUEUED: THEME.accentMuted,
-  PLANNING: THEME.accent,
-  PAUSED: THEME.accentMuted,
-  KILLED: THEME.error,
+  AWAITING_PLAN_APPROVAL: 'yellowBright',
+  AWAITING_USER_FEEDBACK: 'yellowBright',
+  FAILED: 'redBright',
+  QUEUED: 'gray',
+  PLANNING: 'magentaBright',
+  PAUSED: 'yellow',
+  KILLED: 'red',
 }
 
 export const STATUS_SHORT = {
@@ -28,10 +28,11 @@ export const STATUS_SHORT = {
   KILLED: 'DEAD',
 }
 
+// Columns sizes optimized to accommodate the new uniform 3-space gaps
 const COLUMN_LAYOUT = {
-  tight: { id: 6, title: 22, status: 5, progress: 2, time: 3, repoMin: 11 },
-  compact: { id: 6, title: 24, status: 5, progress: 2, time: 3, repoMin: 14 },
-  full: { id: 6, title: 30, status: 5, progress: 2, time: 3, repoMin: 14 },
+  tight:   { id: 6, title: 18, repo: 14, status: 6, progress: 2, time: 4 },
+  compact: { id: 6, title: 25, repo: 20, status: 6, progress: 2, time: 4 },
+  full:    { id: 6, title: 35, repo: 25, status: 6, progress: 2, time: 4 },
 }
 
 export function ago(ms) {
@@ -75,34 +76,10 @@ function isOrch(agent) {
   )
 }
 
-function Cell({ width, children, grow = false, minWidth = 0 }) {
-  return React.createElement(
-    Box,
-    {
-      width: grow ? undefined : width,
-      minWidth: grow ? minWidth : width,
-      flexGrow: grow ? 1 : 0,
-      flexShrink: grow ? 1 : 0,
-      overflow: 'hidden',
-      height: 1,
-    },
-    children
-  )
-}
-
-function Gap() {
-  return React.createElement(Box, { width: 1, flexShrink: 0 },
-    React.createElement(Text, { color: THEME.separator }, ' ')
-  )
-}
-
-export function FillBar({ tick = 0, width = 2, isDimmed, state }) {
-  const color = isDimmed ? 'gray' : (STATUS_COLOR[state] || THEME.subtleText)
-
-  return React.createElement(Text, null,
-    React.createElement(Text, { color },
-      state === 'COMPLETED' ? '::' : React.createElement(Spinner, { type: 'dots' })
-    )
+// The Perfect 3-Space Gap 
+function Gap({ rowBg }) {
+  return React.createElement(Box, { width: 3, flexShrink: 0 },
+    React.createElement(Text, { backgroundColor: rowBg }, '   ')
   )
 }
 
@@ -111,19 +88,17 @@ export function AgentRow({ agent, selected, tick, isDimmed, expanded }) {
   const layout = COLUMN_LAYOUT[profile]
 
   const state = agent.state || 'UNKNOWN'
-  const stateColor = STATUS_COLOR[state] || THEME.text
-  const stateShort = STATUS_SHORT[state] || state.substring(0, 5)
+  
+  // Strict unified color for ALL text elements in the row
+  const baseColor = STATUS_COLOR[state] || THEME.text
+  const textColor = baseColor
+  
+  const stateShort = STATUS_SHORT[state] || state.substring(0, 6)
   const isFocused = selected && !isDimmed
-  const tint = (base) => (isDimmed ? 'gray' : (isFocused ? 'whiteBright' : base))
+  
+  const rowBg = selected ? (isDimmed ? '#2b2b2b' : THEME.focusBg) : undefined
 
-  const msElapsed = Date.now() - new Date(agent.lastUpdated || agent.createdAt || 0).getTime()
-  const minsElapsed = msElapsed / 60000
-  let recencyColor = THEME.subtleText
-  if (minsElapsed < 10) recencyColor = 'greenBright'
-  else if (minsElapsed < 60) recencyColor = THEME.accentSoft
-  else if (minsElapsed < 1440) recencyColor = THEME.accentMuted
-
-  const shortId = (agent.id || '').slice(0, 6)
+  const shortId = (agent.id || '').slice(0, layout.id)
   const subAgents = agent.subAgents || []
   const orch = isOrch(agent)
   const arrow = orch ? (expanded ? 'v ' : '> ') : '  '
@@ -132,106 +107,124 @@ export function AgentRow({ agent, selected, tick, isDimmed, expanded }) {
   const titleWithChrome = `${arrow}${rawTitle}${badge}`
   const titleStr = trimCell(titleWithChrome, layout.title)
   const repoStr = extractRepoName(agent.repoDisplay || agent.repo || '')
+  const repoTrimmed = trimCell(repoStr, layout.repo)
   const ageStr = ago(agent.lastUpdated || agent.createdAt)
 
   return React.createElement(Box, {
-    paddingX: 0,
     width: '100%',
     height: 1,
     overflow: 'hidden',
-    backgroundColor: isFocused ? THEME.focusBg : undefined,
+    backgroundColor: rowBg,
     flexDirection: 'row',
-    minWidth: 0,
   },
-  React.createElement(Cell, { width: 1 },
-    React.createElement(Text, { color: tint(THEME.accent), bold: !isDimmed }, isFocused ? '>' : ' ')
-  ),
-  React.createElement(Cell, { width: layout.id },
-    React.createElement(Text, { color: tint(THEME.accentMuted), bold: !isDimmed, wrap: 'truncate' }, shortId)
-  ),
-  React.createElement(Cell, { width: layout.title },
-    React.createElement(Text, {
-      color: orch ? tint(THEME.accentSoft) : tint(recencyColor),
-      bold: !isDimmed,
-      underline: orch && !isDimmed,
-      wrap: 'truncate',
-    }, titleStr)
-  ),
-  React.createElement(Gap),
-  React.createElement(Cell, { grow: true, minWidth: layout.repoMin },
-    React.createElement(Text, { color: tint(THEME.text), wrap: 'truncate', dimColor: isDimmed }, repoStr)
-  ),
-  React.createElement(Gap),
-  React.createElement(Cell, { width: layout.status },
-    React.createElement(Text, { color: tint(stateColor), bold: !isDimmed, wrap: 'truncate' }, stateShort)
-  ),
-  React.createElement(Gap),
-  React.createElement(Cell, { width: layout.progress },
-    React.createElement(FillBar, { tick, width: layout.progress, isDimmed, state })
-  ),
-  layout.time > 0 && React.createElement(Cell, { width: layout.time },
-    React.createElement(Text, { color: ageStr === 'now' ? tint('whiteBright') : tint(THEME.subtleText), dimColor: ageStr !== 'now', wrap: 'truncate' }, ageStr)
-  ))
+    React.createElement(Box, { width: 2, flexShrink: 0 }, 
+      React.createElement(Text, { color: textColor, bold: !isDimmed, dimColor: isDimmed, backgroundColor: rowBg }, isFocused ? '> ' : '  ')
+    ),
+    React.createElement(Box, { width: layout.id, flexShrink: 0 }, 
+      React.createElement(Text, { color: textColor, bold: !isDimmed, dimColor: isDimmed, backgroundColor: rowBg }, shortId.padEnd(layout.id, ' '))
+    ),
+    React.createElement(Gap, { rowBg }),
+    React.createElement(Box, { width: layout.title, flexShrink: 0 }, 
+      React.createElement(Text, { color: textColor, bold: !isDimmed, underline: orch && !isDimmed, dimColor: isDimmed, wrap: 'truncate', backgroundColor: rowBg }, titleStr)
+    ),
+    React.createElement(Gap, { rowBg }),
+    React.createElement(Box, { width: layout.repo, flexShrink: 0 }, 
+      React.createElement(Text, { color: textColor, dimColor: isDimmed, wrap: 'truncate', backgroundColor: rowBg }, repoTrimmed)
+    ),
+    React.createElement(Gap, { rowBg }),
+    React.createElement(Box, { width: layout.status, flexShrink: 0 }, 
+      React.createElement(Text, { color: textColor, bold: !isDimmed, dimColor: isDimmed, backgroundColor: rowBg }, stateShort.padEnd(layout.status, ' '))
+    ),
+    React.createElement(Gap, { rowBg }),
+    React.createElement(Box, { width: layout.progress, flexShrink: 0 }, 
+      React.createElement(Text, { color: textColor, dimColor: isDimmed, backgroundColor: rowBg }, state === 'COMPLETED' ? '::' : React.createElement(Spinner, { type: 'dots' }))
+    ),
+    layout.time > 0 && React.createElement(Gap, { rowBg }),
+    layout.time > 0 && React.createElement(Box, { width: layout.time, flexShrink: 0 }, 
+      React.createElement(Text, { color: textColor, dimColor: isDimmed, backgroundColor: rowBg }, ageStr)
+    ),
+    React.createElement(Box, { flexGrow: 1 })
+  )
 }
 
-export function SubAgentRow({ agent, tick, isLast }) {
+export function SubAgentRow({ agent, tick, isLast, selected = false, isDimmed = false }) {
   const profile = getLayoutProfile()
   const layout = COLUMN_LAYOUT[profile]
   const state = agent.state || 'UNKNOWN'
-  const stateColor = STATUS_COLOR[state] || THEME.text
-  const stateShort = STATUS_SHORT[state] || state.substring(0, 5)
+  
+  const baseColor = STATUS_COLOR[state] || THEME.text
+  const textColor = baseColor
+  
+  const stateShort = STATUS_SHORT[state] || state.substring(0, 6)
+  const isFocused = selected && !isDimmed
+  const rowBg = selected ? (isDimmed ? '#2b2b2b' : THEME.focusBg) : undefined
 
-  const shortId = (agent.id || '').slice(0, 4)
-  const title = trimCell(agent.title || agent.role || 'agent', layout.title - 3)
+  const shortId = (agent.id || '').slice(0, 4) 
+  const title = trimCell(agent.title || agent.role || 'agent', layout.title - 2)
   const repoStr = extractRepoName(agent.repoDisplay || agent.repo || '')
-  const connector = isLast ? '`- ' : '|- '
+  const repoTrimmed = trimCell(repoStr, layout.repo)
+  
+  const connector = isLast ? '└─' : '├─'
   const ageStr = ago(agent.lastUpdated || agent.createdAt)
 
   return React.createElement(Box, {
-    paddingX: 0,
     width: '100%',
     height: 1,
     overflow: 'hidden',
+    backgroundColor: rowBg,
     flexDirection: 'row',
-    minWidth: 0,
   },
-  React.createElement(Cell, { width: 1 },
-    React.createElement(Text, null, ' ')
-  ),
-  React.createElement(Cell, { width: layout.id },
-    React.createElement(Text, { color: 'gray' }, connector),
-    React.createElement(Text, { color: THEME.accentMuted, wrap: 'truncate' }, shortId)
-  ),
-  React.createElement(Cell, { width: layout.title },
-    React.createElement(Text, { color: THEME.text, wrap: 'truncate' }, `  ${title}`)
-  ),
-  React.createElement(Gap),
-  React.createElement(Cell, { grow: true, minWidth: layout.repoMin },
-    React.createElement(Text, { color: THEME.subtleText, wrap: 'truncate', dimColor: true }, repoStr)
-  ),
-  React.createElement(Gap),
-  React.createElement(Cell, { width: layout.status },
-    React.createElement(Text, { color: stateColor, wrap: 'truncate' }, stateShort)
-  ),
-  React.createElement(Gap),
-  React.createElement(Cell, { width: layout.progress },
-    React.createElement(FillBar, { tick, width: layout.progress, isDimmed: false, state })
-  ),
-  layout.time > 0 && React.createElement(Cell, { width: layout.time },
-    React.createElement(Text, { color: ageStr === 'now' ? 'whiteBright' : 'gray', dimColor: ageStr !== 'now', wrap: 'truncate' }, ageStr)
-  ))
+    React.createElement(Box, { width: 2, flexShrink: 0 }, 
+      React.createElement(Text, { color: textColor, bold: !isDimmed, dimColor: isDimmed, backgroundColor: rowBg }, isFocused ? '> ' : '  ')
+    ),
+    React.createElement(Box, { width: layout.id, flexShrink: 0, flexDirection: 'row' }, 
+      React.createElement(Text, { color: textColor, dimColor: isDimmed, backgroundColor: rowBg }, connector),
+      React.createElement(Text, { color: textColor, dimColor: isDimmed, backgroundColor: rowBg }, shortId.padEnd(layout.id - connector.length, ' '))
+    ),
+    React.createElement(Gap, { rowBg }),
+    React.createElement(Box, { width: layout.title, flexShrink: 0 }, 
+      React.createElement(Text, { color: textColor, dimColor: isDimmed, wrap: 'truncate', backgroundColor: rowBg }, `  ${title}`)
+    ),
+    React.createElement(Gap, { rowBg }),
+    React.createElement(Box, { width: layout.repo, flexShrink: 0 }, 
+      React.createElement(Text, { color: textColor, dimColor: isDimmed, wrap: 'truncate', backgroundColor: rowBg }, repoTrimmed)
+    ),
+    React.createElement(Gap, { rowBg }),
+    React.createElement(Box, { width: layout.status, flexShrink: 0 }, 
+      React.createElement(Text, { color: textColor, bold: !isDimmed, dimColor: isDimmed, backgroundColor: rowBg }, stateShort.padEnd(layout.status, ' '))
+    ),
+    React.createElement(Gap, { rowBg }),
+    React.createElement(Box, { width: layout.progress, flexShrink: 0 }, 
+      React.createElement(Text, { color: textColor, dimColor: isDimmed, backgroundColor: rowBg }, state === 'COMPLETED' ? '::' : React.createElement(Spinner, { type: 'dots' }))
+    ),
+    layout.time > 0 && React.createElement(Gap, { rowBg }),
+    layout.time > 0 && React.createElement(Box, { width: layout.time, flexShrink: 0 }, 
+      React.createElement(Text, { color: textColor, dimColor: isDimmed, backgroundColor: rowBg }, ageStr)
+    ),
+    React.createElement(Box, { flexGrow: 1 })
+  )
 }
 
-export function EmptySubAgentsRow() {
+export function EmptySubAgentsRow({ selected = false, isDimmed = false }) {
+  const rowBg = selected ? (isDimmed ? '#2b2b2b' : THEME.focusBg) : undefined
+  const textColor = THEME.subtleText
+  
   return React.createElement(Box, {
-    paddingX: 1,
     width: '100%',
     height: 1,
     flexDirection: 'row',
-    minWidth: 0,
+    backgroundColor: rowBg,
+    overflow: 'hidden'
   },
-  React.createElement(Text, { color: 'gray' }, '       `- '),
-  React.createElement(Text, { color: 'gray', dimColor: true }, 'none yet'))
+    React.createElement(Box, { width: 2, flexShrink: 0 }),
+    React.createElement(Box, { width: 6, flexShrink: 0 }, 
+      React.createElement(Text, { color: textColor, dimColor: true, backgroundColor: rowBg }, '└─    ')
+    ),
+    React.createElement(Gap, { rowBg }),
+    React.createElement(Box, { flexGrow: 1 }, 
+      React.createElement(Text, { color: textColor, dimColor: true, backgroundColor: rowBg }, 'none yet')
+    )
+  )
 }
 
 export function buildRows(sessions, expandedIds) {

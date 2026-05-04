@@ -17,7 +17,26 @@ const ORCHESTRATOR_SYSTEM_PROMPT = `### SYSTEM IDENTITY
 3. Use \`dispatch_sub_agent\` for each module.
 4. Manage agents via tools (\`kill_sub_agent\`, \`set_agent_dependency\`, \`merge_branches\`).
 5. Output tool calls as JSON. Wait for \`[TOOL_RESULT: ...]\` confirmations before proceeding.
-6. React to \`[AGENT_UPDATE: ...]\` messages to manage dependencies and auto-retry if needed.`;
+6. React to \`[AGENT_UPDATE: ...]\` messages to manage dependencies and auto-retry if needed.
+
+### OUTPUT FORMAT — STRICT
+You MUST output tool calls as a JSON array. Each element MUST follow this exact shape:
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "<tool_name>",
+      "arguments": { ...args as a JSON object... }
+    }
+  }
+]
+RULES:
+- The outer key is "function", NOT "parameters", NOT "args".
+- The inner key is "arguments", NOT "parameters", NOT "args".
+- Always output an ARRAY [ ] even for a single tool call.
+- Do NOT add prose before or after the JSON array when calling tools.
+- Do NOT wrap the JSON in markdown code fences.
+- Wait for a [TOOL_RESULT: ...] line before outputting the next batch of tool calls.`;
 
 // ------------------------------------------------------------------
 // 2. AVAILABLE TOOLS (JSON SCHEMA)
@@ -176,30 +195,68 @@ export { handleOrchestratorToolCall };
 // ------------------------------------------------------------------
 // 3. CORE DISPATCH LOGIC
 // ------------------------------------------------------------------
-export async function dispatchLeadOrchestrator(userInput, taskValue = 1, title = "Orchestrator Session") {
+
+// ── FIX #5: Derive a clean short title from user input ─────────────
+// Previously the title was set to `ORCHESTRATOR— ${raw.substring(0, 40)}`
+// which just truncates mid-word. This extracts the first meaningful
+// phrase (up to 40 chars, breaking on a word boundary).
+function deriveOrchestratorTitle(userInput) {
+  const raw = userInput.trim()
+  if (raw.length <= 40) return `ORCHESTRATOR— ${raw}`
+
+  // Try to break on a word boundary before 40 chars
+  const truncated = raw.substring(0, 40)
+  const lastSpace = truncated.lastIndexOf(' ')
+  const shortDesc = lastSpace > 10 ? truncated.substring(0, lastSpace) : truncated
+  return `ORCHESTRATOR— ${shortDesc}`
+}
+
+export async function dispatchLeadOrchestrator(userInput, taskValue = 1, title = null) {
   const config = getConfig();
 
   if (!config.source) {
     throw new Error('No source set. Run: jorch config set-source sources/github-owner-repo');
   }
 
-  // Inject user input and Task Value into the final payload
-  const fullPrompt = `${ORCHESTRATOR_SYSTEM_PROMPT}\n\n[ORCHESTRATOR TOOLSET]\nUse the provided tools to manage sub-agents.\n\n[USER INPUT]\nTask Value: ${taskValue}\nPrompt: ${userInput}`;
+  // ── FIX #5: Build the clean title before creating the session ─────
+  // The title is derived locally so it's never overwritten by Jules'
+  // raw-prompt title. The ORCHESTRATOR— prefix is also what protects
+  // it from being overwritten in the sync loop.
+  const cleanTitle = title || deriveOrchestratorTitle(userInput)
+
+  // Build the full prompt — note we no longer ask Jules to "name this
+  // session" since the TUI sets the name itself. That instruction caused
+  // Jules to output the name as its first message rather than diving
+  // straight into tool calls.
+  const fullPrompt = [
+    ORCHESTRATOR_SYSTEM_PROMPT,
+    '',
+    '[ORCHESTRATOR TOOLSET]',
+    'Here are your available tools. You must output tool calls as JSON matching these schemas:',
+    JSON.stringify(ORCHESTRATOR_TOOLS, null, 2),
+    '',
+    '[USER INPUT]',
+    `Task Value: ${taskValue}`,
+    `Prompt: ${userInput}`,
+  ].join('\n')
+
   // Create Jules session configured as the Hybrid Orchestrator
   const julesSession = await createSession({
     prompt: fullPrompt,
     source: config.source,
-    startingBranch: config.branch || undefined, // Omitting default to let Jules pick the repository default
-    requirePlanApproval: false, // Orchestrator handles triage autonomously
+    startingBranch: config.branch || undefined,
+    requirePlanApproval: false,
     tools: ORCHESTRATOR_TOOLS
   });
 
   const sessionId = julesSession.name?.split('/').pop() || julesSession.id;
 
-  // Track the orchestrator session in the state store
+  // Track the orchestrator session in the state store.
+  // We set title here with the ORCHESTRATOR— prefix so the sync loop
+  // will always preserve it (see cleanRemoteTitle in useSessionManager).
   const sessionData = {
     id: sessionId,
-    title,
+    title: cleanTitle,
     type: 'orchestrator',
     state: julesSession.state || 'QUEUED',
     createdAt: Date.now(),

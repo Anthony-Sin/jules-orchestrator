@@ -35,10 +35,6 @@ export async function createSession({ prompt, source, startingBranch, requirePla
     automationMode: getConfig().autoPr !== false ? "AUTO_CREATE_PR" : undefined,
   }
 
-  if (tools) {
-    payload.tools = tools;
-  }
-
   // Only add githubRepoContext with startingBranch if it's explicitly provided.
   // Otherwise, omit it so Jules defaults to the repository's default branch.
   if (startingBranch) {
