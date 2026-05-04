@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { Box, Text, useInput } from 'ink'
 
 function clamp(value, min, max) {
@@ -60,9 +60,18 @@ export function ScrollInput({
   maxRows = 4,
 }) {
   const [cursorOffset, setCursorOffset] = useState(value.length)
+  const [scrollOffset, setScrollOffset] = useState(0)
+  
+  const latestValue = useRef(value)
+  const latestCursor = useRef(cursorOffset)
 
   useEffect(() => {
-    setCursorOffset(offset => Math.min(offset, value.length))
+    latestValue.current = value
+    setCursorOffset(offset => {
+      const newOffset = Math.min(offset, value.length)
+      latestCursor.current = newOffset
+      return newOffset
+    })
   }, [value])
 
   useInput((input, key) => {
@@ -70,35 +79,57 @@ export function ScrollInput({
     if (key.upArrow || key.downArrow || key.tab || (key.shift && key.tab) || (key.ctrl && input === 'c')) return
 
     if (key.return) {
-      onSubmit?.(value)
+      onSubmit?.(latestValue.current)
       return
     }
 
-    let nextCursor = cursorOffset
-    let nextValue = value
+    let nextCursor = latestCursor.current
+    let nextValue = latestValue.current
 
     if (key.leftArrow) {
-      nextCursor = Math.max(0, cursorOffset - 1)
+      nextCursor = Math.max(0, nextCursor - 1)
     } else if (key.rightArrow) {
-      nextCursor = Math.min(value.length, cursorOffset + 1)
+      nextCursor = Math.min(nextValue.length, nextCursor + 1)
     } else if (key.backspace || key.delete) {
-      if (cursorOffset > 0) {
-        nextValue = value.slice(0, cursorOffset - 1) + value.slice(cursorOffset)
-        nextCursor = cursorOffset - 1
+      if (nextCursor > 0) {
+        nextValue = nextValue.slice(0, nextCursor - 1) + nextValue.slice(nextCursor)
+        nextCursor = nextCursor - 1
       }
     } else if (input && !key.meta && !key.ctrl) {
-      nextValue = value.slice(0, cursorOffset) + input + value.slice(cursorOffset)
-      nextCursor = cursorOffset + input.length
+      nextValue = nextValue.slice(0, nextCursor) + input + nextValue.slice(nextCursor)
+      nextCursor = nextCursor + input.length
     }
 
+    latestCursor.current = nextCursor
+    latestValue.current = nextValue
     setCursorOffset(nextCursor)
-    if (nextValue !== value) onChange?.(nextValue)
+    
+    if (nextValue !== value) {
+      onChange?.(nextValue)
+    }
   }, { isActive: focus })
-
-  const [scrollOffset, setScrollOffset] = useState(0)
 
   const width = Math.max(8, visibleWidth)
   const rows = Math.max(1, maxRows)
+
+  const wrapped = buildWrappedLines(value, width)
+  const cursor = getCursorPos(value, cursorOffset, width)
+
+  if (cursor.line >= wrapped.length) {
+    wrapped.push('')
+  }
+
+  useEffect(() => {
+    setScrollOffset(prev => {
+      let newOffset = prev
+      if (cursor.line < newOffset) {
+        newOffset = cursor.line
+      } else if (cursor.line >= newOffset + rows) {
+        newOffset = cursor.line - rows + 1
+      }
+      return newOffset
+    })
+  }, [cursor.line, rows])
 
   if (!value) {
     if (!placeholder) {
@@ -121,24 +152,15 @@ export function ScrollInput({
     )
   }
 
-  const wrapped = buildWrappedLines(value, width)
-  const cursor = getCursorPos(value, cursorOffset, width)
-
-  useEffect(() => {
-    setScrollOffset(prev => {
-      let newOffset = prev
-      if (cursor.line < newOffset) {
-        newOffset = cursor.line
-      } else if (cursor.line >= newOffset + rows) {
-        newOffset = cursor.line - rows + 1
-      }
-      return newOffset
-    })
-  }, [cursor.line, rows])
-
-  const start = Math.max(0, Math.min(scrollOffset, wrapped.length - 1))
+  // --- THE FIX IS HERE ---
+  // Force the scroll offset to snap back if the container expands and reveals empty space
+  const maxPossibleScroll = Math.max(0, wrapped.length - rows)
+  const safeScrollOffset = Math.min(scrollOffset, maxPossibleScroll)
+  
+  const start = Math.max(0, safeScrollOffset)
   const end = Math.min(wrapped.length, start + rows)
   const visibleLines = wrapped.slice(start, end)
+  // -----------------------
 
   return React.createElement(Box, {
     minWidth: 0,

@@ -273,6 +273,7 @@ export function useKeyboard(p) {
       return
     }
 
+    // --- FIX IS HERE: WE LET GITDIFF.JS HANDLE CONTENT SCROLLING ---
     if (mode === 'diff') {
       if (diffFocus === 'files') {
         if (key.leftArrow) { setDiffFileSel(i => Math.max(0, i - 1)); return }
@@ -284,14 +285,11 @@ export function useKeyboard(p) {
           return
         }
         if (key.return) { setDiffFocus('content'); return }
-      } else {
-        if (key.upArrow) { setDiffScrollOffset(o => Math.max(0, o - 1)); return }
-        if (key.downArrow) { setDiffScrollOffset(o => o + 1); return }
-        if (key.pageUp) { setDiffScrollOffset(o => Math.max(0, o - 10)); return }
-        if (key.pageDown) { setDiffScrollOffset(o => o + 10); return }
       }
-      return
+      // Content scrolling (Up/Down) is now intercepted directly inside gitdiff.js
+      return 
     }
+    // ---------------------------------------------------------------
 
     if (mode === 'graph') {
       if (graphViewMode === 'plan') {

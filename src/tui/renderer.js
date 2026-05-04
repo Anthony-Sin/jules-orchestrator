@@ -293,8 +293,6 @@ export function Dashboard({ searchTerm = '' }) {
       )
     ),
 
-    React.createElement(Box, { width: '100%', height: 1, flexShrink: 0 }),
-
     showHelp
       ? React.createElement(HelpScreen)
       : React.createElement(Box, {

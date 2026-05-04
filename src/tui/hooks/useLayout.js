@@ -14,7 +14,7 @@ export function useLayout({
 }) {
   const { columns, rows } = useTerminalSize()
 
-  const TERMINAL_ROWS = Math.max(10, rows - 1)
+  const TERMINAL_ROWS = Math.max(10, rows)
   const isWide = columns >= 100
   const isCompact = columns < 110
   const isTight = columns < 92

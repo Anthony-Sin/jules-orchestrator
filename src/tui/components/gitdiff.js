@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react'
-import { Box, Text } from 'ink'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
+import { Box, Text, useInput } from 'ink'
 import { parsePatch } from 'diff'
 import { getAllActivities } from '../../state/jules-api.js'
 import { THEME } from '../theme.js'
@@ -19,20 +19,6 @@ function shortenFileName(raw, maxLen = 32) {
   const name = parts.length > 2 ? parts.slice(-2).join('/') : normalized
   if (name.length <= maxLen) return name
   return `${name.slice(0, Math.max(8, maxLen - 3))}...`
-}
-
-function wrapForWidth(text, width) {
-  const safeWidth = Math.max(1, width)
-  const src = String(text ?? '')
-  if (src.length === 0) return ['']
-
-  const lines = []
-  let idx = 0
-  while (idx < src.length) {
-    lines.push(src.slice(idx, idx + safeWidth))
-    idx += safeWidth
-  }
-  return lines
 }
 
 function buildActivitySignature(activities) {
@@ -137,7 +123,6 @@ export function GitDiffViewer({
   height,
   isDimmed,
   fileSel = 0,
-  scrollOffset = 0,
   diffFocus,
   setDiffFileSel,
   refreshToken = 0,
@@ -146,6 +131,47 @@ export function GitDiffViewer({
   const [activities, setActivities] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  
+  // Local scroll states
+  const [hScroll, setHScroll] = useState(0)
+  const [localScroll, setLocalScroll] = useState(0)
+  const maxStartRef = useRef(0)
+  
+  // Track total files for the quick-switch shortcuts
+  const totalFilesRef = useRef(0)
+
+  // Reset scroll when changing files
+  useEffect(() => {
+    setHScroll(0)
+    setLocalScroll(0)
+  }, [fileSel, sessionId])
+
+  // Localized useInput to completely fix the memory overscroll bug
+  useInput((input, key) => {
+    if (isDimmed || diffFocus !== 'content') return;
+    
+    // --- THE NEW ULTRA-FAST FILE SWITCHING ---
+    if (input === '[') {
+      setDiffFileSel?.(prev => Math.max(0, prev - 1));
+      return;
+    }
+    if (input === ']') {
+      setDiffFileSel?.(prev => Math.min(Math.max(0, totalFilesRef.current - 1), prev + 1));
+      return;
+    }
+    // -----------------------------------------
+
+    // Horizontal scrolling
+    if (key.leftArrow) setHScroll(prev => Math.max(0, prev - 6));
+    if (key.rightArrow) setHScroll(prev => prev + 6);
+    
+    // Vertical scrolling (Strictly capped to maxStartRef!)
+    if (key.upArrow) setLocalScroll(prev => Math.max(0, prev - 1));
+    if (key.downArrow) setLocalScroll(prev => Math.min(maxStartRef.current, prev + 1));
+    if (key.pageUp) setLocalScroll(prev => Math.max(0, prev - 10));
+    if (key.pageDown) setLocalScroll(prev => Math.min(maxStartRef.current, prev + 10));
+
+  }, { isActive: !isDimmed && diffFocus === 'content' });
 
   useEffect(() => {
     if (!sessionId) {
@@ -200,6 +226,7 @@ export function GitDiffViewer({
 
   useEffect(() => {
     const total = parsedDiff.length
+    totalFilesRef.current = total // Sync ref for the shortcuts
     setDiffFileCount?.(total)
 
     if (total > 0 && setDiffFileSel && fileSel >= total) {
@@ -266,13 +293,15 @@ export function GitDiffViewer({
     color: isDimmed ? THEME.subtleText : (isFilesFocused ? THEME.text : THEME.subtleText),
     bold: true,
     wrap: 'truncate',
-  }, `Files [${safeSelIdx + 1}/${total}] (left/right switch | enter view diff | tab chat)`),
+  }, `Files [${safeSelIdx + 1}/${total}] ( [ ] switch | enter view diff | tab chat )`), // Updated header text to show new shortcuts!
   React.createElement(Box, { flexDirection: 'row', overflow: 'hidden', flexShrink: 0 },
     React.createElement(Text, { color: THEME.subtleText }, showLeft ? '< ' : '  '),
     ...tabElements,
     showRight ? React.createElement(Text, { color: THEME.subtleText }, ' >') : null))
 
-  const useSplitView = width >= 120
+  // Always use Split View side-by-side
+  const useSplitView = true
+
   const panelWidth = Math.max(16, width - 2)
   const sidePad = 1
   const innerWidth = Math.max(10, panelWidth - (sidePad * 2))
@@ -281,57 +310,25 @@ export function GitDiffViewer({
   const hunkWidth = innerWidth
 
   const allLines = []
-  const pushHunkWrapped = (text, color) => {
-    for (const line of wrapForWidth(text, hunkWidth)) {
-      allLines.push({ type: 'hunk', text: line, color })
-    }
-  }
 
   if (selectedFile?.hunks) {
-    pushHunkWrapped(
-      `FILE ${normalizeFileName(selectedFile.oldFileName || '')} -> ${normalizeFileName(selectedFile.newFileName || '')}`,
-      THEME.subtleText
-    )
+    allLines.push({
+      type: 'hunk',
+      text: `FILE ${normalizeFileName(selectedFile.oldFileName || '')} -> ${normalizeFileName(selectedFile.newFileName || '')}`,
+      color: THEME.subtleText
+    })
     allLines.push({ type: 'hunk', text: '', color: THEME.subtleText })
 
     for (const hunk of selectedFile.hunks) {
-      pushHunkWrapped(
-        `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@ ${hunk.hunkHeader || ''}`,
-        THEME.accentSoft
-      )
+      allLines.push({
+        type: 'hunk',
+        text: `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@ ${hunk.hunkHeader || ''}`,
+        color: THEME.accentSoft
+      })
 
       for (const rawLine of hunk.lines || []) {
         const marker = rawLine[0] || ' '
         const body = rawLine.slice(1)
-
-        if (!useSplitView) {
-          let prefix = ' '
-          let color = THEME.subtleText
-          let bg
-
-          if (marker === '+') {
-            prefix = '+'
-            color = 'green'
-            bg = '#1d2c1d'
-          } else if (marker === '-') {
-            prefix = '-'
-            color = THEME.accentSoft
-            bg = '#3b1414'
-          }
-
-          const wrapped = wrapForWidth(body, Math.max(4, innerWidth - 2))
-          wrapped.forEach((chunk, idx) => {
-            allLines.push({
-              type: 'single',
-              prefix: idx === 0 ? prefix : ' ',
-              text: chunk,
-              color,
-              bg,
-              dim: marker === ' ',
-            })
-          })
-          continue
-        }
 
         let leftText = ''
         let rightText = ''
@@ -353,31 +350,37 @@ export function GitDiffViewer({
           rightText = body
         }
 
-        const leftWrapped = wrapForWidth(leftText, leftColWidth)
-        const rightWrapped = wrapForWidth(rightText, rightColWidth)
-        const rows = Math.max(leftWrapped.length, rightWrapped.length)
-
-        for (let i = 0; i < rows; i++) {
-          allLines.push({
-            type: 'pair',
-            leftText: leftWrapped[i] || '',
-            rightText: rightWrapped[i] || '',
-            leftColor,
-            rightColor,
-            leftBg,
-            rightBg,
-            leftDim: marker === ' ',
-            rightDim: marker === ' ',
-          })
-        }
+        allLines.push({
+          type: 'pair',
+          leftText,
+          rightText,
+          leftColor,
+          rightColor,
+          leftBg,
+          rightBg,
+          leftDim: marker === ' ',
+          rightDim: marker === ' ',
+        })
       }
     }
   }
 
-  const maxStart = Math.max(0, allLines.length - diffPanelH)
-  const safeScroll = Number.isFinite(scrollOffset) ? scrollOffset : 0
+  // Set the max limit for the scroll handler dynamically
+  const innerDiffRows = Math.max(1, diffPanelH - 2)
+  const maxStart = Math.max(0, allLines.length - innerDiffRows)
+  maxStartRef.current = maxStart 
+
+  // Apply the strictly capped localized scroll state
+  const safeScroll = Number.isFinite(localScroll) ? localScroll : 0
   const diffStart = Math.max(0, Math.min(safeScroll, maxStart))
-  const visibleDiffLines = allLines.slice(diffStart, diffStart + diffPanelH)
+  const visibleDiffLines = allLines.slice(diffStart, diffStart + innerDiffRows)
+
+  const sliceText = (text, w) => {
+    const safeText = String(text ?? '')
+    if (hScroll >= safeText.length) return ' '.repeat(w)
+    const sliced = safeText.slice(hScroll, hScroll + w)
+    return sliced.padEnd(w, ' ')
+  }
 
   const diffPanel = React.createElement(Box, {
     flexDirection: 'column',
@@ -392,31 +395,16 @@ export function GitDiffViewer({
     const absoluteIdx = diffStart + idx
 
     if (line.type === 'hunk') {
+      const vHunk = sliceText(line.text, hunkWidth)
       return React.createElement(Box, { key: `h_${absoluteIdx}`, height: 1, overflow: 'hidden' },
         React.createElement(Text, {
           color: isDimmed ? THEME.subtleText : (line.color || THEME.text),
           wrap: 'truncate',
-        }, line.text))
+        }, vHunk))
     }
 
-    if (line.type === 'single') {
-      return React.createElement(Box, {
-        key: `u_${absoluteIdx}`,
-        height: 1,
-        overflow: 'hidden',
-        backgroundColor: isDimmed ? undefined : line.bg,
-        flexDirection: 'row',
-      },
-      React.createElement(Text, {
-        color: isDimmed ? THEME.subtleText : line.color,
-        dimColor: line.dim,
-      }, `${line.prefix} `),
-      React.createElement(Text, {
-        color: isDimmed ? THEME.subtleText : line.color,
-        dimColor: line.dim,
-        wrap: 'truncate',
-      }, line.text))
-    }
+    const vLeft = sliceText(line.leftText, leftColWidth)
+    const vRight = sliceText(line.rightText, rightColWidth)
 
     return React.createElement(Box, { key: `p_${absoluteIdx}`, height: 1, flexDirection: 'row', overflow: 'hidden' },
       React.createElement(Box, {
@@ -428,7 +416,7 @@ export function GitDiffViewer({
         color: isDimmed ? THEME.subtleText : line.leftColor,
         dimColor: line.leftDim,
         wrap: 'truncate',
-      }, line.leftText.padEnd(leftColWidth))),
+      }, vLeft)),
       React.createElement(Box, { width: 1, flexShrink: 0 },
         React.createElement(Text, { color: THEME.subtleText }, '|')),
       React.createElement(Box, {
@@ -440,7 +428,7 @@ export function GitDiffViewer({
         color: isDimmed ? THEME.subtleText : line.rightColor,
         dimColor: line.rightDim,
         wrap: 'truncate',
-      }, line.rightText.padEnd(rightColWidth))))
+      }, vRight)))
   }))
 
   return React.createElement(Box, { flexDirection: 'column', width, height, overflow: 'hidden' }, filesPanel, diffPanel)
