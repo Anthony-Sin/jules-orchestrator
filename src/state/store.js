@@ -72,18 +72,6 @@ function normalizePath(p) {
   return p.endsWith('/') ? p.slice(0, -1) : p
 }
 
-function isConflict(lockedKey, reqKey) {
-  if (lockedKey === reqKey) return true
-  // DOMAIN keys are exact match only
-  if (lockedKey.startsWith('DOMAIN:') || reqKey.startsWith('DOMAIN:')) return false
-
-  const lPath = normalizePath(lockedKey)
-  const rPath = normalizePath(reqKey)
-
-  if (lPath === rPath) return true
-  return rPath.startsWith(lPath + '/') || lPath.startsWith(rPath + '/')
-}
-
 export function lockFiles(sessionId, files) {
   const locks = getFileLocks()
   for (const f of files) locks[f] = sessionId
@@ -105,17 +93,68 @@ export function checkFileLockConflicts(files) {
 
   if (lockKeys.length === 0 || files.length === 0) return conflicts
 
+  // Build indices for fast lookup
+  const domainLocks = new Map()
+  const pathLocks = new Map()
+  const childLocks = new Map()
+
+  for (let j = 0; j < lockKeys.length; j++) {
+    const lockedKey = lockKeys[j]
+    const sessionId = locks[lockedKey]
+    const conflictInfo = { file: lockedKey, lockedBy: sessionId, index: j }
+
+    if (lockedKey.startsWith('DOMAIN:')) {
+      if (!domainLocks.has(lockedKey)) {
+        domainLocks.set(lockedKey, conflictInfo)
+      }
+      continue
+    }
+
+    const lPath = normalizePath(lockedKey)
+    if (!pathLocks.has(lPath)) {
+      pathLocks.set(lPath, conflictInfo)
+    }
+
+    const segments = lPath.split('/')
+    // If lock is 'a/b/c', it conflicts with 'a/b' and 'a' (requested as directories)
+    for (let k = 1; k < segments.length; k++) {
+      const parentPath = segments.slice(0, k).join('/')
+      if (!childLocks.has(parentPath)) {
+        childLocks.set(parentPath, conflictInfo)
+      }
+    }
+  }
+
   const uniqueFiles = Array.from(new Set(files))
 
-  for (let i = 0; i < uniqueFiles.length; i++) {
-    const file = uniqueFiles[i]
+  for (const file of uniqueFiles) {
+    let best = null
 
-    for (let j = 0; j < lockKeys.length; j++) {
-      const lockedKey = lockKeys[j]
-      if (isConflict(lockedKey, file)) {
-        conflicts.push({ file, lockedBy: locks[lockedKey] })
-        break // Avoid duplicate conflicts for the same requested file
+    if (file.startsWith('DOMAIN:')) {
+      best = domainLocks.get(file) || null
+    } else {
+      const rPath = normalizePath(file)
+      best = pathLocks.get(rPath) || null
+
+      // Check if any parent of rPath is locked
+      const segments = rPath.split('/')
+      for (let k = 1; k < segments.length; k++) {
+        const parentPath = segments.slice(0, k).join('/')
+        const c = pathLocks.get(parentPath)
+        if (c && (!best || c.index < best.index)) {
+          best = c
+        }
       }
+
+      // Check if any child of rPath is locked
+      const c = childLocks.get(rPath)
+      if (c && (!best || c.index < best.index)) {
+        best = c
+      }
+    }
+
+    if (best) {
+      conflicts.push({ file, lockedBy: best.lockedBy })
     }
   }
 

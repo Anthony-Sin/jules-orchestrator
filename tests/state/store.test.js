@@ -172,6 +172,41 @@ test('File Lock functions', async (t) => {
       []
     );
   });
+
+  await t.test('checkFileLockConflicts preserves "first found" behavior with multiple overlapping locks', () => {
+    mockData.clear();
+    // Insert locks in specific order.
+    // In JS objects (and Conf), keys usually preserve insertion order for non-integer keys.
+    const fileLocks = {};
+    fileLocks['src/components'] = 'session-parent';
+    fileLocks['src/components/Button.js'] = 'session-child';
+    mockData.set('fileLocks', fileLocks);
+
+    // If we request src/components/Button.js, it conflicts with BOTH.
+    // It should return the one that came first in the locks object (session-parent).
+    let conflicts = checkFileLockConflicts(['src/components/Button.js']);
+    assert.deepStrictEqual(conflicts, [{ file: 'src/components/Button.js', lockedBy: 'session-parent' }]);
+
+    // Reverse the order
+    mockData.clear();
+    const fileLocksRev = {};
+    fileLocksRev['src/components/Button.js'] = 'session-child';
+    fileLocksRev['src/components'] = 'session-parent';
+    mockData.set('fileLocks', fileLocksRev);
+
+    conflicts = checkFileLockConflicts(['src/components/Button.js']);
+    assert.deepStrictEqual(conflicts, [{ file: 'src/components/Button.js', lockedBy: 'session-child' }]);
+
+    // Test with directory requested, and multiple child locks
+    mockData.clear();
+    const fileLocksDir = {};
+    fileLocksDir['src/components/Input.js'] = 'session-input';
+    fileLocksDir['src/components/Button.js'] = 'session-button';
+    mockData.set('fileLocks', fileLocksDir);
+
+    conflicts = checkFileLockConflicts(['src/components']);
+    assert.deepStrictEqual(conflicts, [{ file: 'src/components', lockedBy: 'session-input' }]);
+  });
 });
 
 test('General State functions', async (t) => {

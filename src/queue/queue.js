@@ -13,16 +13,24 @@ export function enqueue(task) {
 export function dequeue(type) {
   const queue = getQueue()
 
+  const allSessionsArray = getSessions() || [];
+  // Create a Map for O(1) session lookups to avoid O(N^2) or O(N*M) performance bottlenecks
+  const sessionsMap = new Map();
+  for (const session of allSessionsArray) {
+    sessionsMap.set(session.id, session);
+  }
+
   // Dependency check logic: wake up any PAUSED agents if their target is COMPLETED
-  const allSessions = getSessions() || [];
-  for (const dep of allSessions) {
+  for (const dep of allSessionsArray) {
     if (dep.state === 'PAUSED' && dep.waitingOn) {
-      const targetSession = allSessions.find(s => s.id === dep.waitingOn);
+      const targetSession = sessionsMap.get(dep.waitingOn);
       if (targetSession && targetSession.state === 'COMPLETED') {
         upsertSession({ id: dep.id, state: 'QUEUED', waitingOn: null });
       }
     }
   }
+
+  const deadStates = ['FAILED', 'KILLED', 'COMPLETED'];
 
   // Find the highest priority task that matches the type and has no file lock conflicts
   const idx = queue.findIndex(t => {
@@ -34,12 +42,10 @@ export function dequeue(type) {
 
     if (conflicts.length > 0) {
       // Check if any of the conflicting sessions are dead
-      const sessions = getSessions() || [];
-      const deadStates = ['FAILED', 'KILLED', 'COMPLETED'];
       const deadSessionIds = new Set();
 
       for (const conflict of conflicts) {
-        const lockingSession = sessions.find(s => s.id === conflict.lockedBy);
+        const lockingSession = sessionsMap.get(conflict.lockedBy);
         // If the session doesn't exist, or it is in a dead state, it's an orphaned lock
         if (!lockingSession || deadStates.includes(lockingSession.state)) {
           deadSessionIds.add(conflict.lockedBy);
