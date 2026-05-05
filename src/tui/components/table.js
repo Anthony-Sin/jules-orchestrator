@@ -123,7 +123,11 @@ export function AgentRow({ agent, selected, tick, isDimmed }) {
     ),
     React.createElement(Gap, { rowBg }),
     React.createElement(Box, { width: layout.progress, flexShrink: 0 }, 
-      React.createElement(Text, { color: textColor, dimColor: isDimmed, backgroundColor: rowBg }, state === 'COMPLETED' ? '::' : React.createElement(Spinner, { type: 'dots' }))
+      React.createElement(Text, { color: textColor, dimColor: isDimmed, backgroundColor: rowBg },
+        state === 'COMPLETED' ? '::' :
+        (['QUEUED', 'PLANNING', 'IN_PROGRESS'].includes(state)) ? React.createElement(Spinner, { type: 'dots' }) :
+        '--'
+      )
     ),
     layout.time > 0 && React.createElement(Gap, { rowBg }),
     layout.time > 0 && React.createElement(Box, { width: layout.time, flexShrink: 0 }, 

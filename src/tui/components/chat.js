@@ -4,6 +4,7 @@ import { wrapText, buildMarkdownLines } from '../markdown.js'
 import { Notepad } from './notepad.js'
 import { ScrollInput } from './scroll-input.js'
 import { THEME } from '../theme.js'
+import { STATUS_COLOR } from './table.js'
 import Spinner from 'ink-spinner'
 
 const COLLAPSE_THRESHOLD = 4
@@ -186,20 +187,28 @@ export function ChatPanel({
   function getStatusBanner(state, progress, preview) {
     if (preview) return { text: preview, spinner: false, color: THEME.accentSoft }
     
+    const safeProgress = String(progress || '')
+    const truncatedProgress = safeProgress.length > 60 ? safeProgress.substring(0, 57) + '...' : safeProgress
+
+    // 🚀 THE FIX: If it says "Thinking...", force the active visuals even if state is lagging
+    if (truncatedProgress === 'Thinking...') {
+      return { text: 'Thinking...', spinner: true, color: STATUS_COLOR.IN_PROGRESS }
+    }
+
     // 🐛 FIX: If there is no state yet (like the 2 seconds when starting a brand new task), 
     // force the banner to show the progress text so we get instant visual feedback!
     if (!state) {
-      if (progress) return { text: progress, spinner: true, color: THEME.accent }
+      if (truncatedProgress) return { text: truncatedProgress, spinner: true, color: STATUS_COLOR.IN_PROGRESS || THEME.accent }
       return null
     }
     
     switch (state) {
-      case 'QUEUED': return { text: 'Waiting in queue...', spinner: true, color: THEME.subtleText }
-      case 'PLANNING': return { text: progress || 'Analyzing task and generating plan...', spinner: true, color: 'magentaBright' }
-      case 'IN_PROGRESS': return { text: progress || 'Thinking...', spinner: true, color: THEME.accent }
-      case 'AWAITING_PLAN_APPROVAL': return { text: 'Waiting for your approval (type /approve)', spinner: false, color: THEME.warning }
-      case 'AWAITING_USER_FEEDBACK': return { text: 'Waiting for your response...', spinner: false, color: THEME.warning }
-      case 'PAUSED': return { text: 'Session paused.', spinner: false, color: THEME.warning }
+      case 'QUEUED': return { text: 'Starting VM / Waiting in queue...', spinner: true, color: STATUS_COLOR.QUEUED || THEME.subtleText }
+      case 'PLANNING': return { text: truncatedProgress || 'Analyzing task and generating plan...', spinner: true, color: STATUS_COLOR.PLANNING || 'magentaBright' }
+      case 'IN_PROGRESS': return { text: truncatedProgress || 'Thinking...', spinner: true, color: STATUS_COLOR.IN_PROGRESS || THEME.accent }
+      case 'AWAITING_PLAN_APPROVAL': return { text: 'Waiting for your approval (type /approve)', spinner: false, color: STATUS_COLOR.AWAITING_PLAN_APPROVAL || THEME.warning }
+      case 'AWAITING_USER_FEEDBACK': return { text: 'Waiting for reply', spinner: false, color: STATUS_COLOR.AWAITING_USER_FEEDBACK || THEME.warning }
+      case 'PAUSED': return { text: 'Session paused.', spinner: false, color: STATUS_COLOR.PAUSED || THEME.warning }
       default: return null // COMPLETED, FAILED, and KILLED will gracefully hide the banner
     }
   }
