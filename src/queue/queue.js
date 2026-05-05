@@ -1,4 +1,37 @@
 import { getQueue, setQueue, checkFileLockConflicts, getSessions, unlockFiles, upsertSession } from '../state/store.js'
+import { sendMessage } from '../state/jules-api.js'
+
+export async function wakePausedAgents() {
+  const allSessions = getSessions() || []
+  const sessionsMap = new Map()
+  for (const session of allSessions) {
+    sessionsMap.set(session.id, session)
+  }
+
+  const woke = []
+  for (const dep of allSessions) {
+    if (dep.state === 'PAUSED' && dep.waitingOn) {
+      const targetSession = sessionsMap.get(dep.waitingOn)
+      if (targetSession && (targetSession.state === 'COMPLETED' || targetSession.state === 'FAILED')) {
+        upsertSession({ id: dep.id, state: 'QUEUED', waitingOn: null })
+        woke.push(dep.id)
+
+        // Notify the dependent agent that it has been resumed
+        try {
+          await sendMessage(dep.id, `[RESUMED] Agent ${targetSession.id} has reached a terminal state (${targetSession.state}). You may proceed.`)
+        } catch (_) {}
+
+        // Notify the parent orchestrator if applicable
+        if (dep.parentOrchestratorId) {
+          try {
+            await sendMessage(dep.parentOrchestratorId, `[AGENT_UPDATE: ${dep.id}] Resumed because dependency ${targetSession.id} reached state ${targetSession.state}.`)
+          } catch (_) {}
+        }
+      }
+    }
+  }
+  return woke
+}
 
 export function enqueue(task) {
   if (!task || !task.type) {
@@ -6,7 +39,12 @@ export function enqueue(task) {
   }
   const queue = getQueue()
   queue.push({ ...task, queuedAt: Date.now() })
-  queue.sort((a, b) => (b.priority || 0) - (a.priority || 0))
+  queue.sort((a, b) => {
+    const priA = a.priority || 0
+    const priB = b.priority || 0
+    if (priA !== priB) return priB - priA
+    return (a.queuedAt || 0) - (b.queuedAt || 0)
+  })
   setQueue(queue)
 }
 
@@ -18,16 +56,6 @@ export function dequeue(type) {
   const sessionsMap = new Map();
   for (const session of allSessionsArray) {
     sessionsMap.set(session.id, session);
-  }
-
-  // Dependency check logic: wake up any PAUSED agents if their target is COMPLETED
-  for (const dep of allSessionsArray) {
-    if (dep.state === 'PAUSED' && dep.waitingOn) {
-      const targetSession = sessionsMap.get(dep.waitingOn);
-      if (targetSession && targetSession.state === 'COMPLETED') {
-        upsertSession({ id: dep.id, state: 'QUEUED', waitingOn: null });
-      }
-    }
   }
 
   const deadStates = ['FAILED', 'KILLED', 'COMPLETED'];

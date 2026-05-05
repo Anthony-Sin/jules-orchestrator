@@ -143,7 +143,9 @@ export function Dashboard({ searchTerm = '' }) {
     saveToDrive,
   })
 
-  const currentSource = getConfig().source
+  const config = getConfig()
+  const currentSource = config.source
+  const githubToken = config.githubToken
   const currentRepoDisplay = currentSource ? parseSourceDisplay(currentSource) : 'NOT SET'
   const currentRepoName = toRepoName(currentRepoDisplay)
   const activeAgent = selectedSessionId ? AGENTS.find(a => a.id === selectedSessionId) : null
@@ -247,6 +249,7 @@ export function Dashboard({ searchTerm = '' }) {
     },
       React.createElement(Text, { color: THEME.text, bold: true, wrap: 'truncate' }, 'Current Repo: '),
       React.createElement(Text, { color: 'blueBright', bold: true, wrap: 'truncate' }, currentRepoDisplay),
+      !githubToken && React.createElement(Text, { color: THEME.warning, bold: true }, ' [MISSING GITHUB_TOKEN]'),
       statusFlash && React.createElement(Text, { color: THEME.text, bold: true, wrap: 'truncate' }, ` | ${statusFlash}`),
       React.createElement(Spacer),
       queuedEntries.length > 0 && React.createElement(Text, { color: THEME.accentSoft, wrap: 'truncate' }, `${queuedEntries.length} queued`),
