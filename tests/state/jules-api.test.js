@@ -37,7 +37,7 @@ test('jules-api', async (t) => {
         return body.prompt === 'test prompt' &&
                body.sourceContext.source === 'sources/github/owner/repo' &&
                body.requirePlanApproval === true &&
-               body.sourceContext.githubRepoContext === undefined;
+               body.sourceContext.githubRepoContext !== undefined;
       })
       .reply(200, { id: 'session-123' });
 
@@ -91,7 +91,7 @@ test('jules-api', async (t) => {
 
     await assert.rejects(
       async () => await api.createSession({ prompt: 'test' }),
-      /Jules API error 400: Bad Request Data/
+      /Jules API error 400 .* API Msg: Bad Request Data/
     );
   });
 
