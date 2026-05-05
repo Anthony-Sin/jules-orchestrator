@@ -8,8 +8,7 @@ import { fileURLToPath } from 'url'
 import { parseSourceDisplay } from '../state/jules-api.js'
 import { getConfig } from '../state/store.js'
 
-import { AgentRow, SubAgentRow, EmptySubAgentsRow, buildRows } from './components/table.js'
-import { MiniGraph, PlannedGraphViewer } from './components/graph.js'
+import { AgentRow, buildRows } from './components/table.js'
 import { ChatPanel } from './components/chat.js'
 import { HelpScreen } from './components/help.js'
 import { GitDiffViewer } from './components/gitdiff.js'
@@ -44,12 +43,6 @@ export function Dashboard({ searchTerm = '' }) {
     tick, setTick,
     sel, setSel,
     tableOffset, setTableOffset,
-    expandedIds, setExpandedIds, toggleExpand,
-    graphSel, setGraphSel,
-    showGraph, setShowGraph,
-    graphViewMode, setGraphViewMode,
-    planNodeSel, setPlanNodeSel,
-    savedDiagrams,
     mode, setMode,
     lastLeftMode,
     diffFileSel, setDiffFileSel,
@@ -80,13 +73,16 @@ export function Dashboard({ searchTerm = '' }) {
     statusFlash, flash,
     showHelp, setShowHelp,
     AGENTS,
-    graphNodes,
     openAgentChat, handleSend, handleRepoSubmit,
   } = ctrl
 
+  // FIX: Moved filteredSources up so useKeyboard can receive it
+  const filteredSources = repoInput.startsWith('/')
+    ? sourcesList.filter(s => ('/' + (s.displayName || s.name)).toLowerCase().includes(repoInput.toLowerCase()))
+    : []
+
   const layout = useLayout({
     mode,
-    showGraph,
     repoInputMode,
     chatMenuOpen,
     chatTab,
@@ -103,7 +99,6 @@ export function Dashboard({ searchTerm = '' }) {
     rightPanelWidth, leftPanelWidth,
     showLeftPanel, showRightPanel,
     availableBodyHeight,
-    graphVisible, graphHeight,
     VISIBLE_AGENTS,
     CHAT_VISIBLE_ROWS,
   } = layout
@@ -115,11 +110,9 @@ export function Dashboard({ searchTerm = '' }) {
     repoInputMode, setRepoInputMode,
     repoInput, setRepoInput,
     sourcesList, sourceSel, setSourceSel,
+    filteredSources, // <--- ADDED: Passing this into useKeyboard
     handleRepoSubmit,
-    sel, setSel, AGENTS, expandedIds, setExpandedIds, toggleExpand, VISIBLE_AGENTS,
-    showGraph, setShowGraph,
-    graphSel, setGraphSel, graphNodes, graphViewMode,
-    planNodeSel, setPlanNodeSel, savedDiagrams,
+    sel, setSel, AGENTS, VISIBLE_AGENTS,
     openAgentChat,
     columns, rows, leftPanelWidth,
     diffFocus, setDiffFocus,
@@ -147,26 +140,23 @@ export function Dashboard({ searchTerm = '' }) {
   const currentRepoDisplay = currentSource ? parseSourceDisplay(currentSource) : 'NOT SET'
   const currentRepoName = toRepoName(currentRepoDisplay)
   const activeAgent = selectedSessionId ? AGENTS.find(a => a.id === selectedSessionId) : null
-  const activeAgentTitle = activeAgent?.title || 'jules-orchestrator'
+  const activeAgentTitle = activeAgent?.title || 'agent'
   const activeAgentId = selectedSessionId || 'NEW TASK'
-
-  const filteredSources = repoInput.startsWith('/')
-    ? sourcesList.filter(s => ('/' + (s.displayName || s.name)).toLowerCase().includes(repoInput.toLowerCase()))
-    : []
 
   const [repoDropdownOffset, setRepoDropdownOffset] = React.useState(0)
 
+  // FIXED PAGINATION: Show exactly 2 items to fit within height: 5
   React.useEffect(() => {
     setRepoDropdownOffset(prev => {
       if (sourceSel < prev) return sourceSel
-      if (sourceSel >= prev + 5) return sourceSel - 4
+      if (sourceSel >= prev + 2) return sourceSel - 1 
       return prev
     })
   }, [sourceSel])
 
-  const visibleDropdownSources = filteredSources.slice(repoDropdownOffset, repoDropdownOffset + 5)
+  const visibleDropdownSources = filteredSources.slice(repoDropdownOffset, repoDropdownOffset + 2)
 
-  const allRows = React.useMemo(() => buildRows(AGENTS, expandedIds), [AGENTS, expandedIds])
+  const allRows = React.useMemo(() => buildRows(AGENTS), [AGENTS])
   const queuedEntries = Object.entries(queuedMessages)
 
   useEffect(() => {
@@ -258,6 +248,7 @@ export function Dashboard({ searchTerm = '' }) {
       React.createElement(Text, { color: THEME.subtleText, dimColor: true, wrap: 'truncate' }, '-'.repeat(200))
     ),
 
+    // FIXED HEIGHT: Hardcoded back to 5 so it aligns with `useLayout`
     repoInputMode && React.createElement(Box, {
       flexDirection: 'column',
       height: 5,
@@ -276,7 +267,18 @@ export function Dashboard({ searchTerm = '' }) {
           React.createElement(TextInput, {
             value: repoInput,
             onChange: (v) => { setRepoInput(v); setSourceSel(0) },
-            onSubmit: repoInput.startsWith('/') ? () => {} : handleRepoSubmit,
+            onSubmit: () => {
+              if (repoInput.startsWith('/')) {
+                // Submit the highlighted dropdown item
+                if (filteredSources && filteredSources[sourceSel]) {
+                  handleRepoSubmit(filteredSources[sourceSel].name || '')
+                  setSourceSel(0)
+                }
+              } else {
+                // Submit custom typed string
+                handleRepoSubmit(repoInput)
+              }
+            }
           })
         )
       ),
@@ -311,12 +313,11 @@ export function Dashboard({ searchTerm = '' }) {
             minHeight: 0,
           },
             _renderLeftPanel({
-              mode, lastLeftMode, graphVisible, graphViewMode,
+              mode, lastLeftMode,
               activeAgentId, leftPanelWidth, isWide, availableBodyHeight,
               diffFileSel, setDiffFileSel, diffScrollOffset, diffFocus,
               diffRefreshToken, setDiffFileCount,
-              graphHeight, tick, graphSel, setGraphSel, graphNodes, openAgentChat,
-              savedDiagrams, planNodeSel,
+              tick, openAgentChat,
               AGENTS, sel, tableOffset, VISIBLE_AGENTS, allRows,
             })
           ),
@@ -378,7 +379,7 @@ export function Dashboard({ searchTerm = '' }) {
             React.createElement(Text, { color: THEME.subtleText, wrap: 'truncate' }, truncateShortcutBar(columns, shortcutBar)),
             React.createElement(Spacer),
             React.createElement(Text, { color: THEME.accent, bold: true },
-              mode === 'diff' ? '[DIF]' : mode === 'graph' ? '[GRP]' : mode === 'chat' ? '[CHT]' : '[TBL]'
+              mode === 'diff' ? '[DIF]' : mode === 'chat' ? '[CHT]' : '[TBL]'
             )
           )
         : React.createElement(Box, { flexGrow: 1, flexShrink: 1, overflow: 'hidden', minWidth: 0 },
@@ -390,12 +391,11 @@ export function Dashboard({ searchTerm = '' }) {
 }
 
 function _renderLeftPanel({
-  mode, lastLeftMode, graphVisible, graphViewMode,
+  mode, lastLeftMode,
   activeAgentId, leftPanelWidth, isWide, availableBodyHeight,
   diffFileSel, setDiffFileSel, diffScrollOffset, diffFocus,
   diffRefreshToken, setDiffFileCount,
-  graphHeight, tick, graphSel, setGraphSel, graphNodes, openAgentChat,
-  savedDiagrams, planNodeSel,
+  tick, openAgentChat,
   AGENTS, sel, tableOffset, VISIBLE_AGENTS, allRows,
 }) {
   if (mode === 'diff' || (mode === 'chat' && lastLeftMode === 'diff')) {
@@ -410,32 +410,6 @@ function _renderLeftPanel({
       setDiffFileSel,
       refreshToken: diffRefreshToken,
       setDiffFileCount,
-    })
-  }
-
-  if (graphVisible && (mode === 'graph' || (mode === 'chat' && lastLeftMode === 'graph'))) {
-    if (graphViewMode === 'live') {
-      return React.createElement(MiniGraph, {
-        tick,
-        isDimmed: mode !== 'graph',
-        height: graphHeight,
-        width: leftPanelWidth,
-        sessions: AGENTS,
-        graphSel,
-        onGraphNav: setGraphSel,
-        onGraphSelect: (idx) => {
-          setGraphSel(idx)
-          const agent = graphNodes[idx]
-          if (agent) openAgentChat(agent)
-        },
-      })
-    }
-
-    return React.createElement(PlannedGraphViewer, {
-      diagram: savedDiagrams[0],
-      selectedNodeIdx: planNodeSel,
-      height: graphHeight,
-      isDimmed: mode !== 'graph',
     })
   }
 
@@ -459,31 +433,9 @@ function _renderLeftPanel({
 }
 
 function _renderTableRows({ allRows, AGENTS, sel, tableOffset, VISIBLE_AGENTS, tick, mode }) {
-  const sessionRows = allRows.filter(r => r.type === 'session')
-  const visibleSessionIdxs = sessionRows
-    .slice(tableOffset, tableOffset + VISIBLE_AGENTS)
-    .map(r => AGENTS.indexOf(r.data))
-
-  const visibleRows = allRows.filter(r => {
-    if (r.type === 'session') return visibleSessionIdxs.includes(AGENTS.indexOf(r.data))
-    if (r.type === 'sub' || r.type === 'empty') {
-      const parent = AGENTS.find(a => a.id === r.parentId)
-      return parent && visibleSessionIdxs.includes(AGENTS.indexOf(parent))
-    }
-    return false
-  })
+  const visibleRows = allRows.slice(tableOffset, tableOffset + VISIBLE_AGENTS)
 
   return visibleRows.map((row, i) => {
-    if (row.type === 'empty') return React.createElement(EmptySubAgentsRow, { key: 'empty-' + row.parentId })
-    if (row.type === 'sub') {
-      return React.createElement(SubAgentRow, {
-        key: 'sub-' + (row.data.id || i),
-        agent: row.data,
-        tick,
-        isLast: row.isLast,
-      })
-    }
-
     const agentIdx = AGENTS.indexOf(row.data)
     return React.createElement(AgentRow, {
       key: row.data.id,
@@ -491,7 +443,6 @@ function _renderTableRows({ allRows, AGENTS, sel, tableOffset, VISIBLE_AGENTS, t
       selected: agentIdx === sel,
       tick,
       isDimmed: mode !== 'table',
-      expanded: row.expanded,
     })
   })
 }

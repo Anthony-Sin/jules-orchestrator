@@ -1,203 +1,208 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text, useInput } from 'ink';
 
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+// Dynamically calculates visual lines on the fly without mangling the original text
+function buildWrappedLines(value, width) {
+  const safeWidth = Math.max(1, width);
+  const lines = [''];
+  for (const ch of String(value || '')) {
+    if (ch === '\n') {
+      lines.push('');
+      continue;
+    }
+    const lastIdx = lines.length - 1;
+    if (lines[lastIdx].length >= safeWidth) {
+      lines.push(ch);
+    } else {
+      lines[lastIdx] += ch;
+    }
+  }
+  return lines;
+}
+
+// Maps a 1D string index into a 2D visual coordinate
+function getCursorPos(value, cursorOffset, width) {
+  const safeWidth = Math.max(1, width);
+  const safeOffset = clamp(cursorOffset, 0, String(value || '').length);
+  let line = 0;
+  let col = 0;
+  for (let i = 0; i < safeOffset; i++) {
+    const ch = value[i];
+    if (ch === '\n') {
+      line++;
+      col = 0;
+      continue;
+    }
+    col++;
+    if (col >= safeWidth) {
+      line++;
+      col = 0;
+    }
+  }
+  return { line, col };
+}
+
 export function Notepad({ value = '', onChange, focused = true, height = 10, width }) {
-  const [cursorLine, setCursorLine] = useState(0);
-  const [cursorCol, setCursorCol] = useState(0);
+  const safeWidth = Math.max(10, width || 40);
+  const [cursorOffset, setCursorOffset] = useState(value.length);
   const [scrollOffset, setScrollOffset] = useState(0);
 
-  // Normalize lines
-  const lines = value.split('\n');
-  if (lines.length === 0) lines.push('');
+  const latestValue = useRef(value);
+  const latestCursor = useRef(cursorOffset);
 
-  // Adjust scroll offset based on cursor position
   useEffect(() => {
-    if (cursorLine < scrollOffset) {
-      setScrollOffset(cursorLine);
-    } else if (cursorLine >= scrollOffset + height) {
-      setScrollOffset(cursorLine - height + 1);
-    }
-  }, [cursorLine, height, scrollOffset]);
+    latestValue.current = value;
+    setCursorOffset(offset => {
+      const newOffset = Math.min(offset, value.length);
+      latestCursor.current = newOffset;
+      return newOffset;
+    });
+  }, [value]);
+
+  const wrapped = buildWrappedLines(latestValue.current, safeWidth);
+  const cursor = getCursorPos(latestValue.current, latestCursor.current, safeWidth);
+
+  // Auto-pan the camera if the cursor moves out of view
+  useEffect(() => {
+    setScrollOffset(prev => {
+      let newOffset = prev;
+      if (cursor.line < newOffset) {
+        newOffset = cursor.line;
+      } else if (cursor.line >= newOffset + height) {
+        newOffset = cursor.line - height + 1;
+      }
+      return newOffset;
+    });
+  }, [cursor.line, height]);
 
   useInput((input, key) => {
     if (!focused) return;
+    if (key.ctrl || key.meta) return;
+
+    let nextCursor = latestCursor.current;
+    let nextValue = latestValue.current;
 
     if (key.upArrow) {
-      setCursorLine(l => {
-        const nextL = Math.max(0, l - 1);
-        setCursorCol(c => Math.max(0, Math.min(c, lines[nextL]?.length || 0)));
-        return nextL;
-      });
-      return;
-    }
-    if (key.downArrow) {
-      setCursorLine(l => {
-        const nextL = Math.min(lines.length - 1, l + 1);
-        setCursorCol(c => Math.max(0, Math.min(c, lines[nextL]?.length || 0)));
-        return nextL;
-      });
-      return;
-    }
-    if (key.leftArrow) {
-      if (cursorCol > 0) {
-        setCursorCol(c => c - 1);
-      } else if (cursorLine > 0) {
-        const prevLineIdx = cursorLine - 1;
-        setCursorLine(prevLineIdx);
-        setCursorCol(lines[prevLineIdx].length);
-      }
-      return;
-    }
-    if (key.rightArrow) {
-      if (cursorCol < lines[cursorLine].length) {
-        setCursorCol(c => c + 1);
-      } else if (cursorLine < lines.length - 1) {
-        setCursorLine(cursorLine + 1);
-        setCursorCol(0);
-      }
-      return;
-    }
+      const targetLine = Math.max(0, cursor.line - 1);
+      if (targetLine !== cursor.line) {
+        let cLine = 0;
+        let cCol = 0;
+        let foundOffset = nextCursor;
+        const targetCol = Math.min(cursor.col, wrapped[targetLine].length);
 
-    // Ignore modifier combos handled globally (like alt+...)
-    if (key.meta || key.ctrl) return;
+        for (let i = 0; i <= nextValue.length; i++) {
+          if (cLine === targetLine && cCol === targetCol) {
+            foundOffset = i;
+            break;
+          }
+          if (cLine > targetLine) break;
 
-    if (key.return) {
-      const currentLine = lines[cursorLine];
-      if (currentLine === undefined) return;
-      const before = currentLine.substring(0, cursorCol);
-      const after = currentLine.substring(cursorCol);
-
-      const newLines = [...lines];
-      newLines[cursorLine] = before;
-      newLines.splice(cursorLine + 1, 0, after);
-
-      onChange(newLines.join('\n'));
-      setCursorLine(l => l + 1);
-      setCursorCol(0);
-      return;
-    }
-
-    if (key.backspace || key.delete) {
-      if (cursorCol > 0) {
-        const currentLine = lines[cursorLine];
-        const newLines = [...lines];
-        newLines[cursorLine] = currentLine.substring(0, cursorCol - 1) + currentLine.substring(cursorCol);
-        onChange(newLines.join('\n'));
-        setCursorCol(c => c - 1);
-      } else if (cursorLine > 0) {
-        const prevLineIdx = cursorLine - 1;
-        const prevLine = lines[prevLineIdx];
-        const currentLine = lines[cursorLine];
-        const maxCol = width > 2 ? width - 2 : 10;
-
-        const newLines = [...lines];
-        const combined = prevLine + currentLine;
-
-        if (combined.length > maxCol) {
-          newLines[prevLineIdx] = combined.substring(0, maxCol);
-          newLines[cursorLine] = combined.substring(maxCol);
-          onChange(newLines.join('\n'));
-          setCursorLine(prevLineIdx);
-          setCursorCol(Math.min(prevLine.length, maxCol));
-        } else {
-          newLines[prevLineIdx] = combined;
-          newLines.splice(cursorLine, 1);
-          onChange(newLines.join('\n'));
-          setCursorLine(prevLineIdx);
-          setCursorCol(prevLine.length);
-        }
-      }
-      return;
-    }
-
-    // Regular typed input
-    if (input) {
-      const maxCol = width > 2 ? width - 2 : 10;
-      // Handle pasted multiline input gracefully
-      const isPaste = input.includes('\n') || input.includes('\r');
-      if (isPaste) {
-         const pastedLines = input.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-         let currentLine = lines[cursorLine];
-         let before = currentLine.substring(0, cursorCol);
-         let after = currentLine.substring(cursorCol);
-
-         let newLines = [...lines];
-         if (pastedLines.length === 1) {
-           const combined = before + pastedLines[0] + after;
-           if (combined.length > maxCol) {
-               newLines[cursorLine] = combined.substring(0, maxCol);
-               newLines.splice(cursorLine + 1, 0, combined.substring(maxCol));
-               onChange(newLines.join('\n'));
-               setCursorLine(cursorLine + 1);
-               setCursorCol(combined.substring(maxCol).length - after.length);
-           } else {
-               newLines[cursorLine] = combined;
-               onChange(newLines.join('\n'));
-               setCursorCol(cursorCol + pastedLines[0].length);
-           }
-         } else {
-           newLines[cursorLine] = before + pastedLines[0];
-           for (let i = 1; i < pastedLines.length - 1; i++) {
-             newLines.splice(cursorLine + i, 0, pastedLines[i]);
-           }
-           const lastPasted = pastedLines[pastedLines.length - 1];
-           newLines.splice(cursorLine + pastedLines.length - 1, 0, lastPasted + after);
-
-           onChange(newLines.join('\n'));
-           setCursorLine(cursorLine + pastedLines.length - 1);
-           setCursorCol(lastPasted.length);
-         }
-      } else {
-        const currentLine = lines[cursorLine];
-        const newLines = [...lines];
-        const combined = currentLine.substring(0, cursorCol) + input + currentLine.substring(cursorCol);
-
-        if (combined.length > maxCol) {
-            // Auto wrap
-            newLines[cursorLine] = combined.substring(0, maxCol);
-            const overflow = combined.substring(maxCol);
-            // If we are at the end of the line, push down
-            if (cursorCol >= maxCol - 1) {
-                newLines.splice(cursorLine + 1, 0, overflow);
-                onChange(newLines.join('\n'));
-                setCursorLine(l => l + 1);
-                setCursorCol(input.length);
+          if (i < nextValue.length) {
+            if (nextValue[i] === '\n') {
+              cLine++; cCol = 0;
             } else {
-                newLines.splice(cursorLine + 1, 0, overflow);
-                onChange(newLines.join('\n'));
-                setCursorCol(c => c + input.length);
+              cCol++;
+              if (cCol >= safeWidth) { cLine++; cCol = 0; }
             }
-        } else {
-            newLines[cursorLine] = combined;
-            onChange(newLines.join('\n'));
-            setCursorCol(c => c + input.length);
+          }
         }
+        nextCursor = foundOffset;
+      }
+    } else if (key.downArrow) {
+      const targetLine = Math.min(wrapped.length - 1, cursor.line + 1);
+      if (targetLine !== cursor.line) {
+        let cLine = 0;
+        let cCol = 0;
+        let foundOffset = nextCursor;
+        const targetCol = Math.min(cursor.col, wrapped[targetLine].length);
+
+        for (let i = 0; i <= nextValue.length; i++) {
+          if (cLine === targetLine && cCol === targetCol) {
+            foundOffset = i;
+            break;
+          }
+          if (cLine > targetLine) break;
+
+          if (i < nextValue.length) {
+            if (nextValue[i] === '\n') {
+              cLine++; cCol = 0;
+            } else {
+              cCol++;
+              if (cCol >= safeWidth) { cLine++; cCol = 0; }
+            }
+          }
+        }
+        nextCursor = foundOffset;
+      }
+    } else if (key.leftArrow) {
+      nextCursor = Math.max(0, nextCursor - 1);
+    } else if (key.rightArrow) {
+      nextCursor = Math.min(nextValue.length, nextCursor + 1);
+    } else if (key.return) {
+      nextValue = nextValue.slice(0, nextCursor) + '\n' + nextValue.slice(nextCursor);
+      nextCursor = nextCursor + 1;
+    } else if (key.backspace || key.delete) {
+      if (nextCursor > 0) {
+        // Because it's a 1D string, deleting automatically pulls the rest of the text upwards!
+        nextValue = nextValue.slice(0, nextCursor - 1) + nextValue.slice(nextCursor);
+        nextCursor = nextCursor - 1;
+      }
+    } else if (input) {
+      const cleanInput = input.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      nextValue = nextValue.slice(0, nextCursor) + cleanInput + nextValue.slice(nextCursor);
+      nextCursor = nextCursor + cleanInput.length;
+    }
+
+    if (nextValue !== latestValue.current || nextCursor !== latestCursor.current) {
+      latestCursor.current = nextCursor;
+      latestValue.current = nextValue;
+      setCursorOffset(nextCursor);
+      if (nextValue !== value) {
+        onChange(nextValue);
       }
     }
   });
 
-  const visibleLines = lines.slice(scrollOffset, scrollOffset + height);
+  const maxPossibleScroll = Math.max(0, wrapped.length - height);
+  const safeScrollOffset = Math.min(scrollOffset, maxPossibleScroll);
+
+  const start = Math.max(0, safeScrollOffset);
+  const end = Math.min(wrapped.length, start + height);
+  const visibleLines = wrapped.slice(start, end);
+
+  while (visibleLines.length < height) {
+    visibleLines.push(null);
+  }
 
   return React.createElement(Box, { flexDirection: "column", width: width, height: height, overflow: "hidden" },
     visibleLines.map((line, i) => {
-      const actualLineIdx = scrollOffset + i;
-      const isCursorLine = actualLineIdx === cursorLine && focused;
+      const absoluteLine = start + i;
+
+      if (line === null) {
+        return React.createElement(Box, { key: `empty_${i}`, minWidth: 0, height: 1 });
+      }
+
+      const isCursorLine = absoluteLine === cursor.line && focused;
 
       if (!isCursorLine) {
-         return React.createElement(Box, { key: actualLineIdx, minWidth: 0, overflow: "hidden" },
+         return React.createElement(Box, { key: `line_${absoluteLine}`, minWidth: 0, overflow: "hidden", height: 1 },
            React.createElement(Text, { color: "gray", wrap: "truncate" }, line || ' ')
          );
       }
 
-      // Render cursor
-      const beforeCursor = line.substring(0, cursorCol);
-      const atCursor = line.substring(cursorCol, cursorCol + 1) || ' ';
-      const afterCursor = line.substring(cursorCol + 1);
+      const cursorCol = clamp(cursor.col, 0, line.length);
+      const before = line.slice(0, cursorCol);
+      const at = cursorCol < line.length ? line[cursorCol] : ' ';
+      const after = cursorCol < line.length ? line.slice(cursorCol + 1) : '';
 
-      return React.createElement(Box, { key: actualLineIdx, minWidth: 0, overflow: "hidden", flexDirection: "row" },
-        React.createElement(Text, { color: "white", wrap: "truncate" }, beforeCursor),
-        React.createElement(Text, { backgroundColor: "white", color: "black", wrap: "truncate" }, atCursor),
-        React.createElement(Text, { color: "white", wrap: "truncate" }, afterCursor)
+      return React.createElement(Box, { key: `line_${absoluteLine}`, minWidth: 0, overflow: "hidden", flexDirection: "row", height: 1 },
+        React.createElement(Text, { color: "white", wrap: "truncate" }, before),
+        React.createElement(Text, { backgroundColor: "white", color: "black", wrap: "truncate" }, at),
+        React.createElement(Text, { color: "white", wrap: "truncate" }, after)
       );
     })
   );

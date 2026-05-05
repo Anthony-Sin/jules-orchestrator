@@ -5,6 +5,7 @@ import { Notepad } from './notepad.js'
 import { ScrollInput } from './scroll-input.js'
 import { THEME } from '../theme.js'
 import Spinner from 'ink-spinner'
+
 const COLLAPSE_THRESHOLD = 4
 const PREVIEW_LINES = 2
 
@@ -170,15 +171,13 @@ export function ChatPanel({
     }
   })
 
-  const isNewSession = chatTargetMode === 'CREATE_ORCHESTRATOR' || chatTargetMode === 'CREATE_TASK' || (!chatTargetMode && agentId === 'NEW TASK')
+  const isNewSession = chatTargetMode === 'CREATE_TASK' || (!chatTargetMode && agentId === 'NEW TASK')
   const hasMessages = messages && messages.length > 0
 
   const maxTitleLen = 16
-  const shortTitle = isNewSession
-    ? 'new session'
-    : agentTitle && agentTitle.length > maxTitleLen
+  const shortTitle = agentTitle && agentTitle.length > maxTitleLen
       ? agentTitle.substring(0, maxTitleLen) + '...'
-      : (agentTitle || 'orchestrator')
+      : (agentTitle || 'task')
 
   const collapsedCount = computedCollapsedCount
 
@@ -199,15 +198,16 @@ export function ChatPanel({
       justifyContent: 'space-between',
     },
       React.createElement(Box, { flexDirection: 'row', minWidth: 0, overflow: 'hidden', flexShrink: 1 },
+        // FIX: Display Target Repo directly in the Chat Header
         isNewSession
           ? (tab === 'chat'
               ? React.createElement(React.Fragment, null,
-                  React.createElement(Text, { color: focused ? THEME.accent : THEME.subtleText, bold: true, wrap: 'truncate' }, 'NEW SESSION'),
+                  React.createElement(Text, { color: focused ? THEME.accent : THEME.subtleText, bold: true, wrap: 'truncate' }, `NEW TASK: ${repoName}`),
                   React.createElement(Text, { color: focused ? THEME.accentMuted : THEME.subtleText, bold: true, wrap: 'truncate' }, ' | '),
                   React.createElement(Text, { color: THEME.subtleText, bold: true, wrap: 'truncate' }, 'NOTES')
                 )
               : React.createElement(React.Fragment, null,
-                  React.createElement(Text, { color: THEME.subtleText, bold: true, wrap: 'truncate' }, 'NEW SESSION'),
+                  React.createElement(Text, { color: THEME.subtleText, bold: true, wrap: 'truncate' }, `NEW TASK: ${repoName}`),
                   React.createElement(Text, { color: THEME.subtleText, bold: true, wrap: 'truncate' }, ' | '),
                   React.createElement(Text, { color: focused ? THEME.accent : THEME.subtleText, bold: true, wrap: 'truncate' }, 'NOTES')
                 ))
@@ -245,41 +245,41 @@ export function ChatPanel({
       flexShrink: 0,
       minHeight: 0,
       overflow: 'hidden',
-      justifyContent: (startDialogOpen || (isNewSession && !hasMessages)) ? 'center' : 'flex-end',
+      justifyContent: startDialogOpen ? 'center' : 'flex-end',
+
     },
-      (startDialogOpen && tab === 'chat')
-        ? React.createElement(Box, { flexDirection: 'column', alignItems: 'center', paddingX: 2, paddingY: 1 },
-            React.createElement(Box, { borderStyle: 'round', borderColor: THEME.accent, paddingX: 3, paddingY: 1, flexDirection: 'column', alignItems: 'center' },
-              React.createElement(Text, { color: THEME.accent, bold: true }, `✦ START NEW ${startDialogMode === 'CREATE_TASK' ? 'TASK' : 'ORCHESTRATOR'}`),
-              React.createElement(Box, { height: 1 }),
-              React.createElement(Text, { color: THEME.text }, 'Type your instructions and press Enter.'),
-              React.createElement(Box, { height: 1 }),
-            )
-          )
-        : (isNewSession && !hasMessages && tab === 'chat')
-          ? React.createElement(Box, {
-            flexDirection: 'column',
-            alignItems: 'center',
-            paddingX: 2,
-            paddingY: 1,
+      // FIX: Single, unified empty state box using stable flexbox centering
+        (startDialogOpen && tab === 'chat')
+        ? React.createElement(Box, { 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            width: '100%', 
+            paddingX: 1
           },
-            React.createElement(Box, {
-              borderStyle: 'round',
-              borderColor: focused ? THEME.accent : THEME.subtleText,
-              paddingX: 3,
-              paddingY: 1,
-              flexDirection: 'column',
-              alignItems: 'center',
+            React.createElement(Box, { 
+              borderStyle: 'round', 
+              borderColor: THEME.accent, 
+              paddingX: 3, 
+              paddingY: MESSAGE_ROWS >= 9 ? 1 : 0,
+              flexDirection: 'column', 
+              alignItems: 'center' 
             },
-              React.createElement(Text, { color: focused ? THEME.accent : THEME.subtleText, bold: true }, 'NEW SESSION'),
-              React.createElement(Box, { height: 1 }),
-              React.createElement(Text, { color: focused ? THEME.text : THEME.subtleText, dimColor: !focused }, 'Your message will spawn a'),
-              React.createElement(Text, { color: focused ? THEME.text : THEME.subtleText, dimColor: !focused }, 'fresh orchestrator agent.'),
-              React.createElement(Box, { height: 1 }),
-              React.createElement(Text, { color: focused ? (repoName === 'NOT SET' ? THEME.accentSoft : 'blueBright') : THEME.subtleText, dimColor: !focused },
-                repoName === 'NOT SET' ? 'no repo selected - press Alt+M' : `Current Repo: ${repoName}`)
-            )
+              MESSAGE_ROWS >= 4 && React.createElement(Text, { color: THEME.accent, bold: true }, `✦ START NEW TASK`),
+              MESSAGE_ROWS >= 7 && React.createElement(Box, { height: 1 }),
+              MESSAGE_ROWS >= 6 && React.createElement(Text, { color: THEME.text }, 'Type instructions and press Enter.'),
+              MESSAGE_ROWS >= 8 && React.createElement(Box, { height: 1 }),
+              
+              // 3. Always show the Target
+              React.createElement(Text, { wrap: 'truncate' },
+                React.createElement(Text, { color: THEME.subtleText }, 'Target: '),
+                React.createElement(Text, { 
+                  color: repoName === 'NOT SET' ? THEME.warning : THEME.accentSoft, 
+                  bold: true 
+                }, repoName)
+              )
           )
+        )
         : tab === 'notes'
           ? React.createElement(Notepad, {
               value: notes || '',
@@ -511,16 +511,17 @@ export function ChatPanel({
     ),
 
     chatMenuOpen && tab === 'chat' && React.createElement(Box, {
+
       flexDirection: 'column',
-      height: 5,
+      height: 4,
       borderStyle: 'round',
       borderColor: THEME.panelFocusBorder,
       paddingX: 1,
       flexShrink: 0,
-      minWidth: 0,
+      minWidth: 0,  
       overflow: 'hidden',
     },
-      ['Start New Task', 'Start New Orchestrator', 'Approve Plan'].map((opt, idx) =>
+      ['Start New Task', 'Approve Plan'].map((opt, idx) =>
         React.createElement(Text, {
           key: idx,
           color: chatMenuSel === idx ? THEME.accent : THEME.subtleText,
@@ -545,7 +546,6 @@ export function ChatPanel({
       React.createElement(Text, { color: THEME.separator, dimColor: true, wrap: 'truncate' }, '-'.repeat(100))
     ),
 
-    // ── Active Progress / Thinking Indicator ──
     (latestProgress || promptPreview) && tab === 'chat' && !startDialogOpen && React.createElement(Box, {
       flexDirection: 'row',
       borderStyle: 'round',
@@ -555,7 +555,6 @@ export function ChatPanel({
       minWidth: 0,
       overflow: 'hidden',
     },
-      // Only show the animated spinner if it's an agent progress update (not a prompt preview)
       !promptPreview && React.createElement(Box, { paddingRight: 1, flexShrink: 0 }, 
         React.createElement(Text, { color: THEME.accent }, React.createElement(Spinner, { type: 'dots' }))
       ),
@@ -582,7 +581,8 @@ export function ChatPanel({
           value: input,
           onChange,
           onSubmit: !chatMenuOpen ? onSubmit : () => {},
-          placeholder: focused ? '/ for menu | up/down nav msgs | alt+a expand' : 'Alt+E',
+          // FIX: Cleaned up Placeholder for New Sessions
+          placeholder: (focused && isNewSession) ? 'Type prompt here...' : (focused ? '/ for menu | up/down nav msgs | alt+a expand' : 'Alt+E'),
           focus: focused && !isRepoInputMode,
           visibleWidth: Math.max(10, wrapLimit),
           maxRows: inputVisibleRows,

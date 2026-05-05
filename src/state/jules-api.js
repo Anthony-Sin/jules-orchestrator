@@ -28,17 +28,35 @@ async function fetchWithTimeout(url, options = {}) {
 }
 
 export async function createSession({ prompt, source, startingBranch, requirePlanApproval = false, tools }) {
-  const payload = {
-    prompt,
-    sourceContext: { source },
-    requirePlanApproval,
-    automationMode: getConfig().autoPr !== false ? "AUTO_CREATE_PR" : undefined,
+  let targetBranch = startingBranch || getConfig().branch;
+
+  // 🪄 MAGIC AUTO-DETECT: Silently ask GitHub what the real default branch is
+  if (!startingBranch) {
+    try {
+      const repoName = parseSourceDisplay(source); // e.g., "Anthony-Sin/test"
+      if (repoName && repoName.includes('/')) {
+        // Unauthenticated public API call to check repo details
+        const ghRes = await fetch(`https://api.github.com/repos/${repoName}`);
+        if (ghRes.ok) {
+          const ghData = await ghRes.json();
+          if (ghData.default_branch) {
+            targetBranch = ghData.default_branch; // Dynamically grabs 'master', 'main', 'dev', etc.
+          }
+        }
+      }
+    } catch (_) {
+      // If offline or rate-limited, silently fail and fall back to targetBranch/'main'
+    }
   }
 
-  // Only add githubRepoContext with startingBranch if it's explicitly provided.
-  // Otherwise, omit it so Jules defaults to the repository's default branch.
-  if (startingBranch) {
-    payload.sourceContext.githubRepoContext = { startingBranch };
+  const payload = {
+    prompt,
+    sourceContext: { 
+      source,
+      githubRepoContext: { startingBranch: targetBranch || 'main' }
+    },
+    requirePlanApproval,
+    automationMode: getConfig().autoPr !== false ? "AUTO_CREATE_PR" : undefined,
   }
 
   const res = await fetchWithTimeout(`${DEFAULTS.JULES_API_BASE}/sessions`, {
@@ -46,7 +64,11 @@ export async function createSession({ prompt, source, startingBranch, requirePla
     headers: headers(),
     body: JSON.stringify(payload),
   })
-  if (!res.ok) throw new Error(`Jules API error ${res.status}: ${await res.text()}`)
+  
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Jules API error ${res.status} | Payload Sent: ${JSON.stringify(payload)} | API Msg: ${errText}`);
+  }
   return res.json()
 }
 

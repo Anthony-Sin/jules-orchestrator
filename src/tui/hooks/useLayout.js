@@ -25,13 +25,11 @@ export function useLayout({
   const showLeftPanel = isWide || mode !== 'chat'
   const showRightPanel = isWide || mode === 'chat'
 
-  const repoInputHeight = repoInputMode ? 5 : 0
+  const repoInputHeight = repoInputMode ? 8 : 0
   const fixedChromeRows = 5
   const availableBodyHeight = Math.max(1, TERMINAL_ROWS - (fixedChromeRows + repoInputHeight))
 
-  const canShowGraph = showGraph && columns >= 95 && rows >= 14
-  const graphVisible = canShowGraph
-  const graphHeight = graphVisible ? availableBodyHeight : 0
+
 
   const VISIBLE_AGENTS = Math.max(1, availableBodyHeight - 2)
 
@@ -39,7 +37,7 @@ export function useLayout({
   const inputRows = (mode === 'chat' && chatTab === 'chat')
     ? Math.max(
         1,
-        String(chatInput || '') // <-- FIX: Wrap in String() to prevent crashes
+        String(chatInput || '')
           .split('\n')
           .reduce((count, line) => {
             const safeLen = Math.max(1, line.length)
@@ -50,10 +48,14 @@ export function useLayout({
 
   const inputExtraHeight = Math.min(3, inputRows - 1)
   const chatFixedHeights = 4
-  const chatMenuHeight = chatMenuOpen && chatTab === 'chat' ? 5 : 0
-  const progressHeight = (hasLatestProgress || hasPromptPreview) && chatTab === 'chat' ? 3 : 0
+  
+  const chatMenuHeight = chatMenuOpen && chatTab === 'chat' ? 4 : 0
+  
+  // FIX: Force the layout engine to reclaim the progress bar space when the Start Dialog is open
+  const progressHeight = (hasLatestProgress || hasPromptPreview) && chatTab === 'chat' && !hasStartDialog ? 3 : 0
+  
   const startDialogHeight = 0
-  const approveHintHeight = hasApproveHint && chatTab === 'chat' ? 2 : 0
+  const approveHintHeight = hasApproveHint && chatTab === 'chat' ? 3 : 0
 
   const CHAT_VISIBLE_ROWS = Math.max(1,
     availableBodyHeight - (
@@ -79,9 +81,6 @@ export function useLayout({
     showRightPanel,
     repoInputHeight,
     availableBodyHeight,
-    canShowGraph,
-    graphVisible,
-    graphHeight,
     VISIBLE_AGENTS,
     chatWrapLimit,
     CHAT_VISIBLE_ROWS,

@@ -125,6 +125,7 @@ export function GitDiffViewer({
   fileSel = 0,
   diffFocus,
   setDiffFileSel,
+  setDiffFocus,
   refreshToken = 0,
   setDiffFileCount,
 }) {
@@ -132,25 +133,20 @@ export function GitDiffViewer({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   
-  // Local scroll states
   const [hScroll, setHScroll] = useState(0)
   const [localScroll, setLocalScroll] = useState(0)
   const maxStartRef = useRef(0)
   
-  // Track total files for the quick-switch shortcuts
   const totalFilesRef = useRef(0)
 
-  // Reset scroll when changing files
   useEffect(() => {
     setHScroll(0)
     setLocalScroll(0)
   }, [fileSel, sessionId])
 
-  // Localized useInput to completely fix the memory overscroll bug
   useInput((input, key) => {
     if (isDimmed || diffFocus !== 'content') return;
     
-    // --- THE NEW ULTRA-FAST FILE SWITCHING ---
     if (input === '[') {
       setDiffFileSel?.(prev => Math.max(0, prev - 1));
       return;
@@ -159,14 +155,18 @@ export function GitDiffViewer({
       setDiffFileSel?.(prev => Math.min(Math.max(0, totalFilesRef.current - 1), prev + 1));
       return;
     }
-    // -----------------------------------------
 
-    // Horizontal scrolling
     if (key.leftArrow) setHScroll(prev => Math.max(0, prev - 6));
     if (key.rightArrow) setHScroll(prev => prev + 6);
     
-    // Vertical scrolling (Strictly capped to maxStartRef!)
-    if (key.upArrow) setLocalScroll(prev => Math.max(0, prev - 1));
+    if (key.upArrow) {
+      if (localScroll === 0) {
+        setDiffFocus?.('files');
+        return;
+      }
+      setLocalScroll(prev => Math.max(0, prev - 1));
+    }
+    
     if (key.downArrow) setLocalScroll(prev => Math.min(maxStartRef.current, prev + 1));
     if (key.pageUp) setLocalScroll(prev => Math.max(0, prev - 10));
     if (key.pageDown) setLocalScroll(prev => Math.min(maxStartRef.current, prev + 10));
@@ -226,7 +226,7 @@ export function GitDiffViewer({
 
   useEffect(() => {
     const total = parsedDiff.length
-    totalFilesRef.current = total // Sync ref for the shortcuts
+    totalFilesRef.current = total
     setDiffFileCount?.(total)
 
     if (total > 0 && setDiffFileSel && fileSel >= total) {
@@ -282,36 +282,49 @@ export function GitDiffViewer({
   }
 
   const filesPanel = React.createElement(Box, {
-    flexDirection: 'column',
-    width,
-    height: filesPanelH,
-    paddingX: 1,
-    borderStyle: 'single',
-    borderColor: isDimmed ? THEME.subtleText : (isFilesFocused ? THEME.panelFocusBorder : THEME.panelBorder),
-  },
-  React.createElement(Text, {
-    color: isDimmed ? THEME.subtleText : (isFilesFocused ? THEME.text : THEME.subtleText),
-    bold: true,
-    wrap: 'truncate',
-  }, `Files [${safeSelIdx + 1}/${total}] ( [ ] switch | enter view diff | tab chat )`), // Updated header text to show new shortcuts!
-  React.createElement(Box, { flexDirection: 'row', overflow: 'hidden', flexShrink: 0 },
+      flexDirection: 'column',
+      width,
+      height: filesPanelH,
+      paddingX: 1,
+      borderStyle: 'single',
+      borderColor: isDimmed ? THEME.subtleText : (isFilesFocused ? THEME.panelFocusBorder : THEME.panelBorder),
+    },
+    React.createElement(Text, {
+      color: isDimmed ? THEME.subtleText : (isFilesFocused ? THEME.text : THEME.subtleText),
+      bold: true,
+      wrap: 'truncate',
+    }, `Files [${safeSelIdx + 1}/${total}] ( [ ] switch | ↓/enter view diff | tab chat )`), 
+    React.createElement(Box, { flexDirection: 'row', overflow: 'hidden', flexShrink: 0 },
     React.createElement(Text, { color: THEME.subtleText }, showLeft ? '< ' : '  '),
     ...tabElements,
     showRight ? React.createElement(Text, { color: THEME.subtleText }, ' >') : null))
 
-  // Always use Split View side-by-side
-  const useSplitView = true
-
-  const panelWidth = Math.max(16, width - 2)
-  const sidePad = 1
-  const innerWidth = Math.max(10, panelWidth - (sidePad * 2))
-  const leftColWidth = useSplitView ? Math.max(8, Math.floor((innerWidth - 1) / 2)) : innerWidth
-  const rightColWidth = useSplitView ? Math.max(8, innerWidth - leftColWidth - 1) : innerWidth
-  const hunkWidth = innerWidth
+  // --- CLEANED UP COLUMN WIDTH LOGIC ---
+  const isNewFile = selectedFile?.oldFileName === '/dev/null' || !selectedFile?.oldFileName;
+  const isDeletedFile = selectedFile?.newFileName === '/dev/null' || !selectedFile?.newFileName;
+  const useSplitView = !(isNewFile || isDeletedFile);
+  
+  const panelWidth = Math.max(16, width - 2);
+  const sidePad = 1;
+  const innerWidth = Math.max(10, panelWidth - (sidePad * 2));
+  
+  const dividerWidth = useSplitView ? 1 : 0;
+  const leftColWidth = useSplitView ? Math.max(8, Math.floor((innerWidth - dividerWidth) / 2)) : 0;
+  const rightColWidth = useSplitView ? Math.max(8, innerWidth - dividerWidth - leftColWidth) : innerWidth;
+  const hunkWidth = innerWidth;
 
   const allLines = []
 
   if (selectedFile?.hunks) {
+    if (isNewFile) {
+      allLines.push({
+        type: 'new_file_banner',
+        text: ` 🆕 NEW FILE: ${selectedFile.newFileName} `,
+        subtext: ' (Single Column View)',
+        color: 'green'
+      })
+    }
+
     allLines.push({
       type: 'hunk',
       text: `FILE ${normalizeFileName(selectedFile.oldFileName || '')} -> ${normalizeFileName(selectedFile.newFileName || '')}`,
@@ -365,12 +378,10 @@ export function GitDiffViewer({
     }
   }
 
-  // Set the max limit for the scroll handler dynamically
   const innerDiffRows = Math.max(1, diffPanelH - 2)
   const maxStart = Math.max(0, allLines.length - innerDiffRows)
   maxStartRef.current = maxStart 
 
-  // Apply the strictly capped localized scroll state
   const safeScroll = Number.isFinite(localScroll) ? localScroll : 0
   const diffStart = Math.max(0, Math.min(safeScroll, maxStart))
   const visibleDiffLines = allLines.slice(diffStart, diffStart + innerDiffRows)
@@ -393,6 +404,14 @@ export function GitDiffViewer({
   },
   visibleDiffLines.map((line, idx) => {
     const absoluteIdx = diffStart + idx
+    
+    // Custom render for the New File Banner
+    if (line.type === 'new_file_banner') {
+      return React.createElement(Box, { key: `banner_${absoluteIdx}`, height: 1, marginBottom: 1 },
+        React.createElement(Text, { color: line.color, bold: true }, line.text),
+        React.createElement(Text, { dimColor: true }, line.subtext)
+      );
+    }
 
     if (line.type === 'hunk') {
       const vHunk = sliceText(line.text, hunkWidth)
@@ -401,6 +420,27 @@ export function GitDiffViewer({
           color: isDimmed ? THEME.subtleText : (line.color || THEME.text),
           wrap: 'truncate',
         }, vHunk))
+    }
+
+    if (!useSplitView) {
+      const activeText = isDeletedFile ? line.leftText : line.rightText;
+      const activeColor = isDeletedFile ? line.leftColor : line.rightColor;
+      const activeBg = isDeletedFile ? line.leftBg : line.rightBg;
+      const activeDim = isDeletedFile ? line.leftDim : line.rightDim;
+      const vText = sliceText(activeText, innerWidth);
+
+      return React.createElement(Box, { key: `p_${absoluteIdx}`, height: 1, flexDirection: 'row', overflow: 'hidden' },
+        React.createElement(Box, {
+          width: innerWidth,
+          overflow: 'hidden',
+          backgroundColor: isDimmed ? undefined : activeBg,
+        },
+        React.createElement(Text, {
+          color: isDimmed ? THEME.subtleText : activeColor,
+          dimColor: activeDim,
+          wrap: 'truncate',
+        }, vText))
+      )
     }
 
     const vLeft = sliceText(line.leftText, leftColWidth)

@@ -119,6 +119,9 @@ export function ScrollInput({
     wrapped.push('')
   }
 
+  // Must be before ALL early returns to satisfy React's rules of hooks
+  const maxPossibleScroll = Math.max(0, wrapped.length - rows)
+
   useEffect(() => {
     setScrollOffset(prev => {
       let newOffset = prev
@@ -130,6 +133,11 @@ export function ScrollInput({
       return newOffset
     })
   }, [cursor.line, rows])
+
+  // Snap scroll back down when lines collapse (e.g. after backspace un-wraps a line)
+  useEffect(() => {
+    setScrollOffset(prev => Math.min(prev, maxPossibleScroll))
+  }, [maxPossibleScroll])
 
   if (!value) {
     if (!placeholder) {
@@ -152,15 +160,10 @@ export function ScrollInput({
     )
   }
 
-  // --- THE FIX IS HERE ---
-  // Force the scroll offset to snap back if the container expands and reveals empty space
-  const maxPossibleScroll = Math.max(0, wrapped.length - rows)
   const safeScrollOffset = Math.min(scrollOffset, maxPossibleScroll)
-  
   const start = Math.max(0, safeScrollOffset)
   const end = Math.min(wrapped.length, start + rows)
   const visibleLines = wrapped.slice(start, end)
-  // -----------------------
 
   return React.createElement(Box, {
     minWidth: 0,

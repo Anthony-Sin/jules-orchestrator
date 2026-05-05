@@ -55,56 +55,8 @@ export function wrapText(text, width) {
 // ── Block-level markdown parser ───────────────────────────────────
 export function parseMarkdown(text) {
   if (!text) return [{ type: 'text', text: '' }]
-
-  const firstBrace = String(text).indexOf('{')
-  const lastBrace  = String(text).lastIndexOf('}')
-
-  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    const possibleJson = String(text).slice(firstBrace, lastBrace + 1)
-
-    try {
-      const parsed = JSON.parse(possibleJson)
-
-      if (parsed && parsed.type === 'function' && parsed.function && parsed.function.name) {
-        const segments = []
-
-        const beforeText = String(text).slice(0, firstBrace).trim()
-        if (beforeText) segments.push(...parseCoreMarkdown(beforeText))
-
-        let args = {}
-        try {
-          const rawArgs = parsed.function.arguments || parsed.arguments;
-          if (typeof rawArgs === 'object' && rawArgs !== null) {
-            args = rawArgs;
-          } else if (typeof rawArgs === 'string') {
-            args = JSON.parse(rawArgs);
-          }
-        } catch (_) {}
-
-        segments.push({ type: 'toolcall', toolName: parsed.function.name, args })
-
-        const afterText = String(text).slice(lastBrace + 1).trim()
-        if (afterText) segments.push(...parseCoreMarkdown(afterText))
-
-        return segments
-      }
-
-      if (parsed && parsed.plan && Array.isArray(parsed.plan.steps)) {
-        const segments = []
-
-        const beforeText = String(text).slice(0, firstBrace).trim()
-        if (beforeText) segments.push(...parseCoreMarkdown(beforeText))
-
-        segments.push({ type: 'plan', plan: parsed.plan })
-
-        const afterText = String(text).slice(lastBrace + 1).trim()
-        if (afterText) segments.push(...parseCoreMarkdown(afterText))
-
-        return segments
-      }
-    } catch (_) {}
-  }
-
+  
+  // Directly process standard markdown, ignoring any raw JSON objects
   return parseCoreMarkdown(text)
 }
 
@@ -265,30 +217,6 @@ function buildInlineTokens(text, baseColor, focused, forceBold, forceItalic) {
 
 // ── Block renderer ────────────────────────────────────────────────
 
-function buildToolCallLines(seg, i, focused) {
-  const lines = []
-  const { toolName, args } = seg
-
-  if (toolName === 'generate_ink_terminal_diagram') {
-    try {
-      const currentDiagrams = store.get('architectureDiagrams') || [];
-      const newDiagStr = JSON.stringify(args);
-      const alreadyExists = currentDiagrams.some(d => JSON.stringify(d) === newDiagStr);
-
-      if (!alreadyExists && args && args.title) {
-        currentDiagrams.unshift(args);
-        store.set('architectureDiagrams', currentDiagrams.slice(0, 10));
-        store.set('diagramLastUpdated', Date.now());
-      }
-    } catch (_) {}
-
-    lines.push({ type: 'gap' })
-    lines.push({ type: 'toolcall-diagram', key: `tc_diag_hint_${i}`, focused })
-    lines.push({ type: 'gap' })
-  }
-
-  return lines
-}
 
 function buildPlanLines(seg, i, focused, wrapLimit) {
   const lines = []
@@ -547,5 +475,3 @@ export function buildMarkdownLines(text, wrapLimit, focused) {
   markdownCache.set(cacheKey, lines);
   return lines
 }
-
-

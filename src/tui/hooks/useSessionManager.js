@@ -1,7 +1,6 @@
 import { useEffect, useCallback, useRef } from 'react'
 import { getAllActivities, listAllSessions, listSources, sendMessage } from '../../state/jules-api.js'
 import { getSessions, store, removeSession, upsertSession } from '../../state/store.js'
-import { handleOrchestratorToolCall } from '../../jules_lead_orchestrator/JulesTools.js'
 import fs from 'fs'
 
 // ── Pure helpers (no React) ───────────────────────────────────────
@@ -61,12 +60,10 @@ export function extractToolCallsFromMessage(msgText) {
     if (match) {
       jsonStr = match[1]
     } else {
-        // ← FIX: normalize whitespace so "[ {" matches the same as "[{"
         const normalizedText = msgText.replace(/\[\s+\{/g, '[{').replace(/\}\s+\]/g, '}]')
         const start = normalizedText.indexOf('[{')
         const end = normalizedText.lastIndexOf('}]')
         if (start !== -1 && end !== -1 && end > start) {
-            // Extract from the ORIGINAL msgText using the same indices
             const potentialJson = msgText.substring(
             msgText.indexOf('['),
             msgText.lastIndexOf(']') + 1
@@ -82,9 +79,6 @@ export function extractToolCallsFromMessage(msgText) {
       let parsedArr = JSON.parse(jsonStr)
       if (!Array.isArray(parsedArr)) parsedArr = [parsedArr]
 
-      // Same format-agnostic normalization as the executor:
-      // handles flat {name,arguments}, nested {function:{name,arguments}},
-      // and "parameters" instead of "arguments" in any combination.
       const toolNames = []
       for (const tc of parsedArr) {
         if (!tc || typeof tc !== 'object') continue
@@ -92,17 +86,7 @@ export function extractToolCallsFromMessage(msgText) {
         const fnName = isFlatFormat ? tc.name : tc.function?.name
         if (!fnName) continue
 
-        let displayName = fnName
-        if (fnName === 'dispatch_sub_agent') {
-          try {
-            const rawArgs = isFlatFormat
-              ? (tc.arguments ?? tc.parameters ?? tc.args ?? {})
-              : (tc.function?.arguments ?? tc.function?.parameters ?? tc.function?.args ?? {})
-            const args = typeof rawArgs === 'string' ? JSON.parse(rawArgs) : rawArgs
-            displayName = `dispatch_sub_agent (${args.module_name})`
-          } catch (_) {}
-        }
-        toolNames.push(displayName)
+        toolNames.push(fnName)
       }
       if (toolNames.length > 0) {
         msgText = msgText.replace(jsonStr, `\n\n[TOOL CALLS: ${toolNames.join(', ')}]\n\n`).trim()
@@ -188,7 +172,7 @@ export function useSessionManager({
     return [...baseMessages, { role: 'system', text: contextText }]
   }, [])
 
-  // ── Update cache + execute tool calls (with dedup guard) ─────────
+  // ── Update cache ─────────────────────────────────────────────────
   const updateSessionHistoryCache = useCallback((sessionId, acts) => {
     const sorted = sortActivities(acts)
     const signature = activitiesSignature(sorted)
@@ -223,11 +207,6 @@ export function useSessionManager({
       appendStart = 0
     }
 
-    // Persisted set of activity names that have already had tools fired.
-    // This survives restarts and prevents double-execution on reload.
-    const firedKey = `firedToolActivities:${sessionId}`
-    const alreadyFired = new Set(store.get(firedKey, []))
-
     let latestProgressText = null
     for (let i = appendStart; i < sorted.length; i++) {
       const act = sorted[i]
@@ -235,83 +214,6 @@ export function useSessionManager({
       // Build display message
       const msg = toHistoryMessage(act)
       if (msg) next.messages.push(msg)
-
-      const agentText = act.agentMessaged?.agentMessage
-
-      // ── FIX #4: Skip [TOOL_RESULT:] and [AGENT_UPDATE:] messages ──
-      // The orchestrator sends these back to itself as confirmations.
-      // Re-parsing them would cause duplicate tool dispatches.
-      const isToolResult = agentText?.trimStart().startsWith('[TOOL_RESULT:')
-      const isAgentUpdate = agentText?.trimStart().startsWith('[AGENT_UPDATE:')
-      const isSystemReply = isToolResult || isAgentUpdate
-
-      // Execute tool calls — only for new activities not yet fired,
-      // and only for genuine orchestrator tool-call messages (not confirmations).
-      if (
-        agentText &&
-        agentText.includes('"function"') &&
-        !isSystemReply &&
-        act.name &&
-        !alreadyFired.has(act.name)
-      ) {
-        try {
-          let jsonStr = ''
-          const codeBlockMatch = /```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/.exec(agentText)
-          if (codeBlockMatch) {
-            jsonStr = codeBlockMatch[1]
-          } else {
-            const start = agentText.indexOf('[{')
-            const end = agentText.lastIndexOf('}]')
-            if (start !== -1 && end !== -1 && end > start) {
-                const candidate = agentText.substring(start, end + 1)
-              try { JSON.parse(candidate); jsonStr = candidate } catch (_) {}
-            }
-          }
-          if (jsonStr) {
-            let parsed = JSON.parse(jsonStr)
-            // Jules occasionally outputs a single object instead of an array
-            if (!Array.isArray(parsed)) parsed = [parsed]
-
-            // Normalize all tool call formats Jules might output into a
-            // consistent { function: { name, arguments } } shape:
-            //
-            // Format A (correct):  { type, function: { name, arguments: {...} } }
-            // Format B (no type):  { function: { name, arguments: {...} } }
-            // Format C (flat):     { name, arguments: {...} }
-            // Format D (params):   { name, parameters: {...} }  (any of above)
-            // Format E (obj args): arguments is a plain object, not a JSON string
-            const normalizeToolCall = (tc) => {
-              if (!tc || typeof tc !== 'object') return null
-
-              // Detect flat format: { name, arguments/parameters }
-              const isFlatFormat = typeof tc.name === 'string' && !tc.function
-
-              const fnName = isFlatFormat ? tc.name : tc.function?.name
-              if (!fnName) return null
-
-              const rawArgs = isFlatFormat
-                ? (tc.arguments ?? tc.parameters ?? tc.args ?? {})
-                : (tc.function?.arguments ?? tc.function?.parameters ?? tc.function?.args ?? {})
-
-              const normalizedArgs = typeof rawArgs === 'string'
-                ? rawArgs
-                : JSON.stringify(rawArgs)
-
-              return { function: { name: fnName, arguments: normalizedArgs } }
-            }
-
-            const normalized = parsed.map(normalizeToolCall).filter(Boolean)
-            if (normalized.length > 0) {
-              for (const tc of normalized) {
-                handleOrchestratorToolCall(tc, sessionId).catch(() => {})
-              }
-              // Mark this activity as fired and persist immediately
-              alreadyFired.add(act.name)
-              store.set(firedKey, [...alreadyFired])
-            }
-          }
-        } catch (_) {}
-      }
 
       const progressText = getProgressText(act)
       if (progressText) latestProgressText = progressText
@@ -374,18 +276,9 @@ export function useSessionManager({
           const local = localSessions.find(ls => ls.id === shortId)
           const prevState = local?.state
 
-          // ── FIX #1: Trust our locally-set title over Jules raw prompt title ──
-          // Jules returns the full prompt text as rs.title, which starts with
-          // "### AGENT IDENTITY ...". We only fall back to it if we have nothing
-          // better, and we filter it through cleanRemoteTitle() to reject prompts.
           const resolvedTitle =
-            // 1. Orchestrator titles we set (protected prefix)
-            (local?.title?.startsWith('ORCHESTRATOR—') ? local.title : null) ||
-            // 2. Any locally-set title that isn't the default placeholder
             (local?.title && local.title !== 'jules-orchestrator' ? local.title : null) ||
-            // 3. A clean remote title (short, no markdown headers)
             cleanRemoteTitle(rs.title) ||
-            // 4. Last resort
             local?.title ||
             'jules-orchestrator'
 
@@ -396,28 +289,9 @@ export function useSessionManager({
             createdAt: rs.createTime,
             title: resolvedTitle,
             repo: rs.sourceContext?.source || local?.repo,
-            // Preserve fields set locally that Jules API doesn't know about
             type: local?.type,
-            parentOrchestratorId: local?.parentOrchestratorId,
           })
           changed = true
-
-          // ── FIX #3: Notify orchestrator when a sub-agent changes state ──
-          // The orchestrator's system prompt says it reacts to [AGENT_UPDATE: ...]
-          // messages, but nothing was sending them. Now we do.
-          if (
-            local?.parentOrchestratorId &&
-            rs.state &&
-            prevState &&
-            rs.state !== prevState
-          ) {
-            sendMessage(
-              local.parentOrchestratorId,
-              `[AGENT_UPDATE: ${shortId}] State changed to ${rs.state}`
-            ).catch(() => {
-              // Non-fatal — orchestrator may already be done
-            })
-          }
         }
 
         if (changed) refreshLocalSessions()

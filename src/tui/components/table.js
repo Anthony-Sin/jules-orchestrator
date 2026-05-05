@@ -67,15 +67,6 @@ function extractRepoName(repo) {
   return parts[parts.length - 1]
 }
 
-function isOrch(agent) {
-  return (
-    agent.isOrchestrator === true ||
-    agent.type === 'orchestrator' ||
-    agent.role === 'ORCHESTRATOR' ||
-    Array.isArray(agent.subAgents)
-  )
-}
-
 // The Perfect 3-Space Gap 
 function Gap({ rowBg }) {
   return React.createElement(Box, { width: 3, flexShrink: 0 },
@@ -83,7 +74,7 @@ function Gap({ rowBg }) {
   )
 }
 
-export function AgentRow({ agent, selected, tick, isDimmed, expanded }) {
+export function AgentRow({ agent, selected, tick, isDimmed }) {
   const profile = getLayoutProfile()
   const layout = COLUMN_LAYOUT[profile]
 
@@ -99,13 +90,8 @@ export function AgentRow({ agent, selected, tick, isDimmed, expanded }) {
   const rowBg = selected ? (isDimmed ? '#2b2b2b' : THEME.focusBg) : undefined
 
   const shortId = (agent.id || '').slice(0, layout.id)
-  const subAgents = agent.subAgents || []
-  const orch = isOrch(agent)
-  const arrow = orch ? (expanded ? 'v ' : '> ') : '  '
-  const badge = orch && !expanded ? ` [+${subAgents.length}]` : ''
   const rawTitle = agent.title || 'agent'
-  const titleWithChrome = `${arrow}${rawTitle}${badge}`
-  const titleStr = trimCell(titleWithChrome, layout.title)
+  const titleStr = trimCell(rawTitle, layout.title)
   const repoStr = extractRepoName(agent.repoDisplay || agent.repo || '')
   const repoTrimmed = trimCell(repoStr, layout.repo)
   const ageStr = ago(agent.lastUpdated || agent.createdAt)
@@ -125,7 +111,7 @@ export function AgentRow({ agent, selected, tick, isDimmed, expanded }) {
     ),
     React.createElement(Gap, { rowBg }),
     React.createElement(Box, { width: layout.title, flexShrink: 0 }, 
-      React.createElement(Text, { color: textColor, bold: !isDimmed, underline: orch && !isDimmed, dimColor: isDimmed, wrap: 'truncate', backgroundColor: rowBg }, titleStr)
+      React.createElement(Text, { color: textColor, bold: !isDimmed, dimColor: isDimmed, wrap: 'truncate', backgroundColor: rowBg }, titleStr)
     ),
     React.createElement(Gap, { rowBg }),
     React.createElement(Box, { width: layout.repo, flexShrink: 0 }, 
@@ -147,102 +133,10 @@ export function AgentRow({ agent, selected, tick, isDimmed, expanded }) {
   )
 }
 
-export function SubAgentRow({ agent, tick, isLast, selected = false, isDimmed = false }) {
-  const profile = getLayoutProfile()
-  const layout = COLUMN_LAYOUT[profile]
-  const state = agent.state || 'UNKNOWN'
-  
-  const baseColor = STATUS_COLOR[state] || THEME.text
-  const textColor = baseColor
-  
-  const stateShort = STATUS_SHORT[state] || state.substring(0, 6)
-  const isFocused = selected && !isDimmed
-  const rowBg = selected ? (isDimmed ? '#2b2b2b' : THEME.focusBg) : undefined
-
-  const shortId = (agent.id || '').slice(0, 4) 
-  const title = trimCell(agent.title || agent.role || 'agent', layout.title - 2)
-  const repoStr = extractRepoName(agent.repoDisplay || agent.repo || '')
-  const repoTrimmed = trimCell(repoStr, layout.repo)
-  
-  const connector = isLast ? '└─' : '├─'
-  const ageStr = ago(agent.lastUpdated || agent.createdAt)
-
-  return React.createElement(Box, {
-    width: '100%',
-    height: 1,
-    overflow: 'hidden',
-    backgroundColor: rowBg,
-    flexDirection: 'row',
-  },
-    React.createElement(Box, { width: 2, flexShrink: 0 }, 
-      React.createElement(Text, { color: textColor, bold: !isDimmed, dimColor: isDimmed, backgroundColor: rowBg }, isFocused ? '> ' : '  ')
-    ),
-    React.createElement(Box, { width: layout.id, flexShrink: 0, flexDirection: 'row' }, 
-      React.createElement(Text, { color: textColor, dimColor: isDimmed, backgroundColor: rowBg }, connector),
-      React.createElement(Text, { color: textColor, dimColor: isDimmed, backgroundColor: rowBg }, shortId.padEnd(layout.id - connector.length, ' '))
-    ),
-    React.createElement(Gap, { rowBg }),
-    React.createElement(Box, { width: layout.title, flexShrink: 0 }, 
-      React.createElement(Text, { color: textColor, dimColor: isDimmed, wrap: 'truncate', backgroundColor: rowBg }, `  ${title}`)
-    ),
-    React.createElement(Gap, { rowBg }),
-    React.createElement(Box, { width: layout.repo, flexShrink: 0 }, 
-      React.createElement(Text, { color: textColor, dimColor: isDimmed, wrap: 'truncate', backgroundColor: rowBg }, repoTrimmed)
-    ),
-    React.createElement(Gap, { rowBg }),
-    React.createElement(Box, { width: layout.status, flexShrink: 0 }, 
-      React.createElement(Text, { color: textColor, bold: !isDimmed, dimColor: isDimmed, backgroundColor: rowBg }, stateShort.padEnd(layout.status, ' '))
-    ),
-    React.createElement(Gap, { rowBg }),
-    React.createElement(Box, { width: layout.progress, flexShrink: 0 }, 
-      React.createElement(Text, { color: textColor, dimColor: isDimmed, backgroundColor: rowBg }, state === 'COMPLETED' ? '::' : React.createElement(Spinner, { type: 'dots' }))
-    ),
-    layout.time > 0 && React.createElement(Gap, { rowBg }),
-    layout.time > 0 && React.createElement(Box, { width: layout.time, flexShrink: 0 }, 
-      React.createElement(Text, { color: textColor, dimColor: isDimmed, backgroundColor: rowBg }, ageStr)
-    ),
-    React.createElement(Box, { flexGrow: 1 })
-  )
-}
-
-export function EmptySubAgentsRow({ selected = false, isDimmed = false }) {
-  const rowBg = selected ? (isDimmed ? '#2b2b2b' : THEME.focusBg) : undefined
-  const textColor = THEME.subtleText
-  
-  return React.createElement(Box, {
-    width: '100%',
-    height: 1,
-    flexDirection: 'row',
-    backgroundColor: rowBg,
-    overflow: 'hidden'
-  },
-    React.createElement(Box, { width: 2, flexShrink: 0 }),
-    React.createElement(Box, { width: 6, flexShrink: 0 }, 
-      React.createElement(Text, { color: textColor, dimColor: true, backgroundColor: rowBg }, '└─    ')
-    ),
-    React.createElement(Gap, { rowBg }),
-    React.createElement(Box, { flexGrow: 1 }, 
-      React.createElement(Text, { color: textColor, dimColor: true, backgroundColor: rowBg }, 'none yet')
-    )
-  )
-}
-
-export function buildRows(sessions, expandedIds) {
+export function buildRows(sessions) {
   const rows = []
   for (const agent of sessions) {
-    const orch = isOrch(agent)
-    const subAgents = agent.subAgents || []
-    const expanded = orch && expandedIds.has(agent.id)
-    rows.push({ type: 'session', data: agent, orch, subCount: subAgents.length, expanded })
-    if (expanded) {
-      if (subAgents.length === 0) {
-        rows.push({ type: 'empty', parentId: agent.id })
-      } else {
-        subAgents.forEach((sub, i) => {
-          rows.push({ type: 'sub', data: sub, isLast: i === subAgents.length - 1, parentId: agent.id })
-        })
-      }
-    }
+    rows.push({ type: 'session', data: agent })
   }
   return rows
 }

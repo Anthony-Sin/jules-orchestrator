@@ -1,3 +1,0 @@
-fix(tui): mark getUsage task as done
-
-The State Agent removed the `getUsage` API. The TUI Agent never used `getUsage` (it uses `getQuotaUsed` and `quotaRemaining` from the local store), so no code changes are required. Marked the informational inbox task as done.

@@ -16,27 +16,11 @@ export function useDashboardController() {
   const [tick, setTick] = useState(0)
   const [sel, setSel] = useState(0)
   const [tableOffset, setTableOffset] = useState(0)
-  const [expandedIds, setExpandedIds] = useState(new Set())
-
-  const toggleExpand = useCallback((id) => {
-    setExpandedIds(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }, [])
-
-  const [graphSel, setGraphSel] = useState(0)
-  const [showGraph, setShowGraph] = useState(false)
-  const [graphViewMode, setGraphViewMode] = useState('live')
-  const [planNodeSel, setPlanNodeSel] = useState(0)
-  const [savedDiagrams, setSavedDiagrams] = useState(() => store.get('architectureDiagrams') || [])
 
   const [mode, setMode] = useState('table')
   const [lastLeftMode, setLastLeftMode] = useState('table')
   useEffect(() => {
-    if (['table', 'graph', 'diff'].includes(mode)) setLastLeftMode(mode)
+    if (['table', 'diff'].includes(mode)) setLastLeftMode(mode)
   }, [mode])
 
   // ── Diff state ────────────────────────────────────────────────────
@@ -60,9 +44,9 @@ export function useDashboardController() {
   const [chatTab, setChatTab] = useState('chat')
   const [chatMenuOpen, setChatMenuOpen] = useState(false)
   const [chatMenuSel, setChatMenuSel] = useState(0)
-  const [chatTargetMode, setChatTargetMode] = useState('CREATE_ORCHESTRATOR')
-  const [startDialogOpen, setStartDialogOpen] = useState(false)
-  const [startDialogMode, setStartDialogMode] = useState('CREATE_ORCHESTRATOR')
+  const [chatTargetMode, setChatTargetMode] = useState('CREATE_TASK')
+  const [startDialogOpen, setStartDialogOpen] = useState(true)
+  const [startDialogMode, setStartDialogMode] = useState('CREATE_TASK')
 
   const [expandedMessages, setExpandedMessages] = useState(new Set())
   const [chatCursorLine, setChatCursorLine] = useState(0)
@@ -118,6 +102,14 @@ export function useDashboardController() {
   const [sourcesList, setSourcesList] = useState([])
   const [sourceSel, setSourceSel] = useState(0)
 
+  // FIX: Auto-populate '/' when opening repo menu
+  useEffect(() => {
+    if (repoInputMode && repoInput === '') {
+      setRepoInput('/')
+      setSourceSel(0)
+    }
+  }, [repoInputMode, repoInput])
+
   // ── Flash / help ──────────────────────────────────────────────────
   const [statusFlash, setStatusFlash] = useState('')
   const [showHelp, setShowHelp] = useState(false)
@@ -162,18 +154,10 @@ export function useDashboardController() {
     setLatestProgress,
     setDiffRefreshBySession,
     setSourcesList,
-    setSavedDiagrams,
     setMode,
-    setGraphViewMode,
-    setPlanNodeSel,
-    showGraph,
   })
 
-  // ── FIX #2: AGENTS with sub-agent hierarchy ───────────────────────
-  // Previously AGENTS was a flat list and sub-agents were never linked
-  // to their orchestrator parent. buildRows() looks for agent.subAgents[]
-  // but nothing ever populated it. Now we derive that from parentOrchestratorId
-  // which JulesTools.js already sets on every dispatched sub-agent.
+  // ── Flattened Agents List ─────────────────────────────────────────
   const AGENTS = useMemo(() => {
     const dataMap = {}
     sessionsData.forEach(s => { dataMap[s.id] = s })
@@ -189,28 +173,8 @@ export function useDashboardController() {
       if (dataMap[id] && !seen.has(id)) { mapped.push(dataMap[id]); seen.add(id) }
     })
 
-    // Attach sub-agents to their orchestrator parents.
-    // A session is an orchestrator if its type is 'orchestrator' OR its title
-    // starts with 'ORCHESTRATOR—' (set by dispatchLeadOrchestrator).
-    return mapped.map(agent => {
-      const isOrch =
-        agent.type === 'orchestrator' ||
-        (agent.title || '').startsWith('ORCHESTRATOR—')
-
-      if (isOrch) {
-        const subs = mapped.filter(a => a.parentOrchestratorId === agent.id)
-        return { ...agent, subAgents: subs }
-      }
-      return agent
-    })
+    return mapped
   }, [sessionsData, sortedIds])
-
-  // Separate lists for graph view
-  const orchAgents = AGENTS.filter(a =>
-    a.type === 'orchestrator' || (a.title || '').startsWith('ORCHESTRATOR—'))
-  const subAgents = AGENTS.filter(a =>
-    !(a.type === 'orchestrator' || (a.title || '').startsWith('ORCHESTRATOR—')))
-  const graphNodes = [...orchAgents, ...subAgents]
 
   const selectedAgent = useMemo(
     () => selectedSessionId ? AGENTS.find(a => a.id === selectedSessionId) : null,
@@ -218,13 +182,6 @@ export function useDashboardController() {
   )
 
   const showApproveHint = selectedAgent?.state === 'AWAITING_PLAN_APPROVAL'
-
-  // Clamp graph selection
-  useEffect(() => {
-    if (graphNodes.length > 0 && graphSel >= graphNodes.length) {
-      setGraphSel(graphNodes.length - 1)
-    }
-  }, [graphNodes.length, graphSel])
 
   // ── Agent actions (handleSend, openAgentChat, queued msgs) ────────
   const {
@@ -305,12 +262,6 @@ export function useDashboardController() {
     tick, setTick,
     sel, setSel,
     tableOffset, setTableOffset,
-    expandedIds, setExpandedIds, toggleExpand,
-    graphSel, setGraphSel,
-    showGraph, setShowGraph,
-    graphViewMode, setGraphViewMode,
-    planNodeSel, setPlanNodeSel,
-    savedDiagrams,
     mode, setMode,
     lastLeftMode,
     diffFileSel, setDiffFileSel,
@@ -346,7 +297,6 @@ export function useDashboardController() {
     statusFlash, setStatusFlash, flash,
     showHelp, setShowHelp,
     AGENTS,
-    graphNodes,
     openAgentChat, handleSend, handleRepoSubmit,
   }
 }

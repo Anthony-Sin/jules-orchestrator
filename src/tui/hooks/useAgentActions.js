@@ -1,7 +1,6 @@
 import { useEffect, useCallback, useRef } from 'react'
 import { sendMessage, approvePlan, createSession } from '../../state/jules-api.js'
 import { getConfig, setConfig, upsertSession } from '../../state/store.js'
-import { dispatchLeadOrchestrator } from '../../jules_lead_orchestrator/julesorchestrator.js'
 
 export function useAgentActions({
   AGENTS,
@@ -96,23 +95,22 @@ export function useAgentActions({
     if (raw === '/start') {
       setMode('chat')
       setStartDialogOpen(true)
-      setStartDialogMode('CREATE_ORCHESTRATOR')
-      setChatTargetMode('CREATE_ORCHESTRATOR')
+      setStartDialogMode('CREATE_TASK')
+      setChatTargetMode('CREATE_TASK')
       setChatInput('')
       return
     }
 
-    if (startDialogOpen && (raw === '/task' || raw === '/orchestrator')) {
-      const nextMode = raw === '/task' ? 'CREATE_TASK' : 'CREATE_ORCHESTRATOR'
-      setStartDialogMode(nextMode)
-      setChatTargetMode(nextMode)
+    if (startDialogOpen && raw === '/task') {
+      setStartDialogMode('CREATE_TASK')
+      setChatTargetMode('CREATE_TASK')
       setChatInput('')
       return
     }
 
     if (startDialogOpen && raw === '/cancel') {
       setStartDialogOpen(false)
-      setChatTargetMode(selectedSessionId ? 'TALK_TO_SELECTED_AGENT' : 'CREATE_ORCHESTRATOR')
+      setChatTargetMode(selectedSessionId ? 'TALK_TO_SELECTED_AGENT' : 'CREATE_TASK')
       setChatInput('')
       return
     }
@@ -140,7 +138,7 @@ export function useAgentActions({
         upsertSession({
           id: sessionId,
           title: raw.substring(0, 30),
-          type: 'sub_agent',
+          type: 'task',
           state: julesSession.state || 'QUEUED',
           createdAt: Date.now(),
           lastUpdated: Date.now(),
@@ -153,25 +151,6 @@ export function useAgentActions({
         setStartDialogOpen(false)
       } catch (e) {
         setMessages(m => [...m, { role: 'system', text: `Create task error: ${e.message}` }])
-      }
-      return
-    }
-
-    // ── Dispatch orchestrator ──
-    if (createMode === 'CREATE_ORCHESTRATOR') {
-      setChatInput('')
-      setScrollOffset(0)
-      setLatestProgress(null)
-      try {
-        const shortDesc = raw.substring(0, 40).trim()
-        const title = `ORCHESTRATOR— ${shortDesc}`
-        const { sessionId } = await dispatchLeadOrchestrator(raw, 1, title)
-        setMessages(m => [...m, { role: 'system', text: `Dispatched orchestrator: ${sessionId}` }])
-        setSelectedSessionId(sessionId)
-        setChatTargetMode('TALK_TO_SELECTED_AGENT')
-        setStartDialogOpen(false)
-      } catch (e) {
-        setMessages(m => [...m, { role: 'system', text: `Dispatch error: ${e.message}` }])
       }
       return
     }
@@ -220,9 +199,10 @@ export function useAgentActions({
 
   // ── Repo submit ───────────────────────────────────────────────────
   function handleRepoSubmit(val) {
-    if (val.trim()) setConfig('source', val.trim())
+    const trimmed = (val ?? repoInput).trim()   // fall back to repoInput state
+    if (trimmed) setConfig('source', trimmed)
     setRepoInputMode(false)
-  }
+    }
 
   return {
     agentsRef,

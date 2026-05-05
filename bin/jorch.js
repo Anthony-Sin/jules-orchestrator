@@ -4,10 +4,8 @@ import chalk from 'chalk'
 import inquirer from 'inquirer'
 import React, { useState, useEffect } from 'react'
 import { render, useInput } from 'ink'
-import { dispatchLeadOrchestrator } from '../src/jules_lead_orchestrator/julesorchestrator.js'
 
-import { deleteSession, listSessions, getSession, parseSourceDisplay, sendMessage, getAllActivities } from '../src/state/jules-api.js'
-import { handleOrchestratorToolCall } from '../src/jules_lead_orchestrator/julesorchestrator.js'
+import { deleteSession, listSessions, getSession, parseSourceDisplay, sendMessage, createSession } from '../src/state/jules-api.js'
 import { upsertSession, getSessions, getActiveSessions, store, unlockFiles, getQueue, setConfig, getConfig } from '../src/state/store.js'
 
 const TERMINAL_STATES = ['COMPLETED', 'FAILED', 'KILLED']
@@ -26,17 +24,7 @@ export async function pollAndUpdate() {
   const results = await Promise.all(active.map(async (session) => {
     try {
       const fresh = await getSession(session.id)
-      let activitiesRes = null
-
-      if (session.type === 'orchestrator' && !TERMINAL_STATES.includes(fresh.state || session.state)) {
-        try {
-          activitiesRes = await getAllActivities(session.id)
-        } catch (_) {
-          // Failure to fetch activities shouldn't block updating the session state
-        }
-      }
-
-      return { session, fresh, activitiesRes }
+      return { session, fresh }
     } catch (err) {
       return { session, error: err }
     }
@@ -44,7 +32,7 @@ export async function pollAndUpdate() {
 
   const updated = []
 
-  for (const { session, fresh, activitiesRes, error } of results) {
+  for (const { session, fresh, error } of results) {
     if (error || !fresh) continue
 
     try {
@@ -60,19 +48,12 @@ export async function pollAndUpdate() {
       upsertSession(updates)
 
       if (oldState !== newState && (newState === 'COMPLETED' || newState === 'FAILED')) {
-        if (session.parentOrchestratorId) {
-           await sendMessage(session.parentOrchestratorId, `[AGENT_UPDATE: ${session.id}] State changed to ${newState}`);
-        }
-
         if (newState === 'COMPLETED') {
            const allSessions = getSessions();
            for (const dep of allSessions) {
              if (dep.state === 'PAUSED' && dep.waitingOn === session.id) {
                upsertSession({ id: dep.id, state: 'QUEUED', waitingOn: null });
                await sendMessage(dep.id, `[RESUMED] Agent ${session.id} has completed. You may proceed.`);
-               if (dep.parentOrchestratorId) {
-                  await sendMessage(dep.parentOrchestratorId, `[AGENT_UPDATE: ${dep.id}] Resumed because dependency ${session.id} completed.`);
-               }
              }
            }
         }
@@ -80,71 +61,6 @@ export async function pollAndUpdate() {
 
       if (TERMINAL_STATES.includes(newState)) unlockFiles(session.id)
       updated.push({ id: session.id, state: newState, title: updates.title || session.title })
-
-      if (session.type === 'orchestrator' && !TERMINAL_STATES.includes(newState) && activitiesRes) {
-        try {
-          const acts = activitiesRes.activities || activitiesRes || [];
-          if (Array.isArray(acts) && acts.length > 0) {
-            const sorted = acts.sort((a, b) => new Date(a.createTime || 0).getTime() - new Date(b.createTime || 0).getTime());
-            const lastProcessedIdMap = store.get('lastProcessedActivityIds') || {};
-            const lastProcessedId = lastProcessedIdMap[session.id];
-
-            let foundNew = false;
-            for (const act of sorted) {
-              if (lastProcessedId && act.name === lastProcessedId) {
-                foundNew = true;
-                continue; // Skip the last processed one, start processing on the next loop iteration
-              }
-              if (!lastProcessedId || foundNew) {
-                if (!lastProcessedId) foundNew = true;
-
-                if (act.agentMessaged?.agentMessage) {
-                  const msgText = act.agentMessaged.agentMessage;
-                  let jsonStrs = [];
-                  const codeBlockRegex = /```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/g;
-                  let match;
-                  while ((match = codeBlockRegex.exec(msgText)) !== null) {
-                      jsonStrs.push(match[1]);
-                  }
-
-                  if (jsonStrs.length === 0 && msgText.includes('"function"')) {
-                     // Fallback for missing codeblocks
-                     const start = msgText.indexOf('[{');
-                     const end = msgText.lastIndexOf('}]');
-                     if (start !== -1 && end !== -1 && end > start) {
-                         jsonStrs.push(msgText.substring(start, end + 2));
-                     }
-                  }
-
-                  const toolCallPromises = [];
-                  for (const jsonStr of jsonStrs) {
-                     try {
-                        const toolCalls = JSON.parse(jsonStr);
-                        if (Array.isArray(toolCalls)) {
-                           for (const tc of toolCalls) {
-                              if (tc && tc.function && tc.function.name) {
-                                 toolCallPromises.push(handleOrchestratorToolCall(tc, session.id));
-                              }
-                           }
-                        }
-                     } catch (err) {
-                        // ignore JSON parse errors
-                     }
-                  }
-                  if (toolCallPromises.length > 0) {
-                     await Promise.allSettled(toolCallPromises);
-                  }
-                }
-              }
-            }
-
-            if (sorted.length > 0) {
-              lastProcessedIdMap[session.id] = sorted[sorted.length - 1].name;
-              store.set('lastProcessedActivityIds', lastProcessedIdMap);
-            }
-          }
-        } catch (_) {}
-      }
     } catch (_) {}
   }
   return updated
@@ -185,20 +101,37 @@ const program = new Command()
 
 program
   .name('jorch')
-  .description('Jules multi-agent orchestrator')
+  .description('Jules multi-agent task manager')
   .version(version)
 
 // ── jorch run "<prompt>" ──────────────────────────────────────────────────────
 program
   .command('run <prompt>')
-  .description('Decompose and dispatch a task (or multiple tasks) to the agent pools')
+  .description('Create and dispatch a task session to Jules')
   .action(async (rawPrompt) => {
-    console.log(chalk.dim('\n  Dispatching Lead Orchestrator…'))
-
+    console.log(chalk.dim('\n  Creating new task session…'))
 
     try {
-      const result = await dispatchLeadOrchestrator(rawPrompt, 1, "Orchestrator Session")
-      console.log(chalk.green(`  ✓ Launched Lead Orchestrator → ${result.sessionId}`))
+      const source = getConfig().source
+      if (!source || source === 'NOT SET') {
+         console.log(chalk.red(`  ✗ Failed to launch: No repo selected. Please configure a source first (e.g. jorch config set-source github-owner-repo).`))
+         return
+      }
+
+      const julesSession = await createSession({ prompt: rawPrompt, source })
+      const sessionId = julesSession.name.split('/').pop()
+
+      upsertSession({
+        id: sessionId,
+        title: rawPrompt.substring(0, 30),
+        type: 'task',
+        state: julesSession.state || 'QUEUED',
+        createdAt: Date.now(),
+        lastUpdated: Date.now(),
+        repo: source,
+      })
+
+      console.log(chalk.green(`  ✓ Launched Task → ${sessionId}`))
     } catch (err) {
       console.log(chalk.red(`  ✗ Failed to launch: ${err.message}`))
     }
