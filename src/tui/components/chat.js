@@ -24,6 +24,7 @@ export function ChatPanel({
   repoName,
   agentTitle,
   agentId,
+  agentState,
   chatTargetMode,
   visibleAgentsCount,
   chatMenuOpen,
@@ -181,6 +182,30 @@ export function ChatPanel({
 
   const collapsedCount = computedCollapsedCount
 
+  // ── Unified Dynamic Status Banner ──
+  function getStatusBanner(state, progress, preview) {
+    if (preview) return { text: preview, spinner: false, color: THEME.accentSoft }
+    
+    // 🐛 FIX: If there is no state yet (like the 2 seconds when starting a brand new task), 
+    // force the banner to show the progress text so we get instant visual feedback!
+    if (!state) {
+      if (progress) return { text: progress, spinner: true, color: THEME.accent }
+      return null
+    }
+    
+    switch (state) {
+      case 'QUEUED': return { text: 'Waiting in queue...', spinner: true, color: THEME.subtleText }
+      case 'PLANNING': return { text: progress || 'Analyzing task and generating plan...', spinner: true, color: 'magentaBright' }
+      case 'IN_PROGRESS': return { text: progress || 'Thinking...', spinner: true, color: THEME.accent }
+      case 'AWAITING_PLAN_APPROVAL': return { text: 'Waiting for your approval (type /approve)', spinner: false, color: THEME.warning }
+      case 'AWAITING_USER_FEEDBACK': return { text: 'Waiting for your response...', spinner: false, color: THEME.warning }
+      case 'PAUSED': return { text: 'Session paused.', spinner: false, color: THEME.warning }
+      default: return null // COMPLETED, FAILED, and KILLED will gracefully hide the banner
+    }
+  }
+
+  const banner = getStatusBanner(agentState, latestProgress, promptPreview)
+
   return React.createElement(Box, {
     flexDirection: 'column',
     width,
@@ -198,7 +223,6 @@ export function ChatPanel({
       justifyContent: 'space-between',
     },
       React.createElement(Box, { flexDirection: 'row', minWidth: 0, overflow: 'hidden', flexShrink: 1 },
-        // FIX: Display Target Repo directly in the Chat Header
         isNewSession
           ? (tab === 'chat'
               ? React.createElement(React.Fragment, null,
@@ -248,7 +272,6 @@ export function ChatPanel({
       justifyContent: startDialogOpen ? 'center' : 'flex-end',
 
     },
-      // FIX: Single, unified empty state box using stable flexbox centering
         (startDialogOpen && tab === 'chat')
         ? React.createElement(Box, { 
             flexDirection: 'column', 
@@ -270,7 +293,6 @@ export function ChatPanel({
               MESSAGE_ROWS >= 6 && React.createElement(Text, { color: THEME.text }, 'Type instructions and press Enter.'),
               MESSAGE_ROWS >= 8 && React.createElement(Box, { height: 1 }),
               
-              // 3. Always show the Target
               React.createElement(Text, { wrap: 'truncate' },
                 React.createElement(Text, { color: THEME.subtleText }, 'Target: '),
                 React.createElement(Text, { 
@@ -530,38 +552,26 @@ export function ChatPanel({
       )
     ),
 
-    showApproveHint && tab === 'chat' && React.createElement(Box, {
-      flexDirection: 'row',
-      borderStyle: 'round',
-      borderColor: THEME.panelBorder,
-      paddingX: 1,
-      flexShrink: 0,
-      minWidth: 0,
-      overflow: 'hidden',
-    },
-      React.createElement(Text, { color: THEME.warning, wrap: 'truncate' }, 'type /approve to confirm')
-    ),
-
     tab === 'chat' && React.createElement(Box, { overflow: 'hidden', flexShrink: 0, height: 1, minWidth: 0 },
       React.createElement(Text, { color: THEME.separator, dimColor: true, wrap: 'truncate' }, '-'.repeat(100))
     ),
 
-    (latestProgress || promptPreview) && tab === 'chat' && !startDialogOpen && React.createElement(Box, {
+    banner && tab === 'chat' && !startDialogOpen && React.createElement(Box, {
       flexDirection: 'row',
       borderStyle: 'round',
-      borderColor: THEME.panelBorder,
+      borderColor: banner.color,
       paddingX: 1,
       flexShrink: 0,
       minWidth: 0,
       overflow: 'hidden',
     },
-      !promptPreview && React.createElement(Box, { paddingRight: 1, flexShrink: 0 }, 
-        React.createElement(Text, { color: THEME.accent }, React.createElement(Spinner, { type: 'dots' }))
+      banner.spinner && React.createElement(Box, { paddingRight: 1, flexShrink: 0 }, 
+        React.createElement(Text, { color: banner.color }, React.createElement(Spinner, { type: 'dots' }))
       ),
       React.createElement(Text, { 
-        color: promptPreview ? THEME.accentSoft : THEME.accent, 
+        color: banner.color, 
         wrap: 'truncate' 
-      }, promptPreview || latestProgress)
+      }, banner.text)
     ),
 
     tab === 'chat' && React.createElement(Box, {
@@ -581,7 +591,6 @@ export function ChatPanel({
           value: input,
           onChange,
           onSubmit: !chatMenuOpen ? onSubmit : () => {},
-          // FIX: Cleaned up Placeholder for New Sessions
           placeholder: (focused && isNewSession) ? 'Type prompt here...' : (focused ? '/ for menu | up/down nav msgs | alt+a expand' : 'Alt+E'),
           focus: focused && !isRepoInputMode,
           visibleWidth: Math.max(10, wrapLimit),

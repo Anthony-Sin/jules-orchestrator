@@ -176,6 +176,16 @@ export function useDashboardController() {
     return mapped
   }, [sessionsData, sortedIds])
 
+  // ── Anchor table selection to active chat ─────────────────────────
+  useEffect(() => {
+    if (mode === 'chat' && selectedSessionId) {
+      const activeIdx = AGENTS.findIndex(a => a.id === selectedSessionId)
+      if (activeIdx >= 0) {
+        setSel(currentSel => currentSel !== activeIdx ? activeIdx : currentSel)
+      }
+    }
+  }, [mode, selectedSessionId, AGENTS])
+
   const selectedAgent = useMemo(
     () => selectedSessionId ? AGENTS.find(a => a.id === selectedSessionId) : null,
     [AGENTS, selectedSessionId]
@@ -184,6 +194,7 @@ export function useDashboardController() {
   const showApproveHint = selectedAgent?.state === 'AWAITING_PLAN_APPROVAL'
 
   // ── Agent actions (handleSend, openAgentChat, queued msgs) ────────
+  // THIS MUST BE CALLED BEFORE THE QUEUED MESSAGE EFFECT
   const {
     agentsRef,
     pendingSendsRef,
@@ -217,25 +228,42 @@ export function useDashboardController() {
     setLatestProgress,
     setQueuedMessages,
     setRepoInputMode,
+    sourcesList,
   })
 
   // ── Queued message sender ─────────────────────────────────────────
-  // Fires queued messages once target agent leaves IN_PROGRESS
+  // Fires queued messages once target agent enters a waiting state
+  // ── Queued message sender ─────────────────────────────────────────
+  // Fires queued messages once target agent becomes available
   useEffect(() => {
     for (const [id, msgs] of Object.entries(queuedMessages)) {
       if (!msgs || msgs.length === 0) continue
       const msg = msgs[0]
 
-      const agent = agentsRef.current.find(a => a.id === id)
-      if (agent && agent.state !== 'IN_PROGRESS' && !pendingSendsRef.current.has(id)) {
+      const agent = AGENTS.find(a => a.id === id)
+      
+      // 🐛 FIX: Queue triggers as long as the agent isn't actively busy
+      const isBusy = agent && ['IN_PROGRESS', 'PLANNING', 'QUEUED'].includes(agent.state);
+      const isReadyForInput = agent && !isBusy;
+
+      if (isReadyForInput && !pendingSendsRef.current.has(id)) {
         pendingSendsRef.current.add(id)
 
         const tId = setTimeout(() => {
-          sendMessage(id, msg).catch(() => {})
+          
+          if (msg === '/approve' && agent.state === 'AWAITING_PLAN_APPROVAL') {
+            import('../../state/jules-api.js').then(({ approvePlan }) => {
+              approvePlan(id).catch(console.error)
+            })
+          } else {
+            sendMessage(id, msg).catch(console.error)
+          }
+          
           setMessages(m => {
             if (selectedSessionIdRef.current !== id) return m
-            return [...m, { role: 'system', text: `[SYSTEM] Sent queued message to ${id}` }]
+            return [...m, { role: 'system', text: `[SYSTEM] Sent queued message...` }]
           })
+          
           setQueuedMessages(prev => {
             const nextQueue = { ...prev }
             if (nextQueue[id]) {
@@ -246,15 +274,15 @@ export function useDashboardController() {
             }
             return nextQueue
           })
+          
           pendingSendsRef.current.delete(id)
           pendingTimeoutsRef.current.delete(tId)
-        }, 5000)
+        }, 100) 
 
         pendingTimeoutsRef.current.add(tId)
       }
     }
-  }, [queuedMessages, AGENTS, agentsRef, pendingSendsRef, pendingTimeoutsRef, selectedSessionIdRef, setMessages, setQueuedMessages])
-
+  }, [queuedMessages, AGENTS, pendingSendsRef, pendingTimeoutsRef, selectedSessionIdRef, setMessages, setQueuedMessages])
   const diffRefreshToken = selectedSessionId ? (diffRefreshBySession[selectedSessionId] || 0) : 0
 
   // ── Return ────────────────────────────────────────────────────────
@@ -281,9 +309,7 @@ export function useDashboardController() {
     showApproveHint,
     notes, setNotes,
     selectedSessionId, setSelectedSessionId,
-    latestProgress: selectedAgent && ['IN_PROGRESS', 'PLANNING'].includes(selectedAgent.state)
-      ? (latestProgress || 'Thinking...')
-      : null,
+    latestProgress,
     setLatestProgress,
     expandedMessages, toggleMessageExpand,
     chatCursorLine, setChatCursorLine,

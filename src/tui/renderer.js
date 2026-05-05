@@ -81,16 +81,25 @@ export function Dashboard({ searchTerm = '' }) {
     ? sourcesList.filter(s => ('/' + (s.displayName || s.name)).toLowerCase().includes(repoInput.toLowerCase()))
     : []
 
+  const currentSource = getConfig().source
+  const currentRepoDisplay = currentSource ? parseSourceDisplay(currentSource) : 'NOT SET'
+  const currentRepoName = toRepoName(currentRepoDisplay)
+  const activeAgent = selectedSessionId ? AGENTS.find(a => a.id === selectedSessionId) : null
+  const activeAgentTitle = activeAgent?.title || 'agent'
+  const activeAgentId = selectedSessionId || 'NEW TASK'
+  // Derive if our new unified banner should be visible
+  const isBannerVisible = activeAgent && ['QUEUED', 'PLANNING', 'IN_PROGRESS', 'AWAITING_PLAN_APPROVAL', 'AWAITING_USER_FEEDBACK', 'PAUSED'].includes(activeAgent.state);
+
   const layout = useLayout({
     mode,
     repoInputMode,
     chatMenuOpen,
     chatTab,
     chatInput,
-    hasLatestProgress: !!latestProgress,
+    hasLatestProgress: isBannerVisible || !!promptPreview,
     hasPromptPreview: !!promptPreview,
     hasStartDialog: startDialogOpen,
-    hasApproveHint: showApproveHint,
+    hasApproveHint: false, // We unified this, so tell the layout engine to ignore the old one!
   })
 
   const {
@@ -136,12 +145,6 @@ export function Dashboard({ searchTerm = '' }) {
     saveToDrive,
   })
 
-  const currentSource = getConfig().source
-  const currentRepoDisplay = currentSource ? parseSourceDisplay(currentSource) : 'NOT SET'
-  const currentRepoName = toRepoName(currentRepoDisplay)
-  const activeAgent = selectedSessionId ? AGENTS.find(a => a.id === selectedSessionId) : null
-  const activeAgentTitle = activeAgent?.title || 'agent'
-  const activeAgentId = selectedSessionId || 'NEW TASK'
 
   const [repoDropdownOffset, setRepoDropdownOffset] = React.useState(0)
 
@@ -345,6 +348,7 @@ export function Dashboard({ searchTerm = '' }) {
               repoName: currentRepoName,
               agentTitle: activeAgentTitle,
               agentId: activeAgentId,
+              agentState: activeAgent?.state,
               chatTargetMode,
               visibleAgentsCount: VISIBLE_AGENTS,
               chatMenuOpen,

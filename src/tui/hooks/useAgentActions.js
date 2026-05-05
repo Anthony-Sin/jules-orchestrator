@@ -28,6 +28,7 @@ export function useAgentActions({
   setLatestProgress,
   setQueuedMessages,
   setRepoInputMode,
+  sourcesList,
 }) {
   const agentsRef = useRef(AGENTS)
   useEffect(() => { agentsRef.current = AGENTS }, [AGENTS])
@@ -35,26 +36,12 @@ export function useAgentActions({
   const pendingSendsRef = useRef(new Set())
   const pendingTimeoutsRef = useRef(new Set())
 
-  // Cleanup pending timeouts on unmount
   useEffect(() => {
     return () => {
       for (const tId of pendingTimeoutsRef.current) clearTimeout(tId)
     }
   }, [])
 
-  // ── Queued message sender ─────────────────────────────────────────
-  // Fires queued messages once an agent leaves IN_PROGRESS state
-  useEffect(() => {
-    for (const [id, msgs] of Object.entries(
-      // We read queuedMessages via the setter pattern to avoid stale closure —
-      // this effect re-runs whenever AGENTS changes which is frequent enough
-      agentsRef.current.reduce((acc, a) => acc, {})
-    )) {
-      void id; void msgs // placeholder — see real impl below
-    }
-  }, []) // intentionally empty — real logic is in the effect below
-
-  // ── Open agent chat ───────────────────────────────────────────────
   const openAgentChat = useCallback((agent) => {
     if (!agent) return
 
@@ -76,9 +63,9 @@ export function useAgentActions({
       }])
     }
 
-    loadSessionActivities(agent.id, { force: true }).then(() => {
-      setLatestProgress(null)
-    })
+    // 🐛 FIX: Clear the old agent's progress instantly so it doesn't bleed into the new chat
+    setLatestProgress(null)
+    loadSessionActivities(agent.id, { force: true })
   }, [
     buildDisplayMessages, loadSessionActivities, resetExpandedMessages,
     setSelectedSessionId, setChatTargetMode, setMode, setStartDialogOpen,
@@ -91,7 +78,6 @@ export function useAgentActions({
     const raw = val.trim()
     if (!raw) return
 
-    // ── Slash commands ──
     if (raw === '/start') {
       setMode('chat')
       setStartDialogOpen(true)
@@ -115,7 +101,6 @@ export function useAgentActions({
       return
     }
 
-    // ── Guard: need a repo ──
     const source = getConfig().source
     if (!source || source === 'NOT SET') {
       setMessages(m => [...m, { role: 'system', text: 'Error: No repo selected. Press Alt+M.' }])
@@ -130,15 +115,23 @@ export function useAgentActions({
     if (createMode === 'CREATE_TASK') {
       setChatInput('')
       setScrollOffset(0)
-      setLatestProgress(null)
+      
+      // 🚀 THE FIX: Universal "Thinking..." text immediately
+      setLatestProgress('Thinking...') 
+      setStartDialogOpen(false)
+
       try {
-        const julesSession = await createSession({ prompt: raw, source })
+        const sourceObj = sourcesList.find(s => s.name === source)
+        const startingBranch = sourceObj?.githubRepo?.defaultBranch?.displayName || 'main'
+
+        const julesSession = await createSession({ prompt: raw, source, startingBranch })
         const sessionId = julesSession.name.split('/').pop()
 
         upsertSession({
           id: sessionId,
           title: raw.substring(0, 30),
           type: 'task',
+          prompt: raw,
           state: julesSession.state || 'QUEUED',
           createdAt: Date.now(),
           lastUpdated: Date.now(),
@@ -148,8 +141,8 @@ export function useAgentActions({
         setMessages(m => [...m, { role: 'system', text: `Created task session: ${sessionId}` }])
         setSelectedSessionId(sessionId)
         setChatTargetMode('TALK_TO_SELECTED_AGENT')
-        setStartDialogOpen(false)
       } catch (e) {
+        setLatestProgress(null)
         setMessages(m => [...m, { role: 'system', text: `Create task error: ${e.message}` }])
       }
       return
@@ -162,20 +155,22 @@ export function useAgentActions({
       return
     }
 
-    if (targetAgent.state === 'IN_PROGRESS') {
-      setQueuedMessages(prev => ({
-        ...prev,
-        [targetAgent.id]: [...(prev[targetAgent.id] || []), raw],
-      }))
-      setMessages(m => [...m, { role: 'system', text: 'Message queued' }])
-      setChatInput('')
-      setScrollOffset(0)
-      return
-    }
-
-    setMessages(m => [...m, { role: 'system', text: 'Sending...' }])
     setChatInput('')
     setScrollOffset(0)
+    
+    // 🚀 THE FIX: Changed from 'Sending...' to 'Thinking...'
+    setLatestProgress('Thinking...')
+    
+    upsertSession({
+      id: targetAgent.id,
+      state: 'IN_PROGRESS',
+      lastUpdated: Date.now()
+    })
+    refreshLocalSessions()
+
+    if (raw !== '/approve') {
+      setMessages(m => [...m, { role: 'user', text: raw, activityName: `local-${Date.now()}` }])
+    }
 
     try {
       if (raw === '/approve') {
@@ -184,6 +179,7 @@ export function useAgentActions({
         await sendMessage(targetAgent.id, raw)
       }
     } catch (e) {
+      setLatestProgress(null)
       setMessages(m => {
         if (selectedSessionIdRef.current !== targetAgent.id) return m
         return [...m, { role: 'system', text: `Send error: ${e.message}` }]
@@ -191,18 +187,17 @@ export function useAgentActions({
     }
   }, [
     startDialogOpen, startDialogMode, chatTargetMode, selectedSessionId,
-    AGENTS, refreshLocalSessions, selectedSessionIdRef,
+    AGENTS, refreshLocalSessions, selectedSessionIdRef, sourcesList,
     setMode, setStartDialogOpen, setStartDialogMode, setChatTargetMode,
     setChatInput, setScrollOffset, setMessages, setLatestProgress,
     setSelectedSessionId, setQueuedMessages,
   ])
 
-  // ── Repo submit ───────────────────────────────────────────────────
   function handleRepoSubmit(val) {
-    const trimmed = (val ?? repoInput).trim()   // fall back to repoInput state
+    const trimmed = (val ?? repoInput).trim() 
     if (trimmed) setConfig('source', trimmed)
     setRepoInputMode(false)
-    }
+  }
 
   return {
     agentsRef,

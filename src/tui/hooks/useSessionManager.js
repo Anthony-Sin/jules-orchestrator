@@ -163,13 +163,22 @@ export function useSessionManager({
   }, [setSessionsData, setSortedIds])
 
   // ── Build display messages from cache ────────────────────────────
+  // ── Build display messages from cache ────────────────────────────
   const buildDisplayMessages = useCallback((sessionId) => {
     const cache = sessionHistoryCacheRef.current.get(sessionId)
     const baseMessages = cache?.messages || []
     const agents = getSessions() || []
     const agent = agents.find(a => a.id === sessionId)
+    
+    // 🐛 FIX: Put context at the TOP, and inject the initial prompt into the history!
     const contextText = `Context: ${sessionId.substring(0, 8)}. State: ${agent?.state || 'unknown'}. Repo: ${agent?.repoDisplay || agent?.repo || 'unknown'}.`
-    return [...baseMessages, { role: 'system', text: contextText }]
+    const initialMessages = [{ role: 'system', text: contextText }]
+    
+    if (agent?.prompt) {
+      initialMessages.push({ role: 'user', text: agent.prompt, activityName: 'initial-prompt' })
+    }
+
+    return [...initialMessages, ...baseMessages]
   }, [])
 
   // ── Update cache ─────────────────────────────────────────────────
@@ -290,6 +299,7 @@ export function useSessionManager({
             title: resolvedTitle,
             repo: rs.sourceContext?.source || local?.repo,
             type: local?.type,
+            prompt: rs.prompt || local?.prompt,
           })
           changed = true
         }
