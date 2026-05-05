@@ -9,6 +9,7 @@ import { dispatchLeadOrchestrator } from '../src/jules_lead_orchestrator/julesor
 import { deleteSession, listSessions, getSession, parseSourceDisplay, sendMessage, getAllActivities } from '../src/state/jules-api.js'
 import { handleOrchestratorToolCall } from '../src/jules_lead_orchestrator/julesorchestrator.js'
 import { upsertSession, getSessions, getActiveSessions, store, unlockFiles, getQueue, setConfig, getConfig } from '../src/state/store.js'
+import { wakePausedAgents } from '../src/queue/queue.js'
 
 const TERMINAL_STATES = ['COMPLETED', 'FAILED', 'KILLED']
 
@@ -63,19 +64,7 @@ export async function pollAndUpdate() {
         if (session.parentOrchestratorId) {
            await sendMessage(session.parentOrchestratorId, `[AGENT_UPDATE: ${session.id}] State changed to ${newState}`);
         }
-
-        if (newState === 'COMPLETED') {
-           const allSessions = getSessions();
-           for (const dep of allSessions) {
-             if (dep.state === 'PAUSED' && dep.waitingOn === session.id) {
-               upsertSession({ id: dep.id, state: 'QUEUED', waitingOn: null });
-               await sendMessage(dep.id, `[RESUMED] Agent ${session.id} has completed. You may proceed.`);
-               if (dep.parentOrchestratorId) {
-                  await sendMessage(dep.parentOrchestratorId, `[AGENT_UPDATE: ${dep.id}] Resumed because dependency ${session.id} completed.`);
-               }
-             }
-           }
-        }
+        await wakePausedAgents();
       }
 
       if (TERMINAL_STATES.includes(newState)) unlockFiles(session.id)

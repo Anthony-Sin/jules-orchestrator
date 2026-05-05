@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert';
 import React from 'react';
 import { render } from 'ink-testing-library';
-import { ago, STATUS_COLOR, STATUS_SHORT, buildRows, FillBar, AgentRow, SubAgentRow } from './table.js';
+import { ago, STATUS_COLOR, STATUS_SHORT, buildRows, AgentRow, SubAgentRow } from './table.js';
 
 test('ago', (t) => {
   const now = Date.now();
