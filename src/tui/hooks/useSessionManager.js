@@ -193,7 +193,7 @@ export function useSessionManager({
     }
 
     if (existing.signature === signature) {
-      return { changed: false, latestProgressText: null }
+      return { changed: false, latestProgressText: null, hasNewMessage: false }
     }
 
     const next = {
@@ -217,12 +217,16 @@ export function useSessionManager({
     }
 
     let latestProgressText = null
+    let hasNewMessage = false
     for (let i = appendStart; i < sorted.length; i++) {
       const act = sorted[i]
 
       // Build display message
       const msg = toHistoryMessage(act)
-      if (msg) next.messages.push(msg)
+      if (msg) {
+        next.messages.push(msg)
+        if (msg.role === 'agent' || msg.role === 'user') hasNewMessage = true
+      }
 
       const progressText = getProgressText(act)
       if (progressText) latestProgressText = progressText
@@ -230,7 +234,7 @@ export function useSessionManager({
 
     next.lastActivityId = sorted.length > 0 ? sorted[sorted.length - 1].name : null
     sessionHistoryCacheRef.current.set(sessionId, next)
-    return { changed: true, latestProgressText }
+    return { changed: true, latestProgressText, hasNewMessage }
   }, [])
 
   // ── Load activities for a session ────────────────────────────────
@@ -240,12 +244,14 @@ export function useSessionManager({
       const acts = res.activities || res || []
       if (!Array.isArray(acts)) return false
 
-      const { changed, latestProgressText } = updateSessionHistoryCache(sessionId, acts)
+      const { changed, latestProgressText, hasNewMessage } = updateSessionHistoryCache(sessionId, acts)
       if (changed) {
         setDiffRefreshBySession(prev => ({ ...prev, [sessionId]: (prev[sessionId] || 0) + 1 }))
       }
       if (latestProgressText) {
         setLatestProgress(latestProgressText)
+      } else if (hasNewMessage) {
+        setLatestProgress(null)
       }
       if (force || (changed && selectedSessionIdRef.current === sessionId)) {
         setMessages(buildDisplayMessages(sessionId))
