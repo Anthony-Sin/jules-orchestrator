@@ -139,8 +139,11 @@ export function useAgentActions({
         })
         refreshLocalSessions()
         setMessages(m => [...m, { role: 'system', text: `Created task session: ${sessionId}` }])
-        setSelectedSessionId(sessionId)
-        setChatTargetMode('TALK_TO_SELECTED_AGENT')
+        openAgentChat({
+          id: sessionId,
+          state: julesSession.state || 'QUEUED',
+          repoDisplay: source
+        })
       } catch (e) {
         setLatestProgress(null)
         setMessages(m => [...m, { role: 'system', text: `Create task error: ${e.message}` }])

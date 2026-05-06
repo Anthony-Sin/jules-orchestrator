@@ -191,7 +191,7 @@ export function ChatPanel({
     const truncatedProgress = safeProgress.length > 60 ? safeProgress.substring(0, 57) + '...' : safeProgress
 
     // 🚀 THE FIX: If it says "Thinking...", force the active visuals even if state is lagging
-    if (truncatedProgress === 'Thinking...') {
+    if (truncatedProgress === 'Thinking...' && !['AWAITING_USER_FEEDBACK', 'AWAITING_PLAN_APPROVAL'].includes(state)) {
       return { text: 'Thinking...', spinner: true, color: STATUS_COLOR.IN_PROGRESS }
     }
 

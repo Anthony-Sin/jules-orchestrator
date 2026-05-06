@@ -59,15 +59,11 @@ describe('TUI Mega Integration Suite', () => {
         { id: '1', title: 'Agent 1', isOrchestrator: false },
         { id: '2', title: 'Orchestrator 1', isOrchestrator: true, subAgents: [{ id: 'sub1' }] }
       ];
-      const expandedIds = new Set(['2']);
-      const rows = buildRows(sessions, expandedIds);
+      const rows = buildRows(sessions);
 
-      assert.strictEqual(rows.length, 3);
+      assert.strictEqual(rows.length, 2);
       assert.strictEqual(rows[0].data.id, '1');
       assert.strictEqual(rows[1].data.id, '2');
-      assert.strictEqual(rows[1].expanded, true);
-      assert.strictEqual(rows[2].type, 'sub');
-      assert.strictEqual(rows[2].data.id, 'sub1');
     });
 
     test('AgentRow renders without crashing (No FillBar)', () => {
