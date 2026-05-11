@@ -83,6 +83,7 @@ export function useKeyboard(p) {
         
         // 1. Instantly wipe it locally so it disappears from UI
         removeSession(agent.id)
+        setSel(s => Math.max(0, Math.min(s, AGENTS.length - 2))) // Eagerly move cursor up if at the bottom
 
         // 2. Try the network deletion in the background
         deleteSession(agent.id)

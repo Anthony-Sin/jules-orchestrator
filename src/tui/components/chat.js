@@ -105,9 +105,10 @@ export function ChatPanel({
           if (isOpen) {
             for (const ml of mdLines) lines.push({ ...ml, msgIdx })
           } else {
-            const previewLines = mdLines.filter(l => l.type !== 'gap').slice(0, PREVIEW_LINES)
+            const textLinesOnly = mdLines.filter(l => l.type !== 'gap')
+            const previewLines = textLinesOnly.slice(0, PREVIEW_LINES)
             for (const pl of previewLines) lines.push({ ...pl, _isPreview: true, msgIdx })
-            const hidden = mdLines.length - previewLines.length
+            const hidden = textLinesOnly.length - previewLines.length
             if (hidden > 0) {
               lines.push({ type: 'more-hint', hidden, msgIdx, focused })
             }
@@ -139,6 +140,17 @@ export function ChatPanel({
   const total = allLines.length
   const targetLineIndex = Math.max(0, total - 1 - (chatCursorLine || 0))
 
+  // ── FIX: Anchor scroll position when reading history ──
+  const prevTotalRef = React.useRef(total)
+  React.useEffect(() => {
+    if (total > prevTotalRef.current && chatCursorLine > 0 && setChatCursorLine) {
+      // Agent is typing, but we are scrolled up. 
+      // Push the cursor offset up by the exact number of new lines so the text freezes in place.
+      setChatCursorLine(c => c + (total - prevTotalRef.current))
+    }
+    prevTotalRef.current = total
+  }, [total, chatCursorLine, setChatCursorLine])
+
   useEffect(() => {
     if (!focused || tab !== 'chat' || total <= 0 || !setScrollOffset) return
 
@@ -167,7 +179,8 @@ export function ChatPanel({
       setChatCursorLine?.(c => Math.max(0, (c || 0) - 1))
       return
     }
-    if (key.meta && inputKey === 'a') {
+    // Changed to Alt+X to prevent triggering the global "Apply Code" (Alt+A) shortcut
+    if (key.meta && inputKey === 'x') {
       const selectedLine = allLines[targetLineIndex]
       if (selectedLine && selectedLine.msgIdx >= 0) toggleMessageExpand(selectedLine.msgIdx)
     }
@@ -185,9 +198,9 @@ export function ChatPanel({
 
   // ── Unified Dynamic Status Banner ──
   function getStatusBanner(state, progress, preview) {
-    if (preview) return { text: preview, spinner: false, color: THEME.accentSoft }
+    if (preview) return { text: String(preview).split('\n')[0], spinner: false, color: THEME.accentSoft }
     
-    const safeProgress = String(progress || '')
+    const safeProgress = String(progress || '').split('\n')[0].trim()
     const truncatedProgress = safeProgress.length > 60 ? safeProgress.substring(0, 57) + '...' : safeProgress
 
     // 🚀 THE FIX: If it says "Thinking...", force the active visuals even if state is lagging
@@ -572,9 +585,10 @@ export function ChatPanel({
       paddingX: 1,
       flexShrink: 0,
       minWidth: 0,
+      height: 3,
       overflow: 'hidden',
     },
-      banner.spinner && React.createElement(Box, { paddingRight: 1, flexShrink: 0 }, 
+      banner.spinner && React.createElement(Box, { paddingRight: 1, flexShrink: 0 },
         React.createElement(Text, { color: banner.color }, React.createElement(Spinner, { type: 'dots' }))
       ),
       React.createElement(Text, { 
@@ -598,8 +612,14 @@ export function ChatPanel({
       React.createElement(Box, { flexGrow: 1, flexShrink: 1, minWidth: 0, overflow: 'hidden' },
         React.createElement(ScrollInput, {
           value: input,
-          onChange,
-          onSubmit: !chatMenuOpen ? onSubmit : () => {},
+          onChange: (val) => {
+            if (chatCursorLine > 0) setChatCursorLine(0) // Snap to bottom on type
+            onChange(val)
+          },
+          onSubmit: !chatMenuOpen ? () => {
+            if (chatCursorLine > 0) setChatCursorLine(0) // Snap to bottom on send
+            onSubmit()
+          } : () => {},
           placeholder: (focused && isNewSession) ? 'Type prompt here...' : (focused ? '/ for menu | up/down nav msgs | alt+a expand' : 'Alt+E'),
           focus: focused && !isRepoInputMode,
           visibleWidth: Math.max(10, wrapLimit),

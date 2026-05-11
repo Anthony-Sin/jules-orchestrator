@@ -273,9 +273,15 @@ export function Dashboard({ searchTerm = '' }) {
             onSubmit: () => {
               if (repoInput.startsWith('/')) {
                 // Submit the highlighted dropdown item
-                if (filteredSources && filteredSources[sourceSel]) {
+                if (filteredSources && filteredSources.length > 0 && filteredSources[sourceSel]) {
                   handleRepoSubmit(filteredSources[sourceSel].name || '')
                   setSourceSel(0)
+                } else if (repoInput.length > 1) {
+                  // Fallback: If no matches, assume they typed a valid custom path anyway
+                  handleRepoSubmit(repoInput.substring(1))
+                  setSourceSel(0)
+                } else {
+                  flash('Please type a repository name.')
                 }
               } else {
                 // Submit custom typed string

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "jorch": "./bin/jorch.js"
+    "Terjules": "./bin/jorch.js"
   },
   "scripts": {
     "dev": "node bin/jorch.js",

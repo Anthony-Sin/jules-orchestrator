@@ -113,10 +113,12 @@ export function useDashboardController() {
   // ── Flash / help ──────────────────────────────────────────────────
   const [statusFlash, setStatusFlash] = useState('')
   const [showHelp, setShowHelp] = useState(false)
+  const flashTimeoutRef = useRef(null)
 
   function flash(msg, ms = 2000) {
     setStatusFlash(msg)
-    setTimeout(() => setStatusFlash(''), ms)
+    if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current)
+    flashTimeoutRef.current = setTimeout(() => setStatusFlash(''), ms)
   }
 
   // ── Sessions data ─────────────────────────────────────────────────
@@ -174,7 +176,12 @@ export function useDashboardController() {
     })
 
     return mapped
-  }, [sessionsData, sortedIds])
+    }, [sessionsData, sortedIds])
+
+    // ── Clamp table selection if agents change ────────────────────────
+    useEffect(() => {
+      setSel(s => Math.max(0, Math.min(s, AGENTS.length - 1)))
+    }, [AGENTS.length])
 
   // ── Anchor table selection to active chat ─────────────────────────
   useEffect(() => {
