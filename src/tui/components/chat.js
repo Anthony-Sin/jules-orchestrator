@@ -180,7 +180,7 @@ export function ChatPanel({
       return
     }
     // Changed to Alt+X to prevent triggering the global "Apply Code" (Alt+A) shortcut
-    if (key.meta && inputKey === 'x') {
+    if (key.meta && inputKey === 'v') {
       const selectedLine = allLines[targetLineIndex]
       if (selectedLine && selectedLine.msgIdx >= 0) toggleMessageExpand(selectedLine.msgIdx)
     }
@@ -349,7 +349,7 @@ export function ChatPanel({
                   React.createElement(Text, { color: l.color, bold: true, dimColor: !focused, wrap: 'truncate' }, `AGENT ${l.chevron}`),
                   l.countSuffix && React.createElement(Text, { color: THEME.subtleText, dimColor: true, wrap: 'truncate' }, l.countSuffix),
                   l.isAutoExpanded && React.createElement(Text, { color: THEME.subtleText, dimColor: true, wrap: 'truncate' }, ' auto'),
-                  l.isLong && isFoc && React.createElement(Text, { color: THEME.subtleText, dimColor: true, wrap: 'truncate' }, ' [alt+a]')
+                  l.isLong && isFoc && React.createElement(Text, { color: THEME.subtleText, dimColor: true, wrap: 'truncate' }, ' [alt+v]')
                 )
               }
 
@@ -364,7 +364,7 @@ export function ChatPanel({
                   prefixElt,
                   React.createElement(Text, { color: focused ? THEME.accentSoft : THEME.subtleText, dimColor: !focused, wrap: 'truncate' },
                     `${l.hidden} more line${l.hidden !== 1 ? 's' : ''} hidden - press `),
-                  React.createElement(Text, { color: focused ? THEME.text : THEME.subtleText, bold: true, dimColor: !focused, wrap: 'truncate' }, '[alt+a]'),
+                  React.createElement(Text, { color: focused ? THEME.text : THEME.subtleText, bold: true, dimColor: !focused, wrap: 'truncate' }, '[alt+v]'),
                   React.createElement(Text, { color: focused ? THEME.accentSoft : THEME.subtleText, dimColor: !focused, wrap: 'truncate' }, ' to expand')
                 )
               }
@@ -616,11 +616,11 @@ export function ChatPanel({
             if (chatCursorLine > 0) setChatCursorLine(0) // Snap to bottom on type
             onChange(val)
           },
-          onSubmit: !chatMenuOpen ? () => {
+          onSubmit: !chatMenuOpen ? (val) => {
             if (chatCursorLine > 0) setChatCursorLine(0) // Snap to bottom on send
-            onSubmit()
+            onSubmit(val)
           } : () => {},
-          placeholder: (focused && isNewSession) ? 'Type prompt here...' : (focused ? '/ for menu | up/down nav msgs | alt+a expand' : 'Alt+E'),
+          placeholder: (focused && isNewSession) ? 'Type prompt here...' : (focused ? '/ for menu | up/down nav msgs | alt+v expand' : 'Alt+E'),
           focus: focused && !isRepoInputMode,
           visibleWidth: Math.max(10, wrapLimit),
           maxRows: inputVisibleRows,
