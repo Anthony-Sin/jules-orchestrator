@@ -186,7 +186,7 @@ export function ChatPanel({
     }
   })
 
-  const isNewSession = chatTargetMode === 'CREATE_TASK' || (!chatTargetMode && agentId === 'NEW TASK')
+  const isNewSession = chatTargetMode === 'CREATE_TASK' || chatTargetMode === 'CREATE_ORCHESTRATOR' || (!chatTargetMode && agentId === 'NEW TASK')
   const hasMessages = messages && messages.length > 0
 
   const maxTitleLen = 16
@@ -310,7 +310,7 @@ export function ChatPanel({
               flexDirection: 'column', 
               alignItems: 'center' 
             },
-              MESSAGE_ROWS >= 4 && React.createElement(Text, { color: THEME.accent, bold: true }, `✦ START NEW TASK`),
+              MESSAGE_ROWS >= 4 && React.createElement(Text, { color: THEME.accent, bold: true }, startDialogMode === 'CREATE_ORCHESTRATOR' ? `✦ START NEW ORCHESTRATOR` : `✦ START NEW TASK`),
               MESSAGE_ROWS >= 7 && React.createElement(Box, { height: 1 }),
               MESSAGE_ROWS >= 6 && React.createElement(Text, { color: THEME.text }, 'Type instructions and press Enter.'),
               MESSAGE_ROWS >= 8 && React.createElement(Box, { height: 1 }),
@@ -565,7 +565,7 @@ export function ChatPanel({
       minWidth: 0,  
       overflow: 'hidden',
     },
-      ['Start New Task', 'Approve Plan', 'Orchestrator Dashboard'].map((opt, idx) =>
+      ['Start New Task', 'Start New Orchestrator', 'Approve Plan'].map((opt, idx) =>
         React.createElement(Text, {
           key: idx,
           color: chatMenuSel === idx ? THEME.accent : THEME.subtleText,

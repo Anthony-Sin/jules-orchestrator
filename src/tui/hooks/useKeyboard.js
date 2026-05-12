@@ -200,6 +200,14 @@ export function useKeyboard(p) {
     if (key.meta && input === 'n') { setMode('chat'); setChatTab(t => t === 'chat' ? 'notes' : 'chat'); return }
     if (key.meta && input === 'm') { setRepoInputMode(true); setRepoInput('/'); setSourceSel(0); return }
     if (key.meta && input === 'r') { setTick(t => t + 1); return }
+    if (key.meta && input === 'o') {
+      import('../../state/store.js').then(({ getGovernorConfig, setConfig }) => {
+        const config = getGovernorConfig()
+        setConfig('governorOvernightMode', !config.overnightMode)
+        flash(`Overnight Mode: ${!config.overnightMode ? 'ON' : 'OFF'}`)
+      })
+      return
+    }
 
     if (key.f4) { setRepoInputMode(true); setRepoInput('/'); setSourceSel(0); return }
     if (key.f1) { setMode('table'); return }
@@ -242,19 +250,13 @@ export function useKeyboard(p) {
         if (key.downArrow) { setChatMenuSel(i => Math.min(2, i + 1)); return }
         if (key.return) {
           if (chatMenuSel === 2) {
-            setMode('orchestrator')
-            setChatMenuOpen(false)
-            setChatInput('')
-            return
-          }
-          if (chatMenuSel === 1) {
             setChatMenuOpen(false)
             setChatInput('')
             handleSend('/approve')
             return
           }
 
-          const modeOption = 'CREATE_TASK'
+          const modeOption = chatMenuSel === 1 ? 'CREATE_ORCHESTRATOR' : 'CREATE_TASK'
           setChatTargetMode(modeOption)
           setStartDialogMode(modeOption)
           setStartDialogOpen(true)

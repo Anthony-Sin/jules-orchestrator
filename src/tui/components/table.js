@@ -91,8 +91,9 @@ export function AgentRow({ agent, selected, tick, isDimmed, isExpanded, hasChild
 
   const shortId = (agent.id || '').slice(0, layout.id)
   const rawTitle = agent.title || 'agent'
+  const typeIcon = agent.type === 'orchestrator' ? '👑 ' : ''
   const prefix = depth > 0 ? '  '.repeat(depth) + '└─ ' : (hasChildren ? (isExpanded ? 'v ' : '> ') : '')
-  const titleStr = trimCell(prefix + rawTitle, layout.title)
+  const titleStr = trimCell(prefix + typeIcon + rawTitle, layout.title)
   const repoStr = extractRepoName(agent.repoDisplay || agent.repo || '')
   const repoTrimmed = trimCell(repoStr, layout.repo)
   const ageStr = ago(agent.lastUpdated || agent.createdAt)

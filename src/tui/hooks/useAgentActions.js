@@ -111,8 +111,8 @@ export function useAgentActions({
 
     const createMode = startDialogOpen ? startDialogMode : chatTargetMode
 
-    // ── Create plain task ──
-    if (createMode === 'CREATE_TASK') {
+    // ── Create plain task or Orchestrator ──
+    if (createMode === 'CREATE_TASK' || createMode === 'CREATE_ORCHESTRATOR') {
       setChatInput('')
       setScrollOffset(0)
       
@@ -124,29 +124,58 @@ export function useAgentActions({
         const sourceObj = sourcesList.find(s => s.name === source)
         const startingBranch = sourceObj?.githubRepo?.defaultBranch?.displayName || 'main'
 
-        const julesSession = await createSession({ prompt: raw, source, startingBranch })
-        const sessionId = julesSession.name.split('/').pop()
+        let sessionId
+        let initialState = 'QUEUED'
 
-        upsertSession({
-          id: sessionId,
-          title: raw.substring(0, 30),
-          type: 'task',
-          prompt: raw,
-          state: julesSession.state || 'QUEUED',
-          createdAt: Date.now(),
-          lastUpdated: Date.now(),
-          repo: source,
-        })
+        if (createMode === 'CREATE_ORCHESTRATOR') {
+          // Local Orchestrator initialization
+          sessionId = 'orch-' + Math.random().toString(36).substring(2, 9)
+          initialState = 'IN_PROGRESS'
+
+          upsertSession({
+            id: sessionId,
+            title: raw.substring(0, 30),
+            type: 'orchestrator',
+            prompt: raw,
+            state: initialState,
+            createdAt: Date.now(),
+            lastUpdated: Date.now(),
+            repo: source,
+          })
+
+          // Start the orchestrator loop asynchronously
+          import('../../orchestrator/loop.js').then(({ runOrchestratorLoop }) => {
+            runOrchestratorLoop(raw, sessionId).catch(err => {
+              console.error('Orchestrator loop failed:', err)
+            })
+          })
+        } else {
+          const julesSession = await createSession({ prompt: raw, source, startingBranch })
+          sessionId = julesSession.name.split('/').pop()
+          initialState = julesSession.state || 'QUEUED'
+
+          upsertSession({
+            id: sessionId,
+            title: raw.substring(0, 30),
+            type: 'task',
+            prompt: raw,
+            state: initialState,
+            createdAt: Date.now(),
+            lastUpdated: Date.now(),
+            repo: source,
+          })
+        }
+
         refreshLocalSessions()
-        setMessages(m => [...m, { role: 'system', text: `Created task session: ${sessionId}` }])
+        setMessages(m => [...m, { role: 'system', text: `Created ${createMode === 'CREATE_ORCHESTRATOR' ? 'orchestrator' : 'task'} session: ${sessionId}` }])
         openAgentChat({
           id: sessionId,
-          state: julesSession.state || 'QUEUED',
+          state: initialState,
           repoDisplay: source
         })
       } catch (e) {
         setLatestProgress(null)
-        setMessages(m => [...m, { role: 'system', text: `Create task error: ${e.message}` }])
+        setMessages(m => [...m, { role: 'system', text: `Create error: ${e.message}` }])
       }
       return
     }
