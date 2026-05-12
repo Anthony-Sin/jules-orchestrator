@@ -6,13 +6,12 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 
 import { parseSourceDisplay } from '../state/jules-api.js'
-import { getConfig } from '../state/store.js'
+import { getConfig, getGovernorConfig } from '../state/store.js'
 
 import { AgentRow, buildRows } from './components/table.js'
 import { ChatPanel } from './components/chat.js'
 import { HelpScreen } from './components/help.js'
 import { GitDiffViewer } from './components/gitdiff.js'
-import { OrchestratorDashboard } from './components/orchestrator-dashboard.js'
 
 import { useDashboardController, saveToDrive } from './dashboard-controller.js'
 import { useLayout } from './hooks/useLayout.js'
@@ -204,6 +203,7 @@ export function Dashboard({ searchTerm = '' }) {
   }
 
   const activeCount = AGENTS.filter(a => ['IN_PROGRESS', 'PLANNING', 'AWAITING_USER_FEEDBACK', 'AWAITING_PLAN_APPROVAL'].includes(a.state)).length
+  const overnightMode = getGovernorConfig().overnightMode
 
   const shortcutTokensFull = [
     'alt+q queue',
@@ -258,6 +258,7 @@ export function Dashboard({ searchTerm = '' }) {
       React.createElement(Spacer),
       queuedEntries.length > 0 && React.createElement(Text, { color: THEME.accentSoft, wrap: 'truncate' }, `${queuedEntries.length} queued`),
       queuedEntries.length > 0 && React.createElement(Text, { color: THEME.subtleText }, ' | '),
+      overnightMode && React.createElement(Text, { color: 'magentaBright', bold: true, wrap: 'truncate' }, `[OVERNIGHT: ON] `),
       React.createElement(Text, { color: THEME.accent, bold: true, wrap: 'truncate' }, `[Active Agents: ${activeCount}]`)
     ),
 
@@ -403,7 +404,7 @@ export function Dashboard({ searchTerm = '' }) {
             React.createElement(Text, { color: THEME.subtleText, wrap: 'truncate' }, truncateShortcutBar(columns, shortcutBar)),
             React.createElement(Spacer),
             React.createElement(Text, { color: THEME.accent, bold: true },
-              mode === 'orchestrator' ? '[ORC]' : mode === 'diff' ? '[DIF]' : mode === 'chat' ? '[CHT]' : '[TBL]'
+              mode === 'diff' ? '[DIF]' : mode === 'chat' ? '[CHT]' : '[TBL]'
             )
           )
         : React.createElement(Box, { flexGrow: 1, flexShrink: 1, overflow: 'hidden', minWidth: 0 },
@@ -422,12 +423,6 @@ function _renderLeftPanel({
   tick, openAgentChat,
   AGENTS, sel, tableOffset, VISIBLE_AGENTS, allRows,
 }) {
-  if (mode === 'orchestrator') {
-    return React.createElement(Box, { flexGrow: 1, flexDirection: 'column', minWidth: 0, overflow: 'hidden' },
-      React.createElement(OrchestratorDashboard, {})
-    )
-  }
-
   if (mode === 'diff' || (mode === 'chat' && lastLeftMode === 'diff')) {
     return React.createElement(GitDiffViewer, {
       sessionId: activeAgentId,

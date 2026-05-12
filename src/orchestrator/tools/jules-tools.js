@@ -20,12 +20,33 @@ export const jules_api_control = {
       switch (args.action) {
         case 'create':
           if (!args.source || !args.prompt) throw new Error('source and prompt required')
-          return await julesApi.createSession({
+
+          const created = await julesApi.createSession({
             source: args.source,
             prompt: args.prompt,
             title: args.title,
             requirePlanApproval: args.requirePlanApproval
           })
+
+          // Save the child relation in the local store so it appears nested in the TUI table
+          if (args._orchestratorSessionId && created && created.name) {
+            import('../../state/store.js').then(({ upsertSession }) => {
+              const childId = created.name.split('/').pop()
+              upsertSession({
+                id: childId,
+                title: args.title || args.prompt.substring(0, 30),
+                type: 'task',
+                prompt: args.prompt,
+                state: created.state || 'QUEUED',
+                createdAt: Date.now(),
+                lastUpdated: Date.now(),
+                repo: args.source,
+                parentId: args._orchestratorSessionId
+              })
+            }).catch(() => {})
+          }
+
+          return created
         case 'sendMessage':
           if (!args.session_id || !args.prompt) throw new Error('session_id and prompt required')
           await julesApi.sendMessage(args.session_id, args.prompt)

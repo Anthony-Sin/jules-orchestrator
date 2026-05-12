@@ -49,7 +49,7 @@ export function useLayout({
   const inputExtraHeight = Math.min(3, inputRows - 1)
   const chatFixedHeights = 4
   
-  const chatMenuHeight = chatMenuOpen && chatTab === 'chat' ? 4 : 0
+  const chatMenuHeight = chatMenuOpen && chatTab === 'chat' ? 5 : 0
   
   // FIX: Force the layout engine to reclaim the progress bar space when the Start Dialog is open
   const progressHeight = (hasLatestProgress || hasPromptPreview) && chatTab === 'chat' && !hasStartDialog ? 3 : 0
