@@ -20,7 +20,7 @@ import crypto from 'crypto'
 
 // ── Text wrapping ─────────────────────────────────────────────────
 export function wrapText(text, width) {
-  if (text == null) return []
+  if (text == null) return ['']
   const lines = []
   const paragraphs = String(text).split('\n')
 
