@@ -53,6 +53,19 @@ export function getActiveSessions() {
   )
 }
 
+// --- Local Orchestrator Activities ---
+export function getLocalActivities(sessionId) {
+  const acts = store.get('localActivities', {})
+  return acts[sessionId] || []
+}
+
+export function appendLocalActivity(sessionId, activity) {
+  const acts = store.get('localActivities', {})
+  if (!acts[sessionId]) acts[sessionId] = []
+  acts[sessionId].push({ ...activity, name: `act-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` })
+  store.set('localActivities', acts)
+}
+
 // --- Task queue ---
 export function getQueue() {
   return store.get('queue', [])

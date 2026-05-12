@@ -176,10 +176,24 @@ export function useAgentActions({
     }
 
     try {
-      if (raw === '/approve') {
-        await approvePlan(targetAgent.id)
+      if (targetAgent.type === 'orchestrator') {
+        import('../../state/store.js').then(({ appendLocalActivity }) => {
+          appendLocalActivity(targetAgent.id, {
+            originator: 'user',
+            userMessaged: { userMessage: raw },
+            planGenerated: false
+          })
+
+          import('../../orchestrator/watchdog.js').then(({ handleUserInterrupt }) => {
+            handleUserInterrupt(targetAgent.id, raw)
+          }).catch(() => {})
+        }).catch(() => {})
       } else {
-        await sendMessage(targetAgent.id, raw)
+        if (raw === '/approve') {
+          await approvePlan(targetAgent.id)
+        } else {
+          await sendMessage(targetAgent.id, raw)
+        }
       }
     } catch (e) {
       setLatestProgress(null)

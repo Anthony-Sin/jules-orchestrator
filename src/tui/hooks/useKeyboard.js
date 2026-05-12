@@ -291,7 +291,7 @@ export function useKeyboard(p) {
     if (mode === 'table') {
       if (key.upArrow) { setSel(i => Math.max(0, i - 1)); return }
       if (key.downArrow) { setSel(i => Math.min(Math.max(0, p.allRows ? p.allRows.length - 1 : AGENTS.length - 1), i + 1)); return }
-      if (key.rightArrow) {
+      if (key.rightArrow || key.leftArrow) {
         const row = p.allRows && p.allRows[sel]
         if (row && row.data && p.toggleNodeExpansion && row.hasChildren) {
           p.toggleNodeExpansion(row.data.id)

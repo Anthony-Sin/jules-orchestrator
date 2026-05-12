@@ -141,6 +141,12 @@ export async function getActivities(sessionId, pageToken = null) {
 }
 
 export async function getAllActivities(sessionId) {
+  if (sessionId.startsWith('ORC-')) {
+    // Local persistent storage for Orchestrator activities
+    const { getLocalActivities } = await import('./store.js')
+    return { activities: getLocalActivities(sessionId) }
+  }
+
   let allActivities = []
   let pageToken = null
 
