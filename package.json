@@ -10,6 +10,7 @@
     "test": "node --experimental-test-module-mocks --loader ./tests/test-loader.mjs --test \"tests/**/*.test.js\""
   },
   "dependencies": {
+    "@google/genai": "^2.0.1",
     "@google/generative-ai": "^0.24.1",
     "chalk": "^5.3.0",
     "cli-table3": "^0.6.5",

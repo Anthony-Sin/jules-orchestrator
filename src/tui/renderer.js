@@ -12,6 +12,7 @@ import { AgentRow, buildRows } from './components/table.js'
 import { ChatPanel } from './components/chat.js'
 import { HelpScreen } from './components/help.js'
 import { GitDiffViewer } from './components/gitdiff.js'
+import { OrchestratorDashboard } from './components/orchestrator-dashboard.js'
 
 import { useDashboardController, saveToDrive } from './dashboard-controller.js'
 import { useLayout } from './hooks/useLayout.js'
@@ -102,6 +103,18 @@ export function Dashboard({ searchTerm = '' }) {
     hasApproveHint: false, // We unified this, so tell the layout engine to ignore the old one!
   })
 
+  const [expandedNodes, setExpandedNodes] = React.useState(new Set())
+  const toggleNodeExpansion = React.useCallback((id) => {
+    setExpandedNodes(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const allRows = React.useMemo(() => buildRows(AGENTS, expandedNodes), [AGENTS, expandedNodes])
+
   const {
     columns, rows,
     TERMINAL_ROWS, isWide, isCompact, isTight,
@@ -123,6 +136,8 @@ export function Dashboard({ searchTerm = '' }) {
     handleRepoSubmit,
     sel, setSel, AGENTS, VISIBLE_AGENTS,
     openAgentChat,
+    allRows,
+    toggleNodeExpansion,
     columns, rows, leftPanelWidth,
     diffFocus, setDiffFocus,
     diffFileSel, setDiffFileSel,
@@ -159,7 +174,6 @@ export function Dashboard({ searchTerm = '' }) {
 
   const visibleDropdownSources = filteredSources.slice(repoDropdownOffset, repoDropdownOffset + 2)
 
-  const allRows = React.useMemo(() => buildRows(AGENTS), [AGENTS])
   const queuedEntries = Object.entries(queuedMessages)
 
   useEffect(() => {
@@ -389,7 +403,7 @@ export function Dashboard({ searchTerm = '' }) {
             React.createElement(Text, { color: THEME.subtleText, wrap: 'truncate' }, truncateShortcutBar(columns, shortcutBar)),
             React.createElement(Spacer),
             React.createElement(Text, { color: THEME.accent, bold: true },
-              mode === 'diff' ? '[DIF]' : mode === 'chat' ? '[CHT]' : '[TBL]'
+              mode === 'orchestrator' ? '[ORC]' : mode === 'diff' ? '[DIF]' : mode === 'chat' ? '[CHT]' : '[TBL]'
             )
           )
         : React.createElement(Box, { flexGrow: 1, flexShrink: 1, overflow: 'hidden', minWidth: 0 },
@@ -408,6 +422,12 @@ function _renderLeftPanel({
   tick, openAgentChat,
   AGENTS, sel, tableOffset, VISIBLE_AGENTS, allRows,
 }) {
+  if (mode === 'orchestrator') {
+    return React.createElement(Box, { flexGrow: 1, flexDirection: 'column', minWidth: 0, overflow: 'hidden' },
+      React.createElement(OrchestratorDashboard, {})
+    )
+  }
+
   if (mode === 'diff' || (mode === 'chat' && lastLeftMode === 'diff')) {
     return React.createElement(GitDiffViewer, {
       sessionId: activeAgentId,
@@ -446,13 +466,17 @@ function _renderTableRows({ allRows, AGENTS, sel, tableOffset, VISIBLE_AGENTS, t
   const visibleRows = allRows.slice(tableOffset, tableOffset + VISIBLE_AGENTS)
 
   return visibleRows.map((row, i) => {
-    const agentIdx = AGENTS.indexOf(row.data)
+    // We compare with the visible row index, which is tableOffset + i, instead of agentIdx, because sel now refers to allRows index
+    const isSelected = (tableOffset + i) === sel
     return React.createElement(AgentRow, {
       key: row.data.id,
       agent: row.data,
-      selected: agentIdx === sel,
+      selected: isSelected,
       tick,
       isDimmed: mode !== 'table',
+      isExpanded: row.isExpanded,
+      hasChildren: row.hasChildren,
+      depth: row.depth,
     })
   })
 }

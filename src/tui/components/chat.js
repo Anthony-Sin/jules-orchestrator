@@ -557,7 +557,7 @@ export function ChatPanel({
     chatMenuOpen && tab === 'chat' && React.createElement(Box, {
 
       flexDirection: 'column',
-      height: 4,
+      height: 5,
       borderStyle: 'round',
       borderColor: THEME.panelFocusBorder,
       paddingX: 1,
@@ -565,7 +565,7 @@ export function ChatPanel({
       minWidth: 0,  
       overflow: 'hidden',
     },
-      ['Start New Task', 'Approve Plan'].map((opt, idx) =>
+      ['Start New Task', 'Approve Plan', 'Orchestrator Dashboard'].map((opt, idx) =>
         React.createElement(Text, {
           key: idx,
           color: chatMenuSel === idx ? THEME.accent : THEME.subtleText,

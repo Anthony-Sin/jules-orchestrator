@@ -240,6 +240,15 @@ export function useDashboardController() {
 
   // ── Queued message sender ─────────────────────────────────────────
   // Fires queued messages once target agent enters a waiting state
+  // ── Orchestrator User Interrupt Hook ──────────────────────────────
+  useEffect(() => {
+    if (chatInput && mode === 'orchestrator') {
+       import('../orchestrator/watchdog.js').then(({ handleUserInterrupt }) => {
+         handleUserInterrupt(chatInput)
+       }).catch(() => {}) // Ignore if not available
+    }
+  }, [chatInput, mode])
+
   // ── Queued message sender ─────────────────────────────────────────
   // Fires queued messages once target agent becomes available
   useEffect(() => {
