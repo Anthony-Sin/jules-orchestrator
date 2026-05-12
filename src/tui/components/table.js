@@ -74,7 +74,7 @@ function Gap({ rowBg }) {
   )
 }
 
-export function AgentRow({ agent, selected, tick, isDimmed }) {
+export function AgentRow({ agent, selected, tick, isDimmed, isExpanded, hasChildren, depth = 0 }) {
   const profile = getLayoutProfile()
   const layout = COLUMN_LAYOUT[profile]
 
@@ -91,7 +91,8 @@ export function AgentRow({ agent, selected, tick, isDimmed }) {
 
   const shortId = (agent.id || '').slice(0, layout.id)
   const rawTitle = agent.title || 'agent'
-  const titleStr = trimCell(rawTitle, layout.title)
+  const prefix = depth > 0 ? '  '.repeat(depth) + '└─ ' : (hasChildren ? (isExpanded ? 'v ' : '> ') : '')
+  const titleStr = trimCell(prefix + rawTitle, layout.title)
   const repoStr = extractRepoName(agent.repoDisplay || agent.repo || '')
   const repoTrimmed = trimCell(repoStr, layout.repo)
   const ageStr = ago(agent.lastUpdated || agent.createdAt)
@@ -137,10 +138,40 @@ export function AgentRow({ agent, selected, tick, isDimmed }) {
   )
 }
 
-export function buildRows(sessions) {
+export function buildRows(sessions, expandedNodes = new Set()) {
   const rows = []
-  for (const agent of sessions) {
-    rows.push({ type: 'session', data: agent })
+
+  // Create a map for quick lookup
+  const sessionMap = new Map()
+  for (const session of sessions) {
+    sessionMap.set(session.id, session)
   }
+
+  // Find root sessions (those without a parentId or parentId not in our sessions)
+  const rootSessions = sessions.filter(s => !s.parentId || !sessionMap.has(s.parentId))
+
+  function addNode(session, depth) {
+    const children = sessions.filter(s => s.parentId === session.id)
+    const isExpanded = expandedNodes.has(session.id)
+
+    rows.push({
+      type: 'session',
+      data: session,
+      depth,
+      hasChildren: children.length > 0,
+      isExpanded
+    })
+
+    if (isExpanded) {
+      for (const child of children) {
+        addNode(child, depth + 1)
+      }
+    }
+  }
+
+  for (const root of rootSessions) {
+    addNode(root, 0)
+  }
+
   return rows
 }

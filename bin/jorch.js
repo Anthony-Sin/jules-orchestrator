@@ -7,6 +7,7 @@ import { render, useInput } from 'ink'
 
 import { deleteSession, listSessions, getSession, parseSourceDisplay, sendMessage, createSession } from '../src/state/jules-api.js'
 import { upsertSession, getSessions, getActiveSessions, store, unlockFiles, getQueue, setConfig, getConfig } from '../src/state/store.js'
+import { runCrashRecovery } from '../src/orchestrator/governor.js'
 
 const TERMINAL_STATES = ['COMPLETED', 'FAILED', 'KILLED']
 
@@ -404,6 +405,10 @@ configCmd
 
 program.action(() => {
   if (process.argv.length === 2) {
+    // Start background Orchestrator loop initialization when TUI opens
+    runCrashRecovery().catch(err => {
+      // Ignore background initialization errors
+    })
     program.commands.find(cmd => cmd.name() === 'status')._actionHandler([]);
   }
 })

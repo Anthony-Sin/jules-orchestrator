@@ -167,6 +167,10 @@ export function checkFileLockConflicts(files) {
  * @typedef {Object} Config
  * @property {string} [apiKey]
  * @property {boolean} [autoPr]
+ * @property {number} [governorApiMaxCalls] - The maximum number of API calls per hour allowed for the Governor
+ * @property {number} [governorApiCallsCount] - Current count
+ * @property {number} [governorApiLastResetTime] - Timestamp of the last reset
+ * @property {boolean} [governorOvernightMode] - Whether overnight mode is on or off
  */
 
 export function getConfig() {
@@ -177,6 +181,36 @@ export function setConfig(key, value) {
   const config = getConfig()
   config[key] = value
   store.set('config', config)
+}
+
+// --- Governor State ---
+export function getGovernorConfig() {
+  const config = getConfig()
+  return {
+    maxCalls: config.governorApiMaxCalls || 20,
+    callsCount: config.governorApiCallsCount || 0,
+    lastResetTime: config.governorApiLastResetTime || Date.now(),
+    overnightMode: config.governorOvernightMode || false
+  }
+}
+
+export function updateGovernorApiCalls() {
+  const config = getGovernorConfig()
+  const now = Date.now()
+  const ONE_HOUR = 60 * 60 * 1000
+
+  if (now - config.lastResetTime > ONE_HOUR) {
+    setConfig('governorApiCallsCount', 1)
+    setConfig('governorApiLastResetTime', now)
+    return true
+  }
+
+  if (config.callsCount >= config.maxCalls) {
+    return false // Rate limit hit
+  }
+
+  setConfig('governorApiCallsCount', config.callsCount + 1)
+  return true
 }
 
 // --- Architecture Diagram ---

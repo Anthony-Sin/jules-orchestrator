@@ -239,8 +239,14 @@ export function useKeyboard(p) {
       if (chatMenuOpen) {
         if (key.escape) { setChatMenuOpen(false); setChatInput(''); return }
         if (key.upArrow) { setChatMenuSel(i => Math.max(0, i - 1)); return }
-        if (key.downArrow) { setChatMenuSel(i => Math.min(1, i + 1)); return }
+        if (key.downArrow) { setChatMenuSel(i => Math.min(2, i + 1)); return }
         if (key.return) {
+          if (chatMenuSel === 2) {
+            setMode('orchestrator')
+            setChatMenuOpen(false)
+            setChatInput('')
+            return
+          }
           if (chatMenuSel === 1) {
             setChatMenuOpen(false)
             setChatInput('')
@@ -284,9 +290,17 @@ export function useKeyboard(p) {
     // ── TABLE LOGIC ──
     if (mode === 'table') {
       if (key.upArrow) { setSel(i => Math.max(0, i - 1)); return }
-      if (key.downArrow) { setSel(i => Math.min(Math.max(0, AGENTS.length - 1), i + 1)); return }
+      if (key.downArrow) { setSel(i => Math.min(Math.max(0, p.allRows ? p.allRows.length - 1 : AGENTS.length - 1), i + 1)); return }
+      if (key.rightArrow) {
+        const row = p.allRows && p.allRows[sel]
+        if (row && row.data && p.toggleNodeExpansion && row.hasChildren) {
+          p.toggleNodeExpansion(row.data.id)
+        }
+        return
+      }
       if (key.return) {
-        const agent = AGENTS[sel]
+        const row = p.allRows && p.allRows[sel]
+        const agent = row ? row.data : AGENTS[sel]
         if (agent) openAgentChat(agent)
       }
     }
